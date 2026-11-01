@@ -1,0 +1,6 @@
+{
+  "name": "CTC - Legal Agreements & Affidavits Portal",
+  "description": "Government registered 24-hour legal agreements, affidavits, e-stamp papers and DigiLocker e-sign service with post-delivery payment across India.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
