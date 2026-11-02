@@ -506,7 +506,7 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
 
                 <div className="sm:col-span-2">
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Constitution of Business (व्यवसाय का प्रकार) <span className="text-rose-600">*</span>
+                    Constitution of Business <span className="text-rose-600">*</span>
                   </label>
                   <select
                     value={step1.constitution}

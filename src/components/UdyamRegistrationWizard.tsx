@@ -75,7 +75,7 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
     enterpriseName: '',
     officialEmail: '',
     officialMobile: '',
-    dateOfCommencement: '2025-04-01',
+    dateOfCommencement: '',
     previousUamNumber: '',
     bankName: '',
     ifscCode: '',
@@ -84,27 +84,27 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
 
   const [unitsList, setUnitsList] = useState([
     {
-      unitName: 'Unit-1 Main Plant',
-      flatNo: 'Plot No. 42',
-      buildingName: 'Industrial Area Phase 1',
-      villageOrTown: 'Mainpuri',
-      block: 'Industrial Estate',
-      city: 'Mainpuri',
-      district: 'Mainpuri',
-      state: 'Uttar Pradesh',
-      pinCode: '205001'
+      unitName: '',
+      flatNo: '',
+      buildingName: '',
+      villageOrTown: '',
+      block: '',
+      city: '',
+      district: '',
+      state: '',
+      pinCode: ''
     }
   ]);
 
   // STEP 4 State: Activity, Investment & Turnover
   const [step4, setStep4] = useState({
     majorActivity: 'MANUFACTURING',
-    nicCodes: '14101 - Manufacture of all types of textile garments',
-    empMale: 5,
-    empFemale: 3,
+    nicCodes: '',
+    empMale: 0,
+    empFemale: 0,
     empOther: 0,
-    investmentInPlantMachinery: 2500000, // 25 Lakhs
-    annualTurnover: 8000000 // 80 Lakhs
+    investmentInPlantMachinery: 0,
+    annualTurnover: 0
   });
 
   // STEP 5 State: DIC Selection & Declaration
@@ -125,21 +125,21 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
 
     if (investment <= oneCr && turnover <= fiveCr) {
       return {
-        category: 'Micro Enterprise (सूक्ष्म उद्यम)',
+        category: 'Micro Enterprise',
         badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-300',
         limits: 'Investment ≤ ₹1 Cr & Turnover ≤ ₹5 Cr'
       };
     }
     if (investment <= tenCr && turnover <= fiftyCr) {
       return {
-        category: 'Small Enterprise (लघु उद्यम)',
+        category: 'Small Enterprise',
         badgeColor: 'bg-blue-100 text-blue-800 border-blue-300',
         limits: 'Investment ≤ ₹10 Cr & Turnover ≤ ₹50 Cr'
       };
     }
     if (investment <= fiftyCr && turnover <= twoFiftyCr) {
       return {
-        category: 'Medium Enterprise (मध्यम उद्यम)',
+        category: 'Medium Enterprise',
         badgeColor: 'bg-indigo-100 text-indigo-800 border-indigo-300',
         limits: 'Investment ≤ ₹50 Cr & Turnover ≤ ₹250 Cr'
       };
@@ -542,7 +542,7 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
                             onChange={() => setStep1({ ...step1, hasPan: 'Yes' })}
                             className="text-blue-600"
                           />
-                          <span>Yes (हाँ)</span>
+                          <span>Yes</span>
                         </label>
                         <label className="flex items-center gap-1.5 text-xs font-semibold cursor-pointer">
                           <input
@@ -552,7 +552,7 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
                             onChange={() => setStep1({ ...step1, hasPan: 'No' })}
                             className="text-blue-600"
                           />
-                          <span>No (नहीं)</span>
+                          <span>No</span>
                         </label>
                       </div>
                     </div>
@@ -627,17 +627,17 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Social Category (सामाजिक वर्ग) <span className="text-rose-600">*</span>
+                    Social Category <span className="text-rose-600">*</span>
                   </label>
                   <select
                     value={step2.socialCategory}
                     onChange={(e) => setStep2({ ...step2, socialCategory: e.target.value })}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   >
-                    <option value="GENERAL">General (सामान्य)</option>
-                    <option value="SC">SC (अनुसूचित जाति)</option>
-                    <option value="ST">ST (अनुसूचित जनजाति)</option>
-                    <option value="OBC">OBC (अन्य पिछड़ा वर्ग)</option>
+                    <option value="GENERAL">General</option>
+                    <option value="SC">SC</option>
+                    <option value="ST">ST</option>
+                    <option value="OBC">OBC</option>
                   </select>
                 </div>
 
@@ -676,7 +676,7 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Physically Handicapped (दिव्यांग)?
+                    Physically Handicapped?
                   </label>
                   <div className="flex items-center gap-4 pt-1">
                     {['Yes', 'No'].map((ph) => (
@@ -726,7 +726,7 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="sm:col-span-2">
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Name of Enterprise (व्यापार का नाम) <span className="text-rose-600">*</span>
+                    Name of Enterprise <span className="text-rose-600">*</span>
                   </label>
                   <input
                     type="text"
@@ -878,7 +878,7 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
                 {/* Bank Account Details */}
                 <div className="sm:col-span-2 pt-2 border-t border-slate-200">
                   <span className="block text-xs font-bold text-slate-900 mb-2">
-                    Bank Account Details (बैंक खाता)
+                    Bank Account Details
                   </span>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>
@@ -947,7 +947,7 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Major Activity (मुख्य गतिविधि) <span className="text-rose-600">*</span>
+                    Major Activity <span className="text-rose-600">*</span>
                   </label>
                   <div className="flex items-center gap-4 pt-1">
                     {['MANUFACTURING', 'SERVICES', 'TRADING'].map((act) => (

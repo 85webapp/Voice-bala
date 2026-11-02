@@ -43,7 +43,7 @@ export const DeliveryCalculatorModal: React.FC<DeliveryCalculatorModalProps> = (
                 Express Fast-Track Calculator
               </h3>
               <p className="text-xs text-blue-600 font-semibold">
-                त्वरित डिलीवरी समय एवं शुल्क कैलकुलेटर
+                Instant delivery timeline and fee estimator
               </p>
             </div>
           </div>
@@ -60,16 +60,16 @@ export const DeliveryCalculatorModal: React.FC<DeliveryCalculatorModalProps> = (
 
         {/* Content */}
         <div className="p-5 sm:p-6 space-y-5 overflow-y-auto">
-          {/* Formula description as explicitly given by user */}
+          {/* Formula description */}
           <div className="bg-blue-50/70 border border-blue-200 rounded-xl p-4 text-xs text-slate-700 space-y-1 leading-relaxed">
             <span className="font-bold text-blue-900">
-              आधिकारिक नियम (Official Delivery Tariff):
+              Official Delivery Tariff:
             </span>
             <p>
-              24 घंटे के अंदर हम आपको एग्रीमेंट बना के देते हैं। यदि आपको जल्दी चाहिए, तो हम लोग पर आवर का <strong>₹5 चार्ज करते हैं</strong>।
+              Standard legal agreements are delivered within 24 hours. For faster turnaround, we charge <strong>₹5 per hour saved</strong>.
             </p>
             <p className="text-slate-500 text-[11px]">
-              जैसे 23 घंटे में ₹5 ज्यादा, 22 घंटे में ₹10 ज्यादा... न्यूनतम 2 घंटे लगेंगे।
+              For example: 23 hours is +₹5, 22 hours is +₹10... minimum 2 hours required.
             </p>
           </div>
 
@@ -95,7 +95,7 @@ export const DeliveryCalculatorModal: React.FC<DeliveryCalculatorModalProps> = (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-slate-800">
-                Choose Delivery Timeline (घंटे चुनें):
+                Choose Delivery Timeline:
               </span>
               <span className="text-sm font-black text-blue-600 bg-blue-50 px-3 py-0.5 rounded-full border border-blue-200">
                 {hours} Hours
@@ -168,7 +168,7 @@ export const DeliveryCalculatorModal: React.FC<DeliveryCalculatorModalProps> = (
               onClick={handleProceed}
               className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm rounded-xl transition-all shadow-xs flex items-center gap-2 cursor-pointer"
             >
-              <span>इस समय में बनवाएं (Order with this timeline)</span>
+              <span>Order with this timeline</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>

@@ -23,6 +23,7 @@ import confetti from 'canvas-confetti';
 import { LegalDocument, OrderItem } from '../types';
 import { STATE_CATEGORIES, getSafeStampDuty } from '../data/stampDutyMatrix';
 import { DateOfBirthPicker } from './DateOfBirthPicker';
+import { useExampleDetails } from '../hooks/useExampleDetails';
 import {
   SUPPORTED_LANGUAGES,
   SupportedLanguage,
@@ -73,6 +74,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
   onOrderCreated,
   onNavigateToDashboard
 }) => {
+  const { showExampleDetails, getPlaceholder } = useExampleDetails();
   const [currentPage, setCurrentPage] = useState<number>(1);
 
   // --- AUDIO EXPLAINER & LANGUAGE STATE ---
@@ -276,11 +278,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
   // --- PAGE 4: LEASE TERMS & STATUTORY CONDITIONS ---
   const [leaseTenure, setLeaseTenure] = useState<string>('11 Months');
   const [customTenure, setCustomTenure] = useState('');
-  const [commencementDate, setCommencementDate] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    return d.toISOString().split('T')[0];
-  });
+  const [commencementDate, setCommencementDate] = useState('');
   const [monthlyRent, setMonthlyRent] = useState<string>('');
   const [rentDueDate, setRentDueDate] = useState<string>('5th of every calendar month');
   const [securityDeposit, setSecurityDeposit] = useState<string>('');
@@ -781,15 +779,6 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
         {/* ================= PAGE 1 ================= */}
         {currentPage === 1 && (
           <div className="space-y-6 animate-fadeIn">
-            {/* MANDATORY & OPTIONAL BANNER AT TOP OF FORM (STRICTLY PAGE 1 ONLY) */}
-            <div className="py-2 px-4 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-xs text-slate-700 font-medium">
-              <div>
-                Mandatory = <span className="text-red-500 font-bold">*</span>
-              </div>
-              <div>
-                Optional = <span className="text-slate-400 font-medium">(Optional)</span>
-              </div>
-            </div>
 
             {/* Document Category Radio */}
             <div>
@@ -1087,7 +1076,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                     type="number"
                     value={customStampValue}
                     onChange={(e) => setCustomStampValue(e.target.value)}
-                    placeholder="Enter custom stamp value in Rupees"
+                    placeholder={getPlaceholder("Enter custom stamp value in Rupees")}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
@@ -1139,7 +1128,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                     type="text"
                     value={customSplitText}
                     onChange={(e) => setCustomSplitText(e.target.value)}
-                    placeholder="Enter custom ratio or division"
+                    placeholder={getPlaceholder("Enter custom ratio or division")}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
@@ -1151,25 +1140,20 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
         {/* ================= PAGE 2 ================= */}
         {currentPage === 2 && (
           <div className="space-y-5 animate-fadeIn">
-            {/* Page 2 Mandatory Distinct Header */}
+            {/* Page 2 Distinct Header */}
             <div className="bg-gradient-to-r from-blue-700 via-blue-800 to-indigo-900 text-white rounded-2xl p-4 sm:p-5 shadow-sm border border-blue-600 mb-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center font-black text-lg border border-white/20">
-                    1
-                  </div>
-                  <div>
-                    <h3 className="text-base sm:text-lg font-black tracking-wide uppercase">
-                      Only First Party Information
-                    </h3>
-                    <p className="text-xs text-blue-100 font-medium">
-                      केवल प्रथम पक्ष की जानकारी / First Party Only (मकान मालिक / Landlord / Lessor)
-                    </p>
-                  </div>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center font-black text-lg border border-white/20">
+                  1
                 </div>
-                <span className="hidden sm:inline-block px-3 py-1 bg-white/20 text-white text-xs font-bold rounded-full backdrop-blur-xs">
-                  Step 2 of 5
-                </span>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black tracking-wide uppercase">
+                    1st Party Details Only
+                  </h3>
+                  <p className="text-xs text-blue-100 font-medium">
+                    Landlord / Property Owner
+                  </p>
+                </div>
               </div>
             </div>
 
@@ -1220,7 +1204,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                       required
                       value={landlordName}
                       onChange={(e) => setLandlordName(e.target.value)}
-                      placeholder="Enter Entity Registered Name"
+                      placeholder={getPlaceholder("Enter Entity Registered Name")}
                       className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                     />
                   </div>
@@ -1234,7 +1218,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                       required
                       value={corporateRegNumber}
                       onChange={(e) => setCorporateRegNumber(e.target.value.toUpperCase())}
-                      placeholder="Enter CIN / LLPIN"
+                      placeholder={getPlaceholder("Enter CIN / LLPIN")}
                       className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono uppercase text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                     />
                   </div>
@@ -1249,7 +1233,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                     required
                     value={corporateAddress}
                     onChange={(e) => setCorporateAddress(e.target.value)}
-                    placeholder="Enter Registered Office Address"
+                    placeholder={getPlaceholder("Enter Registered Office Address")}
                     className="w-full bg-white border border-slate-300 rounded-xl p-2.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 resize-none"
                   />
                 </div>
@@ -1264,7 +1248,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                       required
                       value={authSignatoryName}
                       onChange={(e) => setAuthSignatoryName(e.target.value)}
-                      placeholder="Enter Signatory Full Name"
+                      placeholder={getPlaceholder("Enter Signatory Full Name")}
                       className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                     />
                   </div>
@@ -1287,7 +1271,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                         type="text"
                         value={authSignatoryCustomDesignation}
                         onChange={(e) => setAuthSignatoryCustomDesignation(e.target.value)}
-                        placeholder="Enter Designation"
+                        placeholder={getPlaceholder("Enter Designation")}
                         className="mt-2 w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-600"
                       />
                     )}
@@ -1317,7 +1301,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                       required
                       value={landlordName}
                       onChange={(e) => setLandlordName(e.target.value)}
-                      placeholder="Enter Full Legal Name"
+                      placeholder={getPlaceholder("Enter Full Legal Name")}
                       className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                     />
                   </div>
@@ -1341,7 +1325,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                       required
                       value={landlordFatherName}
                       onChange={(e) => setLandlordFatherName(e.target.value)}
-                      placeholder="Enter Father's or Husband's Name"
+                      placeholder={getPlaceholder("Enter Father's or Husband's Name")}
                       className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                     />
                   </div>
@@ -1354,8 +1338,8 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                       value={landlordDobOrAge}
                       onChange={setLandlordDobOrAge}
                       required={true}
-                      placeholder="DD/MM/YYYY"
-                      helperText="DD/MM/YYYY टाइप करें या कैलेंडर चुनें"
+                      placeholder={getPlaceholder("DD/MM/YYYY")}
+                      helperText={showExampleDetails ? "Format: DD/MM/YYYY" : undefined}
                     />
                   </div>
 
@@ -1378,7 +1362,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                       required
                       value={landlordAddress}
                       onChange={(e) => setLandlordAddress(e.target.value)}
-                      placeholder="Enter Permanent Address with City and PIN code"
+                      placeholder={getPlaceholder("Enter Permanent Address with City and PIN code")}
                       className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                     />
                   </div>
@@ -1410,7 +1394,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                   pattern="[0-9]*"
                   value={landlordMobile}
                   onChange={(e) => setLandlordMobile(e.target.value.replace(/\D/g, ''))}
-                  placeholder="Enter 10-Digit Mobile Number"
+                  placeholder={getPlaceholder("Enter 10-Digit Mobile Number")}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
               </div>
@@ -1433,7 +1417,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                   type="email"
                   value={landlordEmail}
                   onChange={(e) => setLandlordEmail(e.target.value)}
-                  placeholder="Enter Email Address"
+                  placeholder={getPlaceholder("Enter Email Address")}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
               </div>
@@ -1467,7 +1451,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                     pattern="[0-9]*"
                     value={landlordAadhaarLast4}
                     onChange={(e) => setLandlordAadhaarLast4(e.target.value.replace(/\D/g, ''))}
-                    placeholder="4 Digits"
+                    placeholder={getPlaceholder("4 Digits")}
                     className="w-24 bg-white border border-slate-300 rounded-lg px-2.5 py-2 text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
@@ -1498,7 +1482,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                       e.preventDefault();
                     }
                   }}
-                  placeholder="Enter 10-Character PAN"
+                  placeholder={getPlaceholder("Enter 10-Character PAN")}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm font-mono uppercase text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
               </div>
@@ -1539,7 +1523,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                         type="text"
                         value={co.name}
                         onChange={(e) => updateCoOwner(co.id, 'name', e.target.value)}
-                        placeholder="Co-Owner Legal Name"
+                        placeholder={getPlaceholder("Co-Owner Legal Name")}
                         className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs"
                       />
                       <input
@@ -1548,7 +1532,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                         inputMode="numeric"
                         value={co.mobile}
                         onChange={(e) => updateCoOwner(co.id, 'mobile', e.target.value.replace(/\D/g, ''))}
-                        placeholder="Mobile Number"
+                        placeholder={getPlaceholder("Mobile Number")}
                         className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs"
                       />
                       <input
@@ -1556,7 +1540,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                         maxLength={10}
                         value={co.pan}
                         onChange={(e) => updateCoOwner(co.id, 'pan', e.target.value.toUpperCase())}
-                        placeholder="Co-Owner PAN"
+                        placeholder={getPlaceholder("Co-Owner PAN")}
                         className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-mono uppercase"
                       />
                     </div>
@@ -1591,7 +1575,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                         required={hasPoa}
                         value={poaName}
                         onChange={(e) => setPoaName(e.target.value)}
-                        placeholder="Enter POA Holder Full Name"
+                        placeholder={getPlaceholder("Enter POA Holder Full Name")}
                         className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-600"
                       />
                     </div>
@@ -1608,7 +1592,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                         required={hasPoa}
                         value={poaAadhaarLast4}
                         onChange={(e) => setPoaAadhaarLast4(e.target.value.replace(/\D/g, ''))}
-                        placeholder="Enter 4 Digits"
+                        placeholder={getPlaceholder("Enter 4 Digits")}
                         className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-mono text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-600"
                       />
                     </div>
@@ -1623,7 +1607,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                       required={hasPoa}
                       value={poaAddress}
                       onChange={(e) => setPoaAddress(e.target.value)}
-                      placeholder="Enter Current Address of POA Holder"
+                      placeholder={getPlaceholder("Enter Current Address of POA Holder")}
                       className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-600"
                     />
                   </div>
@@ -1699,25 +1683,20 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
         {/* ================= PAGE 3: SECOND PARTY / TENANT DETAILS ================= */}
         {currentPage === 3 && (
           <div className="space-y-5 animate-fadeIn">
-            {/* Page 3 Mandatory Distinct Header */}
+            {/* Page 3 Distinct Header */}
             <div className="bg-gradient-to-r from-purple-700 via-purple-800 to-indigo-900 text-white rounded-2xl p-4 sm:p-5 shadow-sm border border-purple-600 mb-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center font-black text-lg border border-white/20">
-                    2
-                  </div>
-                  <div>
-                    <h3 className="text-base sm:text-lg font-black tracking-wide uppercase">
-                      Only Second Party Information
-                    </h3>
-                    <p className="text-xs text-purple-100 font-medium">
-                      केवल द्वितीय पक्ष की जानकारी / Second Party Only (किरायेदार / Tenant / Lessee)
-                    </p>
-                  </div>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center font-black text-lg border border-white/20">
+                  2
                 </div>
-                <span className="hidden sm:inline-block px-3 py-1 bg-white/20 text-white text-xs font-bold rounded-full backdrop-blur-xs">
-                  Step 3 of 5
-                </span>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black tracking-wide uppercase">
+                    2nd Party Details Only
+                  </h3>
+                  <p className="text-xs text-purple-100 font-medium">
+                    Tenant / Lessee
+                  </p>
+                </div>
               </div>
             </div>
 
@@ -1744,7 +1723,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                       required
                       value={tenantName}
                       onChange={(e) => setTenantName(e.target.value)}
-                      placeholder="Enter Tenant Full Legal Name"
+                      placeholder={getPlaceholder("Enter Tenant Full Legal Name")}
                       className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                     />
                   </div>
@@ -1768,7 +1747,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                       required
                       value={tenantFatherName}
                       onChange={(e) => setTenantFatherName(e.target.value)}
-                      placeholder="Enter Father's or Husband's Name"
+                      placeholder={getPlaceholder("Enter Father's or Husband's Name")}
                       className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                     />
                   </div>
@@ -1781,8 +1760,8 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                       value={tenantAge}
                       onChange={setTenantAge}
                       required={true}
-                      placeholder="DD/MM/YYYY"
-                      helperText="DD/MM/YYYY टाइप करें या कैलेंडर चुनें"
+                      placeholder={getPlaceholder("DD/MM/YYYY")}
+                      helperText={showExampleDetails ? "Format: DD/MM/YYYY" : undefined}
                     />
                   </div>
 
@@ -1805,7 +1784,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                       required
                       value={tenantAddress}
                       onChange={(e) => setTenantAddress(e.target.value)}
-                      placeholder="Enter Permanent Native Address"
+                      placeholder={getPlaceholder("Enter Permanent Native Address")}
                       className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                     />
                   </div>
@@ -1834,7 +1813,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                       pattern="[0-9]*"
                       value={tenantMobile}
                       onChange={(e) => setTenantMobile(e.target.value.replace(/\D/g, ''))}
-                      placeholder="Enter 10-Digit Mobile Number"
+                      placeholder={getPlaceholder("Enter 10-Digit Mobile Number")}
                       className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                     />
                   </div>
@@ -1847,7 +1826,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                       type="email"
                       value={tenantEmail}
                       onChange={(e) => setTenantEmail(e.target.value)}
-                      placeholder="Enter Email Address"
+                      placeholder={getPlaceholder("Enter Email Address")}
                       className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                     />
                   </div>
@@ -1870,7 +1849,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                         pattern="[0-9]*"
                         value={tenantAadhaarLast4}
                         onChange={(e) => setTenantAadhaarLast4(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                        placeholder="4 Digits"
+                        placeholder={getPlaceholder("4 Digits")}
                         className="w-24 bg-white border border-slate-300 rounded-lg px-2.5 py-2 text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                       />
                     </div>
@@ -1890,7 +1869,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                           e.preventDefault();
                         }
                       }}
-                      placeholder="Enter 10-Character PAN"
+                      placeholder={getPlaceholder("Enter 10-Character PAN")}
                       className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm font-mono uppercase text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                     />
                   </div>
@@ -1929,21 +1908,21 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                         type="text"
                         value={occ.fullName}
                         onChange={(e) => updateCoOccupant(occ.id, 'fullName', e.target.value)}
-                        placeholder="Full Legal Name"
+                        placeholder={getPlaceholder("Full Legal Name")}
                         className="flex-1 bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
                       />
                       <input
                         type="text"
                         value={occ.age}
                         onChange={(e) => updateCoOccupant(occ.id, 'age', e.target.value)}
-                        placeholder="Age"
+                        placeholder={getPlaceholder("Age")}
                         className="w-20 bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
                       />
                       <input
                         type="text"
                         value={occ.relationship}
                         onChange={(e) => updateCoOccupant(occ.id, 'relationship', e.target.value)}
-                        placeholder="Relationship (e.g. Spouse / Son)"
+                        placeholder={getPlaceholder("Relationship (e.g. Spouse / Son)")}
                         className="flex-1 bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
                       />
                       <button
@@ -1998,7 +1977,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                       required
                       value={commercialCompanyName}
                       onChange={(e) => setCommercialCompanyName(e.target.value)}
-                      placeholder="Enter Registered Company / Firm Name"
+                      placeholder={getPlaceholder("Enter Registered Company / Firm Name")}
                       className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                     />
                   </div>
@@ -2023,7 +2002,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                       maxLength={10}
                       value={commercialCompanyPan}
                       onChange={(e) => setCommercialCompanyPan(e.target.value.toUpperCase())}
-                      placeholder="Enter 10-Character Corporate PAN"
+                      placeholder={getPlaceholder("Enter 10-Character Corporate PAN")}
                       className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm font-mono uppercase text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                     />
                   </div>
@@ -2038,7 +2017,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                     required
                     value={commercialOfficeAddress}
                     onChange={(e) => setCommercialOfficeAddress(e.target.value)}
-                    placeholder="Enter Registered Office Address"
+                    placeholder={getPlaceholder("Enter Registered Office Address")}
                     className="w-full bg-white border border-slate-300 rounded-xl p-2.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 resize-none"
                   />
                 </div>
@@ -2063,7 +2042,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                       required
                       value={commercialCin}
                       onChange={(e) => setCommercialCin(e.target.value.toUpperCase())}
-                      placeholder="Enter CIN / LLPIN"
+                      placeholder={getPlaceholder("Enter CIN / LLPIN")}
                       className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono uppercase text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                     />
                   </div>
@@ -2095,7 +2074,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                         required
                         value={commercialRepName}
                         onChange={(e) => setCommercialRepName(e.target.value)}
-                        placeholder="Enter Representative Full Legal Name"
+                        placeholder={getPlaceholder("Enter Representative Full Legal Name")}
                         className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-600"
                       />
                     </div>
@@ -2118,7 +2097,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                           type="text"
                           value={commercialRepCustomDesignation}
                           onChange={(e) => setCommercialRepCustomDesignation(e.target.value)}
-                          placeholder="Enter Custom Designation"
+                          placeholder={getPlaceholder("Enter Custom Designation")}
                           className="mt-2 w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-600"
                         />
                       )}
@@ -2191,7 +2170,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                       required={!isUnregisteredGst}
                       value={commercialGstin}
                       onChange={(e) => setCommercialGstin(e.target.value.toUpperCase())}
-                      placeholder="Enter 15-Digit GSTIN"
+                      placeholder={getPlaceholder("Enter 15-Digit GSTIN")}
                       className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm font-mono uppercase text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                     />
                   )}
@@ -2230,7 +2209,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                     onChange={(e) => setLeaseTenure(e.target.value)}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   >
-                    <option value="11 Months">11 Months (Highest Allowed Non-Registration Limit / अधिकतम मान्य)</option>
+                    <option value="11 Months">11 Months (Standard Statutory Limit)</option>
                     <option value="10 Months">10 Months</option>
                     <option value="9 Months">9 Months</option>
                     <option value="8 Months">8 Months</option>
@@ -2255,7 +2234,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                           const val = Math.min(11, Math.max(1, Number(e.target.value) || 1));
                           setCustomTenure(`${val} Months`);
                         }}
-                        placeholder="Enter months (1 to 11 only)"
+                        placeholder={getPlaceholder("Enter months (1 to 11 only)")}
                         className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
                       />
                       <span className="text-[10px] text-blue-600 block">
@@ -2316,7 +2295,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                       min={100}
                       value={monthlyRent}
                       onChange={(e) => setMonthlyRent(e.target.value)}
-                      placeholder="Enter Monthly Rent"
+                      placeholder={getPlaceholder("Enter Monthly Rent")}
                       className="w-full bg-white border border-slate-300 rounded-xl pl-8 pr-3 py-2 text-xs sm:text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                     />
                   </div>
@@ -2368,7 +2347,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                       required
                       value={securityDeposit}
                       onChange={(e) => setSecurityDeposit(e.target.value)}
-                      placeholder="Enter Security Deposit Amount"
+                      placeholder={getPlaceholder("Enter Security Deposit Amount")}
                       className="w-full bg-white border border-slate-300 rounded-xl pl-8 pr-3 py-2 text-xs sm:text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                     />
                   </div>
@@ -2640,18 +2619,18 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
-                  <input
+                    <input
                     type="text"
                     value={clause.title}
                     onChange={(e) => updateCustomClause(clause.id, 'title', e.target.value)}
-                    placeholder="Enter Clause Title"
+                    placeholder={getPlaceholder("Enter Clause Title")}
                     className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-900"
                   />
                   <textarea
                     rows={2}
                     value={clause.description}
                     onChange={(e) => updateCustomClause(clause.id, 'description', e.target.value)}
-                    placeholder="Enter full legal condition / stipulation..."
+                    placeholder={getPlaceholder("Enter full legal condition / stipulation...")}
                     className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs text-slate-900 resize-none"
                   />
                 </div>
@@ -2667,7 +2646,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-blue-700 uppercase tracking-wider block">
-                  1. Mandatory Attestation (Two Witnesses Required by Law)
+                  1. Attestation (Two Witnesses)
                 </span>
                 <button
                   type="button"
@@ -2688,7 +2667,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                     required
                     value={w1Name}
                     onChange={(e) => setW1Name(e.target.value)}
-                    placeholder="Witness 1 Full Legal Name"
+                    placeholder={getPlaceholder("Witness 1 Full Legal Name")}
                     className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
                   />
                   <input
@@ -2696,7 +2675,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                     required
                     value={w1FatherName}
                     onChange={(e) => setW1FatherName(e.target.value)}
-                    placeholder="Father's / Husband's Name"
+                    placeholder={getPlaceholder("Father's / Husband's Name")}
                     className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
                   />
                 </div>
@@ -2705,7 +2684,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                   required
                   value={w1Address}
                   onChange={(e) => setW1Address(e.target.value)}
-                  placeholder="Complete Residential Address"
+                  placeholder={getPlaceholder("Complete Residential Address")}
                   className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
                 />
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -2717,21 +2696,21 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                     pattern="[0-9]*"
                     value={w1Mobile}
                     onChange={(e) => setW1Mobile(e.target.value.replace(/\D/g, ''))}
-                    placeholder="10-Digit Mobile Number"
+                    placeholder={getPlaceholder("10-Digit Mobile Number")}
                     className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
                   />
                   <DateOfBirthPicker
                     label="Age / Date of Birth"
                     value={w1Age}
                     onChange={setW1Age}
-                    placeholder="DD/MM/YYYY"
-                    helperText="वैकल्पिक / Optional"
+                    placeholder={getPlaceholder("DD/MM/YYYY")}
+                    helperText={showExampleDetails ? "Optional" : undefined}
                   />
                   <input
                     type="text"
                     value={w1IdNumber}
                     onChange={(e) => setW1IdNumber(e.target.value)}
-                    placeholder="ID Doc Number (Aadhaar/Voter ID/DL) (Optional)"
+                    placeholder={getPlaceholder("ID Doc Number (Aadhaar/Voter ID/DL) (Optional)")}
                     className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
                   />
                 </div>
@@ -2746,7 +2725,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                     required
                     value={w2Name}
                     onChange={(e) => setW2Name(e.target.value)}
-                    placeholder="Witness 2 Full Legal Name"
+                    placeholder={getPlaceholder("Witness 2 Full Legal Name")}
                     className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
                   />
                   <input
@@ -2754,7 +2733,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                     required
                     value={w2FatherName}
                     onChange={(e) => setW2FatherName(e.target.value)}
-                    placeholder="Father's / Husband's Name"
+                    placeholder={getPlaceholder("Father's / Husband's Name")}
                     className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
                   />
                 </div>
@@ -2763,7 +2742,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                   required
                   value={w2Address}
                   onChange={(e) => setW2Address(e.target.value)}
-                  placeholder="Complete Residential Address"
+                  placeholder={getPlaceholder("Complete Residential Address")}
                   className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
                 />
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -2775,21 +2754,21 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                     pattern="[0-9]*"
                     value={w2Mobile}
                     onChange={(e) => setW2Mobile(e.target.value.replace(/\D/g, ''))}
-                    placeholder="10-Digit Mobile Number"
+                    placeholder={getPlaceholder("10-Digit Mobile Number")}
                     className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
                   />
                   <DateOfBirthPicker
                     label="Age / Date of Birth"
                     value={w2Age}
                     onChange={setW2Age}
-                    placeholder="DD/MM/YYYY"
-                    helperText="वैकल्पिक / Optional"
+                    placeholder={getPlaceholder("DD/MM/YYYY")}
+                    helperText={showExampleDetails ? "Optional" : undefined}
                   />
                   <input
                     type="text"
                     value={w2IdNumber}
                     onChange={(e) => setW2IdNumber(e.target.value)}
-                    placeholder="ID Doc Number (Aadhaar/Voter ID/DL) (Optional)"
+                    placeholder={getPlaceholder("ID Doc Number (Aadhaar/Voter ID/DL) (Optional)")}
                     className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
                   />
                 </div>
@@ -2912,7 +2891,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                       required
                       value={shippingAddress}
                       onChange={(e) => setShippingAddress(e.target.value)}
-                      placeholder="Enter Complete Street Address with City and State"
+                      placeholder={getPlaceholder("Enter Complete Street Address with City and State")}
                       className="w-full bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
                     />
 
@@ -2925,7 +2904,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                         required
                         value={shippingPincode}
                         onChange={(e) => setShippingPincode(e.target.value.replace(/\D/g, ''))}
-                        placeholder="Enter 6-Digit Pincode"
+                        placeholder={getPlaceholder("Enter 6-Digit Pincode")}
                         className="w-full bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-xs font-mono text-slate-900"
                       />
                       <input
@@ -2936,7 +2915,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                         pattern="[0-9]*"
                         value={shippingPhone}
                         onChange={(e) => setShippingPhone(e.target.value.replace(/\D/g, ''))}
-                        placeholder="Recipient 10-Digit Mobile"
+                        placeholder={getPlaceholder("Recipient 10-Digit Mobile")}
                         className="w-full bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
                       />
                     </div>
@@ -2950,7 +2929,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
               <div className="flex items-center justify-between">
                 <div>
                   <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
-                    Verification &amp; Review Mode (सत्यापन विकल्प) <span className="text-red-500">*</span>
+                    Verification &amp; Review Mode <span className="text-red-500 font-bold">*</span>
                   </span>
                   <span className="text-[11px] text-slate-500">
                     Choose how your rental draft should be reviewed before e-stamp procurement
@@ -2975,7 +2954,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                     <div className="flex items-center gap-2">
                       <ShieldCheck className={`w-5 h-5 ${verificationMode === 'self' ? 'text-blue-600' : 'text-slate-400'}`} />
                       <h4 className="text-xs sm:text-sm font-bold text-slate-900">
-                        Self-Verified (स्व-सत्यापित)
+                        Self-Verified
                       </h4>
                     </div>
                     <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
@@ -2983,7 +2962,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                     </span>
                   </div>
                   <p className="mt-2 text-[11px] text-slate-600 leading-relaxed">
-                    आप स्वयं दर्ज की गई सभी जानकारियों की पुष्टि करते हैं। स्वचालित प्रणाली द्वारा तत्काल प्रोसेसिंग।
+                    You confirm all entered details. Immediate processing via automated system.
                   </p>
                 </div>
 
@@ -3010,7 +2989,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                     </span>
                   </div>
                   <p className="mt-2 text-[11px] text-slate-600 leading-relaxed">
-                    वरिष्ठ कानूनी विशेषज्ञ द्वारा नामों, पतों, किराया क्लॉज और स्टाम्प सटीकता की मैन्युअल पुनः-जांच।
+                    Manual review of names, addresses, rental clauses, and stamp accuracy by our legal team.
                   </p>
                 </div>
               </div>
@@ -3076,7 +3055,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                   <span className="text-xs font-bold text-slate-900 uppercase tracking-wide">
-                    कानूनी शपथ एवं घोषणाएँ (5 Declarations) <span className="text-red-500">*</span>
+                    Legal Declarations (5 Declarations) <span className="text-red-500 font-bold">*</span>
                   </span>
                 </div>
 
@@ -3093,7 +3072,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                     title="Listen to 5 declarations in voice"
                   >
                     <Volume2 className="w-3.5 h-3.5" />
-                    <span>{isSpeakingDeclarations ? 'रोकें (Stop Voice)' : '🔊 5 घोषणाएँ सुनें (Voice)'}</span>
+                    <span>{isSpeakingDeclarations ? 'Stop Voice' : '🔊 Listen to Declarations'}</span>
                   </button>
 
                   {/* Select All toggle */}
@@ -3109,11 +3088,11 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
 
               <div className="space-y-2.5">
                 {[
-                  "1. मैंने रेंट एग्रीमेंट के सभी नियम व शर्तें ध्यानपूर्वक पढ़ ली हैं और मैं इनसे सहमत हूँ। (I have carefully read and agreed to all terms and conditions of this rental agreement.)",
-                  "2. प्रस्तुत की गई मकान मालिक, किरायेदार और गवाहों की व्यक्तिगत पहचान (PAN/Aadhaar) व पते की जानकारी पूर्णतः सत्य और प्रामाणिक है। (All personal identity and address details of landlord, tenant, and witnesses provided are true and verified.)",
-                  "3. इस विलेख/करार का निष्पादन बिना किसी दबाव, कपट अथवा अनुचित प्रभाव के स्वतंत्र सहमति से किया जा रहा है। (This deed/agreement is being executed with free consent without any coercion, fraud, or undue influence.)",
-                  "4. संबंधित राज्य सरकार की स्टाम्प ड्यूटी एवं ई-हस्ताक्षर (Aadhaar e-Sign) नियमों के अनुपालन की पूरी ज़िम्मेदारी मेरी है। (I understand and accept full responsibility for compliance with state stamp duty and Aadhaar e-Sign regulations.)",
-                  "5. मैं पुष्टि करता हूँ कि दस्तावेज़ डिलीवरी के पश्चात देय राशि का भुगतान नियमानुसार करूँगा। (I confirm and agree to pay the post-delivery fee upon receipt of the verified legal document.)"
+                  "1. I have carefully read and agreed to all terms and conditions of this rental agreement.",
+                  "2. All personal identity and address details of landlord, tenant, and witnesses provided are true and verified.",
+                  "3. This deed/agreement is being executed with free consent without any coercion, fraud, or undue influence.",
+                  "4. I understand and accept full responsibility for compliance with state stamp duty and Aadhaar e-Sign regulations.",
+                  "5. I confirm and agree to pay the post-delivery fee upon receipt of the verified legal document."
                 ].map((declarationText, idx) => (
                   <label
                     key={idx}

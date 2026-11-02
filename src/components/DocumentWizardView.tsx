@@ -29,6 +29,7 @@ import { getDocumentConfig, CustomKeyValueTerm } from '../data/documentFormConfi
 import { INITIAL_FRONT_DOCUMENTS } from '../data/documentsData';
 import { getDocumentIdRule } from '../data/documentIdRequirements';
 import { DateOfBirthPicker } from './DateOfBirthPicker';
+import { useExampleDetails } from '../hooks/useExampleDetails';
 import {
   SupportedLanguage,
   SUPPORTED_LANGUAGES,
@@ -53,6 +54,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
   onOrderCreated,
   onNavigateToDashboard
 }) => {
+  const { showExampleDetails, getPlaceholder } = useExampleDetails();
   // Current document selection (can be swapped via Page 1 dropdown)
   const [selectedDocTitle, setSelectedDocTitle] = useState(initialDoc.title);
 
@@ -230,11 +232,11 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
   };
 
   // --- PAGE 4: Core Document Specific Details ---
-  const [scopeOfWork, setScopeOfWork] = useState('Standard statutory legal scope of work and mutual obligations as defined under Indian Contract Act, 1872.');
-  const [considerationAmount, setConsiderationAmount] = useState('25,000');
-  const [durationMonths, setDurationMonths] = useState('11 Months');
-  const [exclusivityTerritory, setExclusivityTerritory] = useState('Pan India');
-  const [noticePeriod, setNoticePeriod] = useState('15 Days written notice');
+  const [scopeOfWork, setScopeOfWork] = useState('');
+  const [considerationAmount, setConsiderationAmount] = useState('');
+  const [durationMonths, setDurationMonths] = useState('');
+  const [exclusivityTerritory, setExclusivityTerritory] = useState('');
+  const [noticePeriod, setNoticePeriod] = useState('');
 
   // Key-Value Pair Custom Terms (Empty array by default)
   const [customTerms, setCustomTerms] = useState<CustomKeyValueTerm[]>([]);
@@ -753,15 +755,6 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
         {/* ================= PAGE 1 ================= */}
         {currentPage === 1 && (
           <div className="space-y-6 animate-fadeIn">
-            {/* MANDATORY & OPTIONAL BANNER AT TOP OF FORM (STRICTLY PAGE 1 ONLY) */}
-            <div className="py-2 px-4 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-xs text-slate-700 font-medium">
-              <div>
-                Mandatory = <span className="text-red-500 font-bold">*</span>
-              </div>
-              <div>
-                Optional = <span className="text-slate-400 font-medium">(Optional)</span>
-              </div>
-            </div>
 
             <div className="bg-blue-50/70 border border-blue-200 rounded-xl p-4 flex items-start gap-3">
               <Sparkles className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
@@ -899,51 +892,21 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
         {/* ================= PAGE 2: FIRST PARTY ================= */}
         {currentPage === 2 && (
           <div className="space-y-4 animate-fadeIn">
-            {/* Page 2 Mandatory Distinct Header */}
+            {/* Page 2 Distinct Header */}
             <div className="bg-gradient-to-r from-blue-700 via-blue-800 to-indigo-900 text-white rounded-2xl p-4 sm:p-5 shadow-sm border border-blue-600 mb-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center font-black text-lg border border-white/20">
-                    1
-                  </div>
-                  <div>
-                    <h3 className="text-base sm:text-lg font-black tracking-wide uppercase">
-                      Only First Party Information
-                    </h3>
-                    <p className="text-xs text-blue-100 font-medium">
-                      केवल प्रथम पक्ष की जानकारी / First Party Only ({docConfig.firstPartyRole})
-                    </p>
-                  </div>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center font-black text-lg border border-white/20">
+                  1
                 </div>
-                <span className="hidden sm:inline-block px-3 py-1 bg-white/20 text-white text-xs font-bold rounded-full backdrop-blur-xs">
-                  Step 2 of {totalPages}
-                </span>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black tracking-wide uppercase">
+                    1st Party Details Only
+                  </h3>
+                  <p className="text-xs text-blue-100 font-medium">
+                    {docConfig.firstPartyRole}
+                  </p>
+                </div>
               </div>
-            </div>
-
-            {/* Document ID Compliance Rationale Banner */}
-            <div className="bg-blue-50/80 border border-blue-200 rounded-xl p-3 text-xs text-blue-900">
-              <div className="flex items-center gap-2 flex-wrap mb-1">
-                <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0" />
-                <span className="font-bold text-slate-900">पहचान सत्यापन नियम ({docIdRule.title}):</span>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                  docIdRule.pan === 'mandatory'
-                    ? 'bg-rose-100 text-rose-700 border border-rose-200'
-                    : docIdRule.pan === 'optional'
-                    ? 'bg-slate-100 text-slate-700'
-                    : 'bg-slate-100 text-slate-500'
-                }`}>
-                  PAN: {docIdRule.pan === 'mandatory' ? 'अनिवार्य (Mandatory)' : docIdRule.pan === 'optional' ? 'वैकल्पिक (Optional)' : 'लागू नहीं (N/A)'}
-                </span>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                  docIdRule.aadhaar === 'mandatory'
-                    ? 'bg-rose-100 text-rose-700 border border-rose-200'
-                    : 'bg-slate-100 text-slate-700'
-                }`}>
-                  Aadhaar: {docIdRule.aadhaar === 'mandatory' ? 'अनिवार्य (Mandatory)' : 'वैकल्पिक (Optional)'}
-                </span>
-              </div>
-              <p className="text-[11px] text-blue-800 leading-relaxed">{docIdRule.rationale}</p>
             </div>
 
             <div className="flex items-center justify-between pb-3 border-b border-slate-200">
@@ -982,14 +945,14 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
             {/* Full Legal Name */}
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
-                {firstPartyEntityType === 'Company' ? 'Registered Company / Firm Name' : 'Full Legal Name'} <span className="text-red-500 font-bold">* [MANDATORY]</span>
+                {firstPartyEntityType === 'Company' ? 'Registered Company / Firm Name' : 'Full Legal Name'} <span className="text-red-500 font-bold">*</span>
               </label>
               <input
                 type="text"
                 required
                 value={firstPartyName}
                 onChange={(e) => setFirstPartyName(e.target.value)}
-                placeholder={firstPartyEntityType === 'Company' ? 'e.g. Acme Media Private Limited' : 'e.g. Ramesh Kumar Sharma'}
+                placeholder={getPlaceholder(firstPartyEntityType === 'Company' ? 'e.g. Acme Media Private Limited' : 'e.g. Ramesh Kumar Sharma')}
                 className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
               />
             </div>
@@ -1005,7 +968,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                     type="text"
                     value={firstPartySignatory}
                     onChange={(e) => setFirstPartySignatory(e.target.value)}
-                    placeholder="e.g. Vikram Malhotra"
+                    placeholder={getPlaceholder('e.g. Vikram Malhotra')}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
@@ -1027,7 +990,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                       type="text"
                       value={firstPartyCustomDesignation}
                       onChange={(e) => setFirstPartyCustomDesignation(e.target.value)}
-                      placeholder="Specify Designation (e.g. Chief Operating Officer)"
+                      placeholder={getPlaceholder('Specify Designation')}
                       className="mt-2 w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-600"
                     />
                   )}
@@ -1045,7 +1008,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                   type="text"
                   value={firstPartyFatherName}
                   onChange={(e) => setFirstPartyFatherName(e.target.value)}
-                  placeholder="e.g. Late Shri Prem Nath Sharma"
+                  placeholder={getPlaceholder('e.g. Late Shri Prem Nath Sharma')}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
               </div>
@@ -1057,7 +1020,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                   onChange={setFirstPartyAgeOrIncDate}
                   required={true}
                   placeholder="DD/MM/YYYY"
-                  helperText="DD/MM/YYYY टाइप करें या कैलेंडर चुनें"
+                  helperText={showExampleDetails ? "Format: DD/MM/YYYY" : undefined}
                 />
               </div>
             </div>
@@ -1065,14 +1028,14 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
             {/* Permanent Address */}
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
-                Permanent Registered Address <span className="text-red-500 font-bold">* [MANDATORY]</span>
+                Permanent Registered Address <span className="text-red-500 font-bold">*</span>
               </label>
               <textarea
                 rows={2}
                 required
                 value={firstPartyAddress}
                 onChange={(e) => setFirstPartyAddress(e.target.value)}
-                placeholder="House / Flat No, Street, Landmark, City, State, PIN code"
+                placeholder={getPlaceholder('House / Flat No, Street, Landmark, City, State, PIN code')}
                 className="w-full bg-white border border-slate-300 rounded-xl p-2.5 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 resize-none"
               />
             </div>
@@ -1081,7 +1044,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Aadhaar (Last 4 Digits) {docIdRule.aadhaar === 'mandatory' ? <span className="text-red-500 font-bold">* [MANDATORY]</span> : <span className="text-slate-400 font-normal">(Optional)</span>}
+                  Aadhaar (Last 4 Digits) {docIdRule.aadhaar === 'mandatory' ? <span className="text-red-500 font-bold">*</span> : <span className="text-slate-400 font-normal">(Optional)</span>}
                 </label>
                 <input
                   type="text"
@@ -1089,7 +1052,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                   required={docIdRule.aadhaar === 'mandatory'}
                   value={firstPartyAadhaarLast4}
                   onChange={(e) => setFirstPartyAadhaarLast4(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                  placeholder="e.g. 8492"
+                  placeholder={getPlaceholder('8492')}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
               </div>
@@ -1103,14 +1066,14 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                   required
                   value={firstPartyMobile}
                   onChange={(e) => setFirstPartyMobile(e.target.value)}
-                  placeholder="+91 98765 43210"
+                  placeholder={getPlaceholder('+91 98765 43210')}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  PAN Number {docIdRule.pan === 'mandatory' ? <span className="text-red-500 font-bold">* [MANDATORY]</span> : docIdRule.pan === 'optional' ? <span className="text-slate-400 font-normal">(Optional)</span> : <span className="text-slate-400 font-normal">(N/A)</span>}
+                  PAN Number {docIdRule.pan === 'mandatory' ? <span className="text-red-500 font-bold">*</span> : docIdRule.pan === 'optional' ? <span className="text-slate-400 font-normal">(Optional)</span> : <span className="text-slate-400 font-normal">(N/A)</span>}
                 </label>
                 <input
                   type="text"
@@ -1123,7 +1086,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                       e.preventDefault();
                     }
                   }}
-                  placeholder="e.g. ABCDE1234F"
+                  placeholder={getPlaceholder('ABCDE1234F')}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm font-mono uppercase text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
               </div>
@@ -1134,51 +1097,21 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
         {/* ================= PAGE 3: SECOND PARTY (Only for Bilateral) ================= */}
         {currentPage === 3 && !isUnilateral && (
           <div className="space-y-4 animate-fadeIn">
-            {/* Page 3 Mandatory Distinct Header */}
+            {/* Page 3 Distinct Header */}
             <div className="bg-gradient-to-r from-purple-700 via-purple-800 to-indigo-900 text-white rounded-2xl p-4 sm:p-5 shadow-sm border border-purple-600 mb-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center font-black text-lg border border-white/20">
-                    2
-                  </div>
-                  <div>
-                    <h3 className="text-base sm:text-lg font-black tracking-wide uppercase">
-                      Only Second Party Information
-                    </h3>
-                    <p className="text-xs text-purple-100 font-medium">
-                      केवल द्वितीय पक्ष की जानकारी / Second Party Only ({docConfig.secondPartyRole})
-                    </p>
-                  </div>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center font-black text-lg border border-white/20">
+                  2
                 </div>
-                <span className="hidden sm:inline-block px-3 py-1 bg-white/20 text-white text-xs font-bold rounded-full backdrop-blur-xs">
-                  Step 3 of {totalPages}
-                </span>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black tracking-wide uppercase">
+                    2nd Party Details Only
+                  </h3>
+                  <p className="text-xs text-purple-100 font-medium">
+                    {docConfig.secondPartyRole}
+                  </p>
+                </div>
               </div>
-            </div>
-
-            {/* Document ID Compliance Rationale Banner */}
-            <div className="bg-purple-50/80 border border-purple-200 rounded-xl p-3 text-xs text-purple-900">
-              <div className="flex items-center gap-2 flex-wrap mb-1">
-                <ShieldCheck className="w-4 h-4 text-purple-600 shrink-0" />
-                <span className="font-bold text-slate-900">पहचान सत्यापन नियम ({docIdRule.title}):</span>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                  docIdRule.pan === 'mandatory'
-                    ? 'bg-rose-100 text-rose-700 border border-rose-200'
-                    : docIdRule.pan === 'optional'
-                    ? 'bg-slate-100 text-slate-700'
-                    : 'bg-slate-100 text-slate-500'
-                }`}>
-                  PAN: {docIdRule.pan === 'mandatory' ? 'अनिवार्य (Mandatory)' : docIdRule.pan === 'optional' ? 'वैकल्पिक (Optional)' : 'लागू नहीं (N/A)'}
-                </span>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                  docIdRule.aadhaar === 'mandatory'
-                    ? 'bg-rose-100 text-rose-700 border border-rose-200'
-                    : 'bg-slate-100 text-slate-700'
-                }`}>
-                  Aadhaar: {docIdRule.aadhaar === 'mandatory' ? 'अनिवार्य (Mandatory)' : 'वैकल्पिक (Optional)'}
-                </span>
-              </div>
-              <p className="text-[11px] text-purple-800 leading-relaxed">{docIdRule.rationale}</p>
             </div>
 
             <div className="flex items-center justify-between pb-3 border-b border-slate-200">
@@ -1217,14 +1150,14 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
             {/* Full Legal Name */}
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
-                {secondPartyEntityType === 'Company' ? 'Registered Company / Firm Name' : 'Full Legal Name'} <span className="text-red-500 font-bold">* [MANDATORY]</span>
+                {secondPartyEntityType === 'Company' ? 'Registered Company / Firm Name' : 'Full Legal Name'} <span className="text-red-500 font-bold">*</span>
               </label>
               <input
                 type="text"
                 required
                 value={secondPartyName}
                 onChange={(e) => setSecondPartyName(e.target.value)}
-                placeholder={secondPartyEntityType === 'Company' ? 'e.g. Zenith Tech Solutions LLP' : 'e.g. Priya Sharma'}
+                placeholder={getPlaceholder(secondPartyEntityType === 'Company' ? 'e.g. Zenith Tech Solutions LLP' : 'e.g. Priya Sharma')}
                 className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
               />
             </div>
@@ -1240,7 +1173,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                     type="text"
                     value={secondPartySignatory}
                     onChange={(e) => setSecondPartySignatory(e.target.value)}
-                    placeholder="e.g. Amit Kapoor"
+                    placeholder={getPlaceholder('e.g. Amit Kapoor')}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
@@ -1262,7 +1195,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                       type="text"
                       value={secondPartyCustomDesignation}
                       onChange={(e) => setSecondPartyCustomDesignation(e.target.value)}
-                      placeholder="Specify Designation (e.g. Managing Partner)"
+                      placeholder={getPlaceholder('Specify Designation')}
                       className="mt-2 w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-600"
                     />
                   )}
@@ -1280,7 +1213,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                   type="text"
                   value={secondPartyFatherName}
                   onChange={(e) => setSecondPartyFatherName(e.target.value)}
-                  placeholder="e.g. Shri Rajesh Sharma"
+                  placeholder={getPlaceholder('e.g. Shri Rajesh Sharma')}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
               </div>
@@ -1292,7 +1225,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                   onChange={setSecondPartyAgeOrIncDate}
                   required={true}
                   placeholder="DD/MM/YYYY"
-                  helperText="DD/MM/YYYY टाइप करें या कैलेंडर चुनें"
+                  helperText={showExampleDetails ? "Format: DD/MM/YYYY" : undefined}
                 />
               </div>
             </div>
@@ -1300,14 +1233,14 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
             {/* Permanent Address */}
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
-                Permanent Registered Address <span className="text-red-500 font-bold">* [MANDATORY]</span>
+                Permanent Registered Address <span className="text-red-500 font-bold">*</span>
               </label>
               <textarea
                 rows={2}
                 required
                 value={secondPartyAddress}
                 onChange={(e) => setSecondPartyAddress(e.target.value)}
-                placeholder="House / Flat No, Street, Landmark, City, State, PIN code"
+                placeholder={getPlaceholder('House / Flat No, Street, Landmark, City, State, PIN code')}
                 className="w-full bg-white border border-slate-300 rounded-xl p-2.5 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 resize-none"
               />
             </div>
@@ -1316,7 +1249,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Aadhaar (Last 4 Digits) {docIdRule.aadhaar === 'mandatory' ? <span className="text-red-500 font-bold">* [MANDATORY]</span> : <span className="text-slate-400 font-normal">(Optional)</span>}
+                  Aadhaar (Last 4 Digits) {docIdRule.aadhaar === 'mandatory' ? <span className="text-red-500 font-bold">*</span> : <span className="text-slate-400 font-normal">(Optional)</span>}
                 </label>
                 <input
                   type="text"
@@ -1324,7 +1257,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                   required={docIdRule.aadhaar === 'mandatory'}
                   value={secondPartyAadhaarLast4}
                   onChange={(e) => setSecondPartyAadhaarLast4(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                  placeholder="e.g. 5183"
+                  placeholder={getPlaceholder('5183')}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
               </div>
@@ -1338,14 +1271,14 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                   required
                   value={secondPartyMobile}
                   onChange={(e) => setSecondPartyMobile(e.target.value)}
-                  placeholder="+91 98111 22334"
+                  placeholder={getPlaceholder('+91 98111 22334')}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  PAN Number {docIdRule.pan === 'mandatory' ? <span className="text-red-500 font-bold">* [MANDATORY]</span> : docIdRule.pan === 'optional' ? <span className="text-slate-400 font-normal">(Optional)</span> : <span className="text-slate-400 font-normal">(N/A)</span>}
+                  PAN Number {docIdRule.pan === 'mandatory' ? <span className="text-red-500 font-bold">*</span> : docIdRule.pan === 'optional' ? <span className="text-slate-400 font-normal">(Optional)</span> : <span className="text-slate-400 font-normal">(N/A)</span>}
                 </label>
                 <input
                   type="text"
@@ -1358,7 +1291,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                       e.preventDefault();
                     }
                   }}
-                  placeholder="e.g. FGHIJ5678K"
+                  placeholder={getPlaceholder('FGHIJ5678K')}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm font-mono uppercase text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
               </div>
@@ -1387,7 +1320,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                 rows={2}
                 value={scopeOfWork}
                 onChange={(e) => setScopeOfWork(e.target.value)}
-                placeholder="Detail the exact commitments, deliverables, or declaration facts..."
+                placeholder={getPlaceholder('Detail the exact commitments, deliverables, or declaration facts...')}
                 className="w-full bg-white border border-slate-300 rounded-xl p-2.5 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 resize-none"
               />
             </div>
@@ -1402,7 +1335,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                   type="text"
                   value={considerationAmount}
                   onChange={(e) => setConsiderationAmount(e.target.value)}
-                  placeholder="e.g. 50,000 or Nil (for family deeds)"
+                  placeholder={getPlaceholder('e.g. 50,000 or Nil (for family deeds)')}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
               </div>
@@ -1418,7 +1351,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                       onChange={(e) => setDurationMonths(e.target.value)}
                       className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                     >
-                      <option value="11 Months">11 Months (Highest Allowed - Registration Exempt)</option>
+                      <option value="11 Months">11 Months (Registration Exempt)</option>
                       <option value="10 Months">10 Months</option>
                       <option value="9 Months">9 Months</option>
                       <option value="8 Months">8 Months</option>
@@ -1431,7 +1364,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                       <option value="1 Month">1 Month</option>
                     </select>
                     <span className="text-[10px] text-blue-700 mt-1 block">
-                      कानूनी नियम: रजिस्ट्रेशन एक्ट 1908 के अनुसार 11 महीने अधिकतम सीमा है। 11 महीने से ऊपर चयन संभव नहीं है।
+                      Legal Rule: Under the Registration Act 1908, 11 months is the standard limit for unregistered lease agreements.
                     </span>
                   </div>
                 ) : (
@@ -1439,7 +1372,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                     type="text"
                     value={durationMonths}
                     onChange={(e) => setDurationMonths(e.target.value)}
-                    placeholder="e.g. 11 Months / 1 Year / Perpetual"
+                    placeholder={getPlaceholder('e.g. 11 Months / 1 Year / Perpetual')}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 )}
@@ -1456,7 +1389,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                   type="text"
                   value={exclusivityTerritory}
                   onChange={(e) => setExclusivityTerritory(e.target.value)}
-                  placeholder="e.g. Pan India / Instagram & YouTube"
+                  placeholder={getPlaceholder('e.g. Pan India / Instagram & YouTube')}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
               </div>
@@ -1469,7 +1402,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                   type="text"
                   value={noticePeriod}
                   onChange={(e) => setNoticePeriod(e.target.value)}
-                  placeholder="e.g. 15 Days written notice"
+                  placeholder={getPlaceholder('e.g. 15 Days written notice')}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
               </div>
@@ -1528,7 +1461,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                         type="text"
                         value={term.title}
                         onChange={(e) => updateCustomTerm(term.id, 'title', e.target.value)}
-                        placeholder="e.g. No-Deletion Timeline / Exclusivity Period"
+                        placeholder={getPlaceholder('e.g. No-Deletion Timeline / Exclusivity Period')}
                         className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-600"
                       />
                     </div>
@@ -1542,7 +1475,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                         rows={2}
                         value={term.description}
                         onChange={(e) => updateCustomTerm(term.id, 'description', e.target.value)}
-                        placeholder="Describe the exact legal condition, liability limit, or rule..."
+                        placeholder={getPlaceholder('Describe the exact legal condition, liability limit, or rule...')}
                         className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-600 resize-none"
                       />
                     </div>
@@ -1616,7 +1549,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                     required
                     value={w1Mobile}
                     onChange={(e) => setW1Mobile(e.target.value)}
-                    placeholder="+91 98999 11223"
+                    placeholder={getPlaceholder('+91 98999 11223')}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
@@ -1627,7 +1560,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                     value={w1Age}
                     onChange={setW1Age}
                     placeholder="DD/MM/YYYY"
-                    helperText="वैकल्पिक / Optional"
+                    helperText={showExampleDetails ? "Format: DD/MM/YYYY" : undefined}
                   />
                 </div>
 
@@ -1640,7 +1573,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                     maxLength={4}
                     value={w1AadhaarLast4}
                     onChange={(e) => setW1AadhaarLast4(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                    placeholder="e.g. 4819"
+                    placeholder={getPlaceholder('4819')}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
@@ -1650,7 +1583,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
             {/* Witness 2 Details */}
             <div className="space-y-3 pt-4 border-t border-slate-200">
               <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
-                Witness 2 Details <span className="text-slate-400 font-normal">(Recommended / Required by Sub-Registrar)</span>
+                Witness 2 Details <span className="text-slate-400 font-normal">(Optional)</span>
               </span>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1662,7 +1595,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                     type="text"
                     value={w2Name}
                     onChange={(e) => setW2Name(e.target.value)}
-                    placeholder="e.g. Manisha Rawat"
+                    placeholder={getPlaceholder('e.g. Manisha Rawat')}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
@@ -1675,7 +1608,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                     type="text"
                     value={w2FatherName}
                     onChange={(e) => setW2FatherName(e.target.value)}
-                    placeholder="e.g. Anand Rawat"
+                    placeholder={getPlaceholder('e.g. Anand Rawat')}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
@@ -1689,7 +1622,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                   type="text"
                   value={w2Address}
                   onChange={(e) => setW2Address(e.target.value)}
-                  placeholder="Address with City, State & Pincode"
+                  placeholder={getPlaceholder('Address with City, State & Pincode')}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
               </div>
@@ -1703,7 +1636,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                     type="tel"
                     value={w2Mobile}
                     onChange={(e) => setW2Mobile(e.target.value)}
-                    placeholder="+91 97111 88990"
+                    placeholder={getPlaceholder('+91 97111 88990')}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
@@ -1714,7 +1647,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                     value={w2Age}
                     onChange={setW2Age}
                     placeholder="DD/MM/YYYY"
-                    helperText="वैकल्पिक / Optional"
+                    helperText={showExampleDetails ? "Format: DD/MM/YYYY" : undefined}
                   />
                 </div>
 
@@ -1727,7 +1660,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                     maxLength={4}
                     value={w2AadhaarLast4}
                     onChange={(e) => setW2AadhaarLast4(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                    placeholder="e.g. 7721"
+                    placeholder={getPlaceholder('7721')}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
@@ -1824,7 +1757,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                           required={deliveryType === 'physical'}
                           value={shippingRecipientName}
                           onChange={(e) => setShippingRecipientName(e.target.value)}
-                          placeholder="e.g. Ramesh Kumar"
+                          placeholder={getPlaceholder('e.g. Ramesh Kumar')}
                           className="w-full bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-600"
                         />
                       </div>
@@ -1838,7 +1771,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                           required={deliveryType === 'physical'}
                           value={shippingPhone}
                           onChange={(e) => setShippingPhone(e.target.value)}
-                          placeholder="+91 98765 43210"
+                          placeholder={getPlaceholder('+91 98765 43210')}
                           className="w-full bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-600"
                         />
                       </div>
@@ -1853,7 +1786,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                         required={deliveryType === 'physical'}
                         value={shippingAddress}
                         onChange={(e) => setShippingAddress(e.target.value)}
-                        placeholder="Flat No, Building, Street, Landmark"
+                        placeholder={getPlaceholder('Flat No, Building, Street, Landmark')}
                         className="w-full bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-600"
                       />
                     </div>
@@ -1868,7 +1801,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                         required={deliveryType === 'physical'}
                         value={shippingPincode}
                         onChange={(e) => setShippingPincode(e.target.value.replace(/\D/g, ''))}
-                        placeholder="e.g. 201301"
+                        placeholder={getPlaceholder('201301')}
                         className="w-36 bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-xs font-mono text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-600"
                       />
                     </div>
@@ -1882,7 +1815,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
               <div className="flex items-center justify-between">
                 <div>
                   <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
-                    Verification &amp; Review Mode (सत्यापन विकल्प) <span className="text-red-500">*</span>
+                    Verification &amp; Review Mode <span className="text-red-500">*</span>
                   </span>
                   <span className="text-[11px] text-slate-500">
                     Choose how your legal draft should be reviewed before e-stamp procurement

@@ -12,6 +12,7 @@ import confetti from 'canvas-confetti';
 import { LegalDocument, OrderItem } from '../types';
 import { STAMP_PAPER_VALUES } from '../data/documentsData';
 import { INDIAN_STATES_LIST } from '../data/indianCities';
+import { useExampleDetails } from '../hooks/useExampleDetails';
 
 interface DocumentOrderModalProps {
   document: LegalDocument;
@@ -24,6 +25,7 @@ export const DocumentOrderModal: React.FC<DocumentOrderModalProps> = ({
   onClose,
   onOrderCreated
 }) => {
+  const { getPlaceholder } = useExampleDetails();
   const [deliveryHours, setDeliveryHours] = useState<number>(24);
   const [selectedState, setSelectedState] = useState<string>('Delhi (NCT)');
   const [stampValue, setStampValue] = useState<string>('₹100');
@@ -275,7 +277,7 @@ export const DocumentOrderModal: React.FC<DocumentOrderModalProps> = ({
                     required
                     value={party1Name}
                     onChange={(e) => setParty1Name(e.target.value)}
-                    placeholder="e.g. Ramesh Kumar"
+                    placeholder={getPlaceholder('e.g. Ramesh Kumar')}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
@@ -288,7 +290,7 @@ export const DocumentOrderModal: React.FC<DocumentOrderModalProps> = ({
                     type="text"
                     value={party2Name}
                     onChange={(e) => setParty2Name(e.target.value)}
-                    placeholder="e.g. Suresh Verma"
+                    placeholder={getPlaceholder('e.g. Suresh Verma')}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
@@ -305,7 +307,7 @@ export const DocumentOrderModal: React.FC<DocumentOrderModalProps> = ({
                     required
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    placeholder="+91 98765 43210"
+                    placeholder={getPlaceholder('+91 98765 43210')}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
@@ -318,7 +320,7 @@ export const DocumentOrderModal: React.FC<DocumentOrderModalProps> = ({
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="client@example.com"
+                    placeholder={getPlaceholder('client@example.com')}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
@@ -333,7 +335,7 @@ export const DocumentOrderModal: React.FC<DocumentOrderModalProps> = ({
                   rows={2}
                   value={specialTerms}
                   onChange={(e) => setSpecialTerms(e.target.value)}
-                  placeholder="e.g. Monthly rent ₹15,000, 2 months security deposit, address details..."
+                  placeholder={getPlaceholder('e.g. Monthly rent ₹15,000, 2 months security deposit, address details...')}
                   className="w-full bg-white border border-slate-300 rounded-xl p-2.5 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 resize-none"
                 />
               </div>

@@ -1,5 +1,6 @@
 import React, { useRef } from 'react';
 import { Calendar as CalendarIcon } from 'lucide-react';
+import { useExampleDetails } from '../hooks/useExampleDetails';
 
 interface DateOfBirthPickerProps {
   label: string;
@@ -87,10 +88,11 @@ export const DateOfBirthPicker: React.FC<DateOfBirthPickerProps> = ({
   value,
   onChange,
   required = false,
-  placeholder = 'DD/MM/YYYY',
+  placeholder,
   helperText
 }) => {
   const hiddenDateRef = useRef<HTMLInputElement>(null);
+  const { showExampleDetails, getPlaceholder } = useExampleDetails();
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value;
@@ -121,6 +123,7 @@ export const DateOfBirthPicker: React.FC<DateOfBirthPickerProps> = ({
   };
 
   const computedAge = calculateAgeInYears(value);
+  const effectivePlaceholder = getPlaceholder(placeholder || 'DD/MM/YYYY');
 
   return (
     <div>
@@ -142,11 +145,11 @@ export const DateOfBirthPicker: React.FC<DateOfBirthPickerProps> = ({
           maxLength={10}
           value={value}
           onChange={handleInputChange}
-          placeholder={placeholder}
+          placeholder={effectivePlaceholder}
           className="w-full bg-white border border-slate-300 rounded-xl pl-3.5 pr-11 py-2 text-xs sm:text-sm font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 transition-all placeholder:text-slate-400"
         />
 
-        {/* Calendar Picker Trigger Button */}
+        {/* Calendar Picker Trigger Icon */}
         <button
           type="button"
           onClick={openCalendarPicker}
@@ -170,16 +173,10 @@ export const DateOfBirthPicker: React.FC<DateOfBirthPickerProps> = ({
         />
       </div>
 
-      <div className="flex items-center justify-between mt-1 text-[11px] text-slate-400">
-        <span>{helperText || 'Format: DD/MM/YYYY (e.g. 15/08/1995)'}</span>
-        <button
-          type="button"
-          onClick={openCalendarPicker}
-          className="text-blue-600 hover:underline font-semibold cursor-pointer"
-        >
-          Use Calendar 📅
-        </button>
+      <div className="mt-1 text-[11px] text-slate-400">
+        <span>{helperText || (showExampleDetails ? 'Format: DD/MM/YYYY (e.g. 15/08/1995)' : 'Format: DD/MM/YYYY')}</span>
       </div>
     </div>
   );
 };
+

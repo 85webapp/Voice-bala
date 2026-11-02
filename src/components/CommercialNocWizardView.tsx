@@ -61,7 +61,8 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
   onOrderCreated,
   onNavigateToDashboard
 }) => {
-  const showExample = useExampleDetails();
+  const { showExampleDetails, getPlaceholder } = useExampleDetails();
+  const showExample = showExampleDetails;
   const [currentPage, setCurrentPage] = useState<StepId>('1');
 
   // --- AUDIO EXPLAINER & MULTILINGUAL VOICE GUIDE ---
@@ -605,21 +606,12 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
         {/* ================= PAGE 1: OBJECTIVE & STAMP SELECTION ================= */}
         {currentPage === '1' && (
           <div className="space-y-6 animate-fadeIn">
-            {/* MANDATORY & OPTIONAL BANNER AT TOP OF FORM (PAGE 1 ONLY) */}
-            <div className="py-2 px-4 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-xs text-slate-700 font-medium">
-              <div>
-                Mandatory = <span className="text-red-500 font-bold">*</span>
-              </div>
-              <div>
-                Optional = <span className="text-slate-400 font-medium">(Optional)</span>
-              </div>
-            </div>
 
             {/* State Selection */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="block text-xs font-bold text-slate-800">
-                  State / Union Territory (36 States/UTs) <span className="text-red-500">*</span>
+                  State / Union Territory (36 States/UTs) <span className="text-red-500 font-bold">*</span>
                 </label>
                 <button
                   type="button"
@@ -647,7 +639,7 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="block text-xs font-bold text-slate-800">
-                  Purpose of NOC (Select all that apply) <span className="text-red-500">*</span>
+                  Purpose of NOC (Select all that apply) <span className="text-red-500 font-bold">*</span>
                 </label>
                 <button
                   type="button"
@@ -690,7 +682,7 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="block text-xs font-bold text-slate-800">
-                  Property Classification <span className="text-red-500">*</span>
+                  Property Classification <span className="text-red-500 font-bold">*</span>
                 </label>
                 <button
                   type="button"
@@ -718,7 +710,7 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="block text-xs font-bold text-slate-800">
-                  Who is paying the Stamp Duty Fee? <span className="text-red-500">*</span>
+                  Who is paying the Stamp Duty Fee? <span className="text-red-500 font-bold">*</span>
                 </label>
                 <button
                   type="button"
@@ -731,8 +723,8 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                 {[
-                  { key: 'Landlord', label: 'Landlord (मकान मालिक)' },
-                  { key: 'Business Owner', label: 'Business Owner (बिजनेस ओनर)' },
+                  { key: 'Landlord', label: 'Landlord' },
+                  { key: 'Business Owner', label: 'Business Owner' },
                   { key: 'Shared Equally', label: 'Shared (50-50%)' }
                 ].map((payer) => (
                   <label
@@ -870,6 +862,23 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
         {/* ================= PAGE 2: THE GRANTOR ================= */}
         {currentPage === '2' && (
           <div className="space-y-5 animate-fadeIn">
+            {/* Page 2 Distinct Header */}
+            <div className="bg-gradient-to-r from-blue-700 via-blue-800 to-indigo-900 text-white rounded-2xl p-4 sm:p-5 shadow-sm border border-blue-600 mb-2">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center font-black text-lg border border-white/20">
+                  1
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black tracking-wide uppercase">
+                    1st Party Details Only
+                  </h3>
+                  <p className="text-xs text-blue-100 font-medium">
+                    Landlord / Property Owner
+                  </p>
+                </div>
+              </div>
+            </div>
+
             <div>
               <label className="block text-xs font-bold text-slate-800 mb-1.5">
                 Landlord Ownership Type <span className="text-red-500">*</span>
@@ -1214,6 +1223,23 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
         {/* ================= PAGE 3: THE GRANTEE (BUSINESS & ENTITY) ================= */}
         {currentPage === '3' && (
           <div className="space-y-4 animate-fadeIn">
+            {/* Page 3 Distinct Header */}
+            <div className="bg-gradient-to-r from-purple-700 via-purple-800 to-indigo-900 text-white rounded-2xl p-4 sm:p-5 shadow-sm border border-purple-600 mb-2">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center font-black text-lg border border-white/20">
+                  2
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black tracking-wide uppercase">
+                    2nd Party Details Only
+                  </h3>
+                  <p className="text-xs text-purple-100 font-medium">
+                    Business Owner / Grantee
+                  </p>
+                </div>
+              </div>
+            </div>
+
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
                 Business Constitution <span className="text-red-500">*</span>

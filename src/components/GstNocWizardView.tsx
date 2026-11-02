@@ -63,7 +63,8 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
   onOrderCreated,
   onNavigateToDashboard
 }) => {
-  const showExample = useExampleDetails();
+  const { showExampleDetails, getPlaceholder } = useExampleDetails();
+  const showExample = showExampleDetails;
   const [currentPage, setCurrentPage] = useState<StepId>('1');
 
   // --- AUDIO EXPLAINER & MULTILINGUAL VOICE GUIDE ---
@@ -107,7 +108,7 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
   const [selectedState, setSelectedState] = useState<string>('Uttar Pradesh');
 
   // GST Jurisdiction Guide with PIN code lookup
-  const [pincode, setPincode] = useState('201301');
+  const [pincode, setPincode] = useState('');
   const [gstCommissionerate, setGstCommissionerate] = useState('');
   const [gstDivision, setGstDivision] = useState('');
   const [gstRange, setGstRange] = useState('');
@@ -552,16 +553,6 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
         {/* ================= PAGE 1 ================= */}
         {currentPage === '1' && (
           <div className="space-y-6 animate-fadeIn">
-            {/* MANDATORY & OPTIONAL BANNER AT TOP OF FORM (STRICTLY PAGE 1 ONLY) */}
-            <div className="py-2 px-4 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-xs text-slate-700 font-medium">
-              <div>
-                Mandatory = <span className="text-red-500 font-bold">*</span>
-              </div>
-              <div>
-                Optional = <span className="text-slate-400 font-medium">(Optional)</span>
-              </div>
-            </div>
-
             {/* Type of Premises */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
@@ -682,8 +673,8 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                 {[
-                  { key: 'Landlord', label: 'Landlord (मकान मालिक)' },
-                  { key: 'Business Owner', label: 'Business Owner (बिजनेस ओनर)' },
+                  { key: 'Landlord', label: 'Landlord' },
+                  { key: 'Business Owner', label: 'Business Owner' },
                   { key: 'Shared Equally', label: 'Shared (50-50%)' }
                 ].map((payer) => (
                   <label
@@ -821,6 +812,23 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
         {/* ================= PAGE 2: LANDLORD TAX IDENTITY ================= */}
         {currentPage === '2' && (
           <div className="space-y-4 animate-fadeIn">
+            {/* Page 2 Distinct Header */}
+            <div className="bg-gradient-to-r from-blue-700 via-blue-800 to-indigo-900 text-white rounded-2xl p-4 sm:p-5 shadow-sm border border-blue-600 mb-2">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center font-black text-lg border border-white/20">
+                  1
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black tracking-wide uppercase">
+                    1st Party Details Only
+                  </h3>
+                  <p className="text-xs text-blue-100 font-medium">
+                    Landlord / Property Owner
+                  </p>
+                </div>
+              </div>
+            </div>
+
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="block text-xs font-bold text-slate-700">
@@ -1009,6 +1017,23 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
         {/* ================= PAGE 3: THE GRANTEE - PROPOSED GST ENTITY ================= */}
         {currentPage === '3' && (
           <div className="space-y-4 animate-fadeIn">
+            {/* Page 3 Distinct Header */}
+            <div className="bg-gradient-to-r from-purple-700 via-purple-800 to-indigo-900 text-white rounded-2xl p-4 sm:p-5 shadow-sm border border-purple-600 mb-2">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center font-black text-lg border border-white/20">
+                  2
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black tracking-wide uppercase">
+                    2nd Party Details Only
+                  </h3>
+                  <p className="text-xs text-purple-100 font-medium">
+                    Business Owner / Grantee
+                  </p>
+                </div>
+              </div>
+            </div>
+
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="block text-xs font-bold text-slate-700">
@@ -1040,7 +1065,7 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="block text-xs font-bold text-slate-700">
-                    Proposed Trade Name (दुकान या ब्रांड का नाम) <span className="text-red-500">*</span>
+                    Proposed Trade Name <span className="text-red-500">*</span>
                   </label>
                   <button
                     type="button"
@@ -1063,7 +1088,7 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="block text-xs font-bold text-slate-700">
-                    Legal Name (पैन के अनुसार कानूनी नाम) <span className="text-red-500">*</span>
+                    Legal Name (As on PAN) <span className="text-red-500">*</span>
                   </label>
                   <button
                     type="button"
@@ -1141,7 +1166,7 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="block text-xs font-bold text-slate-700">
-                  Principal Place of Business Address (जीएसटी परिसर का पूरा पता) <span className="text-red-500">*</span>
+                  Principal Place of Business Address <span className="text-red-500">*</span>
                 </label>
                 <button
                   type="button"
@@ -1300,7 +1325,7 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
                   className="mt-0.5 w-4 h-4 text-blue-600 rounded"
                 />
                 <span className="text-xs text-slate-700">
-                  <strong>जीएसटी ऑफिसर का भौतिक निरीक्षण (Rule 9):</strong> मकान मालिक को जीएसटी अधिकारियों द्वारा परिसर के भौतिक सत्यापन (Physical Verification) पर कोई आपत्ति नहीं है।
+                  <strong>Physical Verification by GST Officer (Rule 9):</strong> Landlord has no objection to physical inspection or verification of the premises by GST authorities.
                 </span>
                 <button
                   type="button"
@@ -1319,7 +1344,7 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
                   className="mt-0.5 w-4 h-4 text-blue-600 rounded"
                 />
                 <span className="text-xs text-slate-700">
-                  <strong>जीएसटी साइनबोर्ड की अनुमति (Rule 18):</strong> परिसर के मुख्य प्रवेश द्वार पर फर्म का नाम और 15 अंकों का GSTIN साइनबोर्ड प्रदर्शित करने की पूर्ण अनुमति है।
+                  <strong>Display of GSTIN Signboard (Rule 18):</strong> Full consent to display the business name and 15-digit GSTIN on the entrance signboard.
                 </span>
                 <button
                   type="button"
@@ -1338,7 +1363,7 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
                   className="mt-0.5 w-4 h-4 text-blue-600 rounded"
                 />
                 <span className="text-xs text-slate-700">
-                  <strong>बुक्स ऑफ अकाउंट्स रखना (Section 35):</strong> व्यापार के सभी बिल, टैक्स इनवॉइस व खाते इस परिसर में रखने की सहमति दी जाती है।
+                  <strong>Maintenance of Books of Accounts (Section 35):</strong> Consent to keep business accounting records, invoices, and ledgers at these premises.
                 </span>
                 <button
                   type="button"
@@ -1357,7 +1382,7 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
                   className="mt-0.5 w-4 h-4 text-blue-600 rounded"
                 />
                 <span className="text-xs text-slate-700">
-                  <strong>टैक्स देनदारी क्षतिपूर्ति (Tax Indemnity):</strong> किरायेदार के व्यापारिक टैक्स, जीएसटी चालान व जुर्माने की जिम्मेदारी केवल किरायेदार की होगी, मकान मालिक की नहीं।
+                  <strong>Tax Liability Indemnity:</strong> All commercial taxes, GST liabilities, and penalties remain solely with the tenant/grantee, not the property owner.
                 </span>
                 <button
                   type="button"
@@ -1518,7 +1543,7 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
                   required
                   value={shippingAddress}
                   onChange={(e) => setShippingAddress(e.target.value)}
-                  placeholder="Complete shipping address for physical delivery"
+                  placeholder={showExample ? "Complete shipping address for physical delivery" : ""}
                   className="w-full bg-white border border-slate-300 rounded-xl p-2.5 text-xs text-slate-900 resize-none"
                 />
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1528,7 +1553,7 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
                     required
                     value={shippingPincode}
                     onChange={(e) => setShippingPincode(e.target.value.replace(/\D/g, ''))}
-                    placeholder="Delivery PIN Code"
+                    placeholder={showExample ? "Delivery PIN Code" : ""}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono"
                   />
                   <input
@@ -1537,7 +1562,7 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
                     required
                     value={shippingPhone}
                     onChange={(e) => setShippingPhone(e.target.value.replace(/\D/g, ''))}
-                    placeholder="Courier Contact Mobile Number"
+                    placeholder={showExample ? "Courier Contact Mobile Number" : ""}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono"
                   />
                 </div>
