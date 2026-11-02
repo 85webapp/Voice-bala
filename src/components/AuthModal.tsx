@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Phone, User, CheckCircle2 } from 'lucide-react';
+import { X, Phone, User, LockKeyhole } from 'lucide-react';
 import { UserProfile } from '../types';
 
 interface AuthModalProps {
@@ -12,47 +12,51 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
 
   // Login form state
   const [loginPhone, setLoginPhone] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
 
   // Register form state
   const [regName, setRegName] = useState('');
   const [regPhone, setRegPhone] = useState('');
-  const [regSuccessMsg, setRegSuccessMsg] = useState(false);
+  const [regPassword, setRegPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const submitAuth = async (endpoint: 'login' | 'register', body: Record<string, string>) => {
+    setErrorMsg('');
+    setIsSubmitting(true);
+    try {
+      const response = await fetch(`/api/auth/${endpoint}`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.user) {
+        throw new Error(typeof result.error === 'string' ? result.error : 'Could not authenticate this account.');
+      }
+      onLoginSuccess({ ...result.user, isLoggedIn: true });
+      onClose();
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : 'Could not reach the account service.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const handleRegister = (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMsg('');
-
-    if (!regName.trim() || !regPhone.trim()) {
-      setErrorMsg('Please fill in all registration fields.');
+    if (regPassword !== confirmPassword) {
+      setErrorMsg('Passwords do not match.');
       return;
     }
-
-    // Demo profiles are local only; no credentials are created or verified.
-    setLoginPhone(regPhone);
-    setRegSuccessMsg(true);
-    setTimeout(() => {
-      setRegSuccessMsg(false);
-      setMode('login');
-    }, 1200);
+    void submitAuth('register', { name: regName.trim(), phone: regPhone, password: regPassword });
   };
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMsg('');
-
-    if (!loginPhone.trim()) {
-      setErrorMsg('Please enter your mobile number.');
-      return;
-    }
-
-    // Success login
-    onLoginSuccess({
-      name: regName || 'Admin User',
-      phone: loginPhone,
-      isLoggedIn: true
-    });
-    onClose();
+    void submitAuth('login', { phone: loginPhone, password: loginPassword });
   };
 
   return (
@@ -61,7 +65,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
         {/* Modal Top Header with Close */}
         <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between bg-white">
           <div className="flex items-center gap-2">
-            <span className="text-lg font-black text-black">Demo Account</span>
+              <span className="text-lg font-black text-black">Account</span>
           </div>
           <button
             type="button"
@@ -72,7 +76,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
           </button>
         </div>
 
-        {/* Demo profile actions */}
+        {/* Login and registration switch */}
         <div className="flex bg-slate-100 p-1 m-4 rounded-xl">
           <button
             type="button"
@@ -86,7 +90,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            Continue
+            Login
           </button>
           <button
             type="button"
@@ -100,23 +104,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            New profile
+            Register
           </button>
         </div>
 
         {/* Form Body */}
         <div className="px-6 pb-6 pt-1">
-          <p className="mb-4 text-xs text-slate-500">Demo access is not authenticated. Profile details are stored only in this browser.</p>
           {errorMsg && (
             <div className="mb-4 p-2.5 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-700">
               {errorMsg}
-            </div>
-          )}
-
-          {regSuccessMsg && (
-            <div className="mb-4 p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800 flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>Demo profile ready. Returning to continue...</span>
             </div>
           )}
 
@@ -124,16 +120,35 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Mobile Number (demo only)
+                  Mobile Number
                 </label>
                 <div className="relative">
                   <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="tel"
                     required
+                    inputMode="numeric"
+                    maxLength={10}
+                    pattern="[0-9]{10}"
                     value={loginPhone}
-                    onChange={(e) => setLoginPhone(e.target.value)}
-                    placeholder="Enter a display contact number"
+                    onChange={(e) => setLoginPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    placeholder="10-digit mobile number"
+                    className="w-full bg-white border border-slate-300 rounded-xl pl-9 pr-3 py-2.5 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Password</label>
+                <div className="relative">
+                  <LockKeyhole className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="password"
+                    required
+                    maxLength={128}
+                    autoComplete="current-password"
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
                     className="w-full bg-white border border-slate-300 rounded-xl pl-9 pr-3 py-2.5 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
@@ -141,9 +156,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
 
               <button
                 type="submit"
+                disabled={isSubmitting}
                 className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl transition-colors cursor-pointer shadow-xs mt-2"
               >
-                Continue in demo
+                {isSubmitting ? 'Please wait...' : 'Login'}
               </button>
             </form>
           ) : (
@@ -159,7 +175,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
                     required
                     value={regName}
                     onChange={(e) => setRegName(e.target.value)}
-                    placeholder="e.g. Ramesh Kumar"
                     className="w-full bg-white border border-slate-300 rounded-xl pl-9 pr-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
@@ -174,19 +189,51 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
                   <input
                     type="tel"
                     required
+                    inputMode="numeric"
+                    maxLength={10}
+                    pattern="[0-9]{10}"
                     value={regPhone}
-                    onChange={(e) => setRegPhone(e.target.value)}
-                    placeholder="+91 98765 43210"
+                    onChange={(e) => setRegPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    placeholder="10-digit mobile number"
                     className="w-full bg-white border border-slate-300 rounded-xl pl-9 pr-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
               </div>
 
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Password</label>
+                <input
+                  type="password"
+                  required
+                  minLength={8}
+                  maxLength={128}
+                  autoComplete="new-password"
+                  value={regPassword}
+                  onChange={(e) => setRegPassword(e.target.value)}
+                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Confirm Password</label>
+                <input
+                  type="password"
+                  required
+                  minLength={8}
+                  maxLength={128}
+                  autoComplete="new-password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                />
+              </div>
+
               <button
                 type="submit"
+                disabled={isSubmitting}
                 className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl transition-colors cursor-pointer shadow-xs mt-2"
               >
-                Create demo profile
+                {isSubmitting ? 'Creating account...' : 'Create Account'}
               </button>
             </form>
           )}

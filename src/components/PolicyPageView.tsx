@@ -34,7 +34,7 @@ export const PolicyPageView: React.FC<PolicyPageViewProps> = ({ policy, onBack }
       </div>
 
       <div className="bg-white border border-slate-200 rounded-xl p-5 text-sm text-slate-700 leading-relaxed">
-        Profile and demo order records are stored in this browser. Search and audio explanations require a configured Gemini server; avoid submitting sensitive personal information. No external service request, payment, or legal document is created by the demo order flow.
+        Account identity and saved form details are stored in Supabase and loaded only for the signed-in account. Passwords are salted scrypt hashes, and form details are encrypted before storage. This portal does not process payments or file documents with government agencies.
       </div>
 
       <div className="mt-8 bg-amber-50 border border-amber-200 rounded-2xl p-5 flex items-start gap-3.5 text-xs text-amber-900">

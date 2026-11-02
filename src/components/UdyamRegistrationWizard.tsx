@@ -25,6 +25,7 @@ import {
 import { SERVICE_CATEGORIES } from '../data/servicesData';
 import { VoiceGuidanceButton } from './VoiceGuidanceButton';
 import { useExampleDetails } from '../hooks/useExampleDetails';
+import { submitEncryptedForm } from '../services/secureSubmission';
 
 interface UdyamRegistrationWizardProps {
   onBack: () => void;
@@ -49,6 +50,7 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
     service: 'MSME Udyam Registration'
   });
   const [requestSubmitted, setRequestSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // STEP 1 State: Aadhaar Authentication & PAN Gate
   const [step1, setStep1] = useState({
@@ -75,7 +77,7 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
     enterpriseName: '',
     officialEmail: '',
     officialMobile: '',
-    dateOfCommencement: '2025-04-01',
+    dateOfCommencement: '',
     previousUamNumber: '',
     bankName: '',
     ifscCode: '',
@@ -84,32 +86,32 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
 
   const [unitsList, setUnitsList] = useState([
     {
-      unitName: 'Unit-1 Main Plant',
-      flatNo: 'Plot No. 42',
-      buildingName: 'Industrial Area Phase 1',
-      villageOrTown: 'Mainpuri',
-      block: 'Industrial Estate',
-      city: 'Mainpuri',
-      district: 'Mainpuri',
-      state: 'Uttar Pradesh',
-      pinCode: '205001'
+      unitName: '',
+      flatNo: '',
+      buildingName: '',
+      villageOrTown: '',
+      block: '',
+      city: '',
+      district: '',
+      state: '',
+      pinCode: ''
     }
   ]);
 
   // STEP 4 State: Activity, Investment & Turnover
   const [step4, setStep4] = useState({
-    majorActivity: 'MANUFACTURING',
-    nicCodes: '14101 - Manufacture of all types of textile garments',
-    empMale: 5,
-    empFemale: 3,
+    majorActivity: '',
+    nicCodes: '',
+    empMale: 0,
+    empFemale: 0,
     empOther: 0,
-    investmentInPlantMachinery: 2500000, // 25 Lakhs
-    annualTurnover: 8000000 // 80 Lakhs
+    investmentInPlantMachinery: 0,
+    annualTurnover: 0
   });
 
   // STEP 5 State: DIC Selection & Declaration
   const [step5, setStep5] = useState({
-    preferredDIC: 'DIC Mainpuri, Uttar Pradesh',
+    preferredDIC: '',
     declarationAccepted: false,
     finalAadhaarOtp: '',
     otpVerified: false
@@ -163,7 +165,7 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
 
   const handleSendAadhaarOtp = () => {
     if (step1.aadhaarNumber.length === 12) {
-      setStep1((prev) => ({ ...prev, otpSent: true, otpValue: '482910' }));
+      setStep1((prev) => ({ ...prev, otpSent: true, otpValue: '' }));
     }
   };
 
@@ -175,15 +177,15 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
     setUnitsList((prev) => [
       ...prev,
       {
-        unitName: `Unit-${prev.length + 1}`,
+        unitName: '',
         flatNo: '',
         buildingName: '',
         villageOrTown: '',
         block: '',
-        city: 'Mainpuri',
-        district: 'Mainpuri',
-        state: 'Uttar Pradesh',
-        pinCode: '205001'
+        city: '',
+        district: '',
+        state: '',
+        pinCode: ''
       }
     ]);
   };
@@ -193,13 +195,40 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
     setUnitsList((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleRequestSubmit = (e: React.FormEvent) => {
+  const handleRequestSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setRequestSubmitted(true);
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      await submitEncryptedForm({
+        firstPartyName: requestData.name,
+        formName: requestData.service,
+        totalPrice: null,
+        details: requestData
+      });
+      setRequestSubmitted(true);
+    } catch (error) {
+      setIsSubmitting(false);
+      alert(error instanceof Error ? error.message : 'Could not securely submit this form.');
+    }
   };
 
-  const handleFinalUdyamSubmit = (e: React.FormEvent) => {
+  const handleFinalUdyamSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      await submitEncryptedForm({
+        firstPartyName: step1.entrepreneurName || step3.enterpriseName,
+        formName: 'MSME Udyam Registration',
+        totalPrice: null,
+        details: { step1, step2, step3, unitsList, step4, step5 }
+      });
+    } catch (error) {
+      setIsSubmitting(false);
+      alert(error instanceof Error ? error.message : 'Could not securely submit this form.');
+      return;
+    }
     const stateCode = 'UP';
     const distCode = '07';
     const randDigits = Math.floor(1000000 + Math.random() * 9000000);
@@ -240,11 +269,15 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
             <div className="mt-3 pt-3 border-t border-slate-200 grid grid-cols-2 gap-2 text-xs">
               <div>
                 <span className="text-slate-500 block">Enterprise:</span>
-                <span className="font-bold text-slate-900">{step3.enterpriseName || 'My Business Enterprise'}</span>
+                <span className="font-bold text-slate-900">{step3.enterpriseName || step1.entrepreneurName}</span>
               </div>
               <div>
                 <span className="text-slate-500 block">Category:</span>
-                <span className="font-bold text-emerald-700">{classification.category.split(' ')[0]} Enterprise</span>
+                <span className="font-bold text-emerald-700">
+                  {step4.investmentInPlantMachinery > 0 || step4.annualTurnover > 0
+                    ? `${classification.category.split(' ')[0]} Enterprise`
+                    : 'Not classified'}
+                </span>
               </div>
             </div>
           </div>
@@ -414,9 +447,10 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
               <div className="pt-2">
                 <button
                   type="submit"
+                  disabled={isSubmitting}
                   className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-sm shadow-sm cursor-pointer transition-all"
                 >
-                  Submit 1-Hour Callback Request
+                  {isSubmitting ? 'Securing submission...' : 'Submit 1-Hour Callback Request'}
                 </button>
               </div>
             </form>
@@ -1052,13 +1086,17 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
                       Automatic MSME Enterprise Classification
                     </span>
                     <span className="text-base font-black text-slate-900 block mt-0.5">
-                      {classification.category}
+                      {step4.investmentInPlantMachinery > 0 || step4.annualTurnover > 0
+                        ? classification.category
+                        : 'Enter investment and turnover to classify'}
                     </span>
                     <span className="text-xs text-slate-600">{classification.limits}</span>
                   </div>
 
                   <span className={`px-3 py-1 rounded-full text-xs font-extrabold border ${classification.badgeColor}`}>
-                    Eligible for Priority MSME Benefits
+                    {step4.investmentInPlantMachinery > 0 || step4.annualTurnover > 0
+                      ? 'Eligible for Priority MSME Benefits'
+                      : 'Classification pending'}
                   </span>
                 </div>
               </div>
@@ -1096,11 +1134,13 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     District Industries Centre (DIC) <span className="text-rose-600">*</span>
                   </label>
-                  <select
+                      <select
+                    required
                     value={step5.preferredDIC}
                     onChange={(e) => setStep5({ ...step5, preferredDIC: e.target.value })}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   >
+                    <option value="">Select a DIC</option>
                     <option value="DIC Mainpuri, Uttar Pradesh">DIC Mainpuri, Uttar Pradesh</option>
                     <option value="DIC Gautam Buddha Nagar (Noida)">DIC Gautam Buddha Nagar (Noida)</option>
                     <option value="DIC Lucknow, Uttar Pradesh">DIC Lucknow, Uttar Pradesh</option>
@@ -1149,11 +1189,11 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
                 </button>
                 <button
                   type="submit"
-                  disabled={!step5.declarationAccepted || step5.finalAadhaarOtp.length < 6}
+                  disabled={isSubmitting || !step5.declarationAccepted || step5.finalAadhaarOtp.length < 6}
                   className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-bold text-sm px-8 py-3 rounded-xl cursor-pointer shadow-md transition-all"
                 >
                   <Award className="w-4 h-4" />
-                  <span>Final Submit &amp; Generate Udyam Certificate</span>
+                  <span>{isSubmitting ? 'Securing submission...' : 'Final Submit &amp; Generate Udyam Certificate'}</span>
                 </button>
               </div>
             </form>

@@ -44,6 +44,50 @@ const CATEGORY_TITLES: Record<HomeCategory, string> = {
   filings: 'Popular Filings'
 };
 
+interface SavedFormSubmission {
+  id: string | number;
+  first_party_name: string;
+  form_name: string;
+  submitted_at: string;
+  total_price: string | number | null;
+  details: Record<string, unknown>;
+}
+
+const EMPTY_PROFILE: UserProfile = {
+  name: '',
+  phone: '',
+  email: '',
+  city: '',
+  state: '',
+  isLoggedIn: false
+};
+
+function toOrderItems(submissions: SavedFormSubmission[], phone: string): OrderItem[] {
+  return submissions.map((submission) => {
+    const submittedAt = new Date(submission.submitted_at);
+    const totalFee = Number(submission.total_price) || 0;
+    return {
+      orderId: `CTC-${submission.id}`,
+      docTitle: submission.form_name,
+      createdAt: submittedAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+      date: submittedAt.toISOString().slice(0, 10),
+      deliveryHours: 24,
+      deliveryFee: 0,
+      baseFee: totalFee,
+      totalFee,
+      hasPrice: submission.total_price !== null,
+      paymentStatus: 'Unpaid',
+      status: 'Processing',
+      pendingHours: 1,
+      applicantName: submission.first_party_name,
+      applicantPhone: phone,
+      state: typeof submission.details?.selectedState === 'string' ? submission.details.selectedState : '',
+      stampDenomination: '',
+      details: submission.details
+    };
+  });
+}
+
 export default function App() {
   useDisplayLanguage({ translateDom: true });
   // Active Bottom Tab: 'home' | 'dashboard' | 'agreements' | 'menu'
@@ -66,83 +110,32 @@ export default function App() {
   const [isAuthOpen, setIsAuthOpen] = useState(false);
 
   // User Profile
-  const [profile, setProfile] = useState<UserProfile>(() => {
-    try {
-      const saved = localStorage.getItem('ctc_user_profile_v2');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed && typeof parsed.isLoggedIn === 'boolean') {
-          return parsed;
+  const [profile, setProfile] = useState<UserProfile>(EMPTY_PROFILE);
+
+  const [orders, setOrders] = useState<OrderItem[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const response = await fetch('/api/auth/me', { credentials: 'same-origin' });
+        if (!response.ok) return;
+        const result = await response.json();
+        if (!result.user || !active) return;
+        const signedInProfile: UserProfile = { ...EMPTY_PROFILE, ...result.user, isLoggedIn: true };
+        setProfile(signedInProfile);
+        const submissionsResponse = await fetch('/api/submissions', { credentials: 'same-origin' });
+        if (!submissionsResponse.ok) return;
+        const saved = await submissionsResponse.json();
+        if (active && Array.isArray(saved.submissions)) {
+          setOrders(toOrderItems(saved.submissions, signedInProfile.phone));
         }
+      } catch {
+        if (active) setOrders([]);
       }
-    } catch {}
-    return {
-      name: '',
-      phone: '',
-      email: '',
-      city: '',
-      state: '',
-      isLoggedIn: false
-    };
-  });
-
-  // Orders / Records
-  const [orders, setOrders] = useState<OrderItem[]>(() => {
-    try {
-      const saved = localStorage.getItem('ctc_user_orders_v2');
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return [
-      {
-        orderId: 'CTC-849120',
-        docTitle: '11th Month Rent Agreement',
-        createdAt: '10:30 AM',
-        date: '2026-10-24',
-        deliveryHours: 24,
-        deliveryFee: 0,
-        baseFee: 299,
-        totalFee: 299,
-        paymentStatus: 'Paid',
-        status: 'Delivered',
-        pendingHours: 0,
-        applicantName: 'Admin',
-        applicantPhone: '2109141007',
-        state: 'Uttar Pradesh',
-        stampDenomination: '₹100',
-        isPhysicalCourier: false
-      },
-      {
-        orderId: 'CTC-520194',
-        docTitle: 'Landlord NOC for GST',
-        createdAt: '02:15 PM',
-        date: '2026-10-25',
-        deliveryHours: 12,
-        deliveryFee: 60,
-        baseFee: 199,
-        totalFee: 259,
-        paymentStatus: 'Unpaid',
-        status: 'Processing',
-        pendingHours: 3,
-        applicantName: 'Admin',
-        applicantPhone: '2109141007',
-        state: 'Uttar Pradesh',
-        stampDenomination: '₹50',
-        isPhysicalCourier: false
-      }
-    ];
-  });
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('ctc_user_profile_v2', JSON.stringify(profile));
-    } catch {}
-  }, [profile]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('ctc_user_orders_v2', JSON.stringify(orders));
-    } catch {}
-  }, [orders]);
+    })();
+    return () => { active = false; };
+  }, []);
 
   const handleOrderCreated = (newOrder: OrderItem) => {
     setOrders((prev) => [newOrder, ...prev]);
@@ -155,18 +148,18 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    setProfile((prev) => ({
-      ...prev,
-      isLoggedIn: false
-    }));
+    void fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
+    setProfile(EMPTY_PROFILE);
+    setOrders([]);
   };
 
   const handleLoginSuccess = (loginData: Partial<UserProfile>) => {
-    setProfile((prev) => ({
-      ...prev,
-      ...loginData,
-      isLoggedIn: true
-    }));
+    const signedInProfile: UserProfile = { ...EMPTY_PROFILE, ...loginData, isLoggedIn: true };
+    setProfile(signedInProfile);
+    void fetch('/api/submissions', { credentials: 'same-origin' })
+      .then(async (response) => response.ok ? response.json() : Promise.reject())
+      .then((result) => setOrders(Array.isArray(result.submissions) ? toOrderItems(result.submissions, signedInProfile.phone) : []))
+      .catch(() => setOrders([]));
   };
 
   // Filtered documents on Home
@@ -187,7 +180,7 @@ export default function App() {
     <div className="min-h-screen bg-[#f8fafc] text-slate-900 flex flex-col font-['Plus_Jakarta_Sans',sans-serif] selection:bg-blue-600 selection:text-white pb-16">
       {/* 1. Pure White Header */}
       <Header
-        onOpenProfile={() => setIsProfileOpen(true)}
+        onOpenProfile={() => profile.isLoggedIn ? setIsProfileOpen(true) : setIsAuthOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
         orderCount={orders.length}
         onNavigateHome={() => {
@@ -254,6 +247,8 @@ export default function App() {
           /* TAB 2: Dashboard */
           <DashboardView
             orders={orders}
+            isAuthenticated={Boolean(profile.isLoggedIn)}
+            onRequestLogin={() => setIsAuthOpen(true)}
             onUpdateOrder={handleUpdateOrder}
           />
         ) : activeTab === 'agreements' ? (

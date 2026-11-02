@@ -24,6 +24,7 @@ import {
 import { SERVICE_CATEGORIES } from '../data/servicesData';
 import { VoiceGuidanceButton } from './VoiceGuidanceButton';
 import { useExampleDetails } from '../hooks/useExampleDetails';
+import { submitEncryptedForm } from '../services/secureSubmission';
 
 interface GstRegistrationWizardProps {
   onBack: () => void;
@@ -35,7 +36,7 @@ const INDIAN_STATES = [
   'Punjab', 'Bihar', 'Andhra Pradesh', 'Telangana', 'Kerala', 'Odisha'
 ];
 
-const SAMPLE_DISTRICTS: Record<string, string[]> = {
+const STATE_DISTRICTS: Record<string, string[]> = {
   'Uttar Pradesh': ['Mainpuri', 'Noida (Gautam Buddha Nagar)', 'Lucknow', 'Agra', 'Kanpur', 'Ghaziabad', 'Varanasi', 'Prayagraj', 'Meerut', 'Bareilly'],
   'Maharashtra': ['Mumbai City', 'Mumbai Suburban', 'Pune', 'Thane', 'Nagpur', 'Nashik'],
   'Delhi': ['Central Delhi', 'New Delhi', 'North Delhi', 'South Delhi', 'West Delhi', 'East Delhi'],
@@ -62,11 +63,12 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
     service: 'GST Registration'
   });
   const [requestSubmitted, setRequestSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // STEP 1 State
   const [step1, setStep1] = useState({
-    state: 'Uttar Pradesh',
-    district: 'Mainpuri',
+    state: '',
+    district: '',
     legalName: '',
     pan: '',
     email: '',
@@ -109,12 +111,12 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
     buildingNo: '',
     street: '',
     locality: '',
-    city: 'Mainpuri',
+    city: '',
     pinCode: '',
     officeLandline: '',
     officeEmail: '',
     natureOfPossession: 'Rented / Leased',
-    activities: ['Retail Business'] as string[],
+    activities: [] as string[],
     hasAdditionalPlace: false,
     additionalAddress: '',
     additionalPossession: 'Rented / Leased'
@@ -130,13 +132,40 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
     ptinOrShopAct: '',
   });
 
-  const handleRequestSubmit = (e: React.FormEvent) => {
+  const handleRequestSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setRequestSubmitted(true);
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      await submitEncryptedForm({
+        firstPartyName: requestData.name,
+        formName: requestData.service,
+        totalPrice: null,
+        details: requestData
+      });
+      setRequestSubmitted(true);
+    } catch (error) {
+      setIsSubmitting(false);
+      alert(error instanceof Error ? error.message : 'Could not securely submit this form.');
+    }
   };
 
-  const handleFinalSubmit = (e: React.FormEvent) => {
+  const handleFinalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      await submitEncryptedForm({
+        firstPartyName: step1.legalName || proprietor.fullName,
+        formName: 'GST Registration',
+        totalPrice: null,
+        details: { step1, proprietor, partners, step3, step4 }
+      });
+    } catch (error) {
+      setIsSubmitting(false);
+      alert(error instanceof Error ? error.message : 'Could not securely submit this form.');
+      return;
+    }
     const randomArn = `AA${Math.floor(100000000000 + Math.random() * 900000000000)}Z`;
     setArnNumber(randomArn);
     setIsSubmitted(true);
@@ -366,9 +395,10 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
               <div className="pt-2">
                 <button
                   type="submit"
+                  disabled={isSubmitting}
                   className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-sm shadow-sm cursor-pointer transition-all"
                 >
-                  Submit 1-Hour Callback Request
+                  {isSubmitting ? 'Securing submission...' : 'Submit 1-Hour Callback Request'}
                 </button>
               </div>
             </form>
@@ -412,10 +442,12 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
                     State (राज्य) <span className="text-rose-600">*</span>
                   </label>
                   <select
+                    required
                     value={step1.state}
-                    onChange={(e) => setStep1({ ...step1, state: e.target.value })}
+                    onChange={(e) => setStep1({ ...step1, state: e.target.value, district: '' })}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   >
+                    <option value="">Select state</option>
                     {INDIAN_STATES.map((s) => (
                       <option key={s} value={s}>
                         {s}
@@ -429,11 +461,13 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
                     District (जिला) <span className="text-rose-600">*</span>
                   </label>
                   <select
+                    required
                     value={step1.district}
                     onChange={(e) => setStep1({ ...step1, district: e.target.value })}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   >
-                    {(SAMPLE_DISTRICTS[step1.state] || ['Mainpuri', 'Central', 'HQ District']).map((d) => (
+                    <option value="">{step1.state ? 'Select district' : 'Select state first'}</option>
+                    {(STATE_DISTRICTS[step1.state] || []).map((d) => (
                       <option key={d} value={d}>
                         {d}
                       </option>
@@ -1074,10 +1108,11 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
                 </button>
                 <button
                   type="submit"
+                  disabled={isSubmitting}
                   className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm px-8 py-3 rounded-xl cursor-pointer shadow-md transition-all"
                 >
                   <FileText className="w-4 h-4" />
-                  <span>Submit &amp; Generate ARN</span>
+                  <span>{isSubmitting ? 'Securing submission...' : 'Submit &amp; Generate ARN'}</span>
                 </button>
               </div>
             </form>

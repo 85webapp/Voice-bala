@@ -19,6 +19,7 @@ import { VoiceGuidanceButton } from './VoiceGuidanceButton';
 import { ttsService } from '../services/textToSpeechService';
 import { stopServiceVoice } from '../services/googleVoiceGuidance';
 import { useExampleDetails } from '../hooks/useExampleDetails';
+import { submitEncryptedForm } from '../services/secureSubmission';
 
 interface ServiceFormViewProps {
   category: ServiceCategory;
@@ -34,6 +35,7 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
   const { getPlaceholder } = useExampleDetails();
   const [selectedTitle, setSelectedTitle] = useState(initialTitle);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [referenceId, setReferenceId] = useState('');
 
   // Common Contact fields
@@ -52,13 +54,13 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
   // GST Filing specific fields
   const [gstin, setGstin] = useState('');
   const [gstFrequency, setGstFrequency] = useState<'monthly' | 'quarterly'>('monthly');
-  const [selectedMonths, setSelectedMonths] = useState<string[]>(['October 2026']);
-  const [selectedQuarter, setSelectedQuarter] = useState<string>('Q2 (Jul - Sep 2026)');
+  const [selectedMonths, setSelectedMonths] = useState<string[]>([]);
+  const [selectedQuarter, setSelectedQuarter] = useState<string>('');
 
   // Income Tax Filing specific fields
   const [panNumber, setPanNumber] = useState('');
-  const [assessmentYear, setAssessmentYear] = useState('AY 2026-27 (FY 2025-26)');
-  const [incomeSource, setIncomeSource] = useState('Salary');
+  const [assessmentYear, setAssessmentYear] = useState('');
+  const [incomeSource, setIncomeSource] = useState('');
   const [taxAddress, setTaxAddress] = useState('');
 
   // Other Filing specific fields
@@ -87,8 +89,49 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
   const isItrFiling = selectedTitle.toLowerCase().includes('income tax') || selectedTitle.toLowerCase().includes('itr');
   const isOtherFiling = selectedTitle.toLowerCase().includes('other filing');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      await submitEncryptedForm({
+        firstPartyName: name,
+        formName: selectedTitle,
+        totalPrice: null,
+        details: {
+          category: category.title,
+          selectedTitle,
+          name,
+          phone,
+          email,
+          vehicleNumber,
+          chassisNumber,
+          engineNumber,
+          policyExpired,
+          policyType,
+          insuranceNotes,
+          gstin,
+          gstFrequency,
+          selectedMonths,
+          selectedQuarter,
+          panNumber,
+          assessmentYear,
+          incomeSource,
+          taxAddress,
+          otherFilingAddress,
+          whichFilingDetails,
+          businessName,
+          businessActivity,
+          businessAddress,
+          generalDetails
+        }
+      });
+    } catch (error) {
+      setIsSubmitting(false);
+      alert(error instanceof Error ? error.message : 'Could not securely submit this form.');
+      return;
+    }
+
     const ref = `CTC-${Math.floor(100000 + Math.random() * 900000)}`;
     setReferenceId(ref);
     setIsSubmitted(true);
@@ -612,6 +655,7 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
                         onChange={(e) => setAssessmentYear(e.target.value)}
                         className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                       >
+                        <option value="">Select assessment year</option>
                         <option value="AY 2026-27 (FY 2025-26)">AY 2026-27 (FY 2025-26)</option>
                         <option value="AY 2025-26 (FY 2024-25)">AY 2025-26 (FY 2024-25)</option>
                       </select>
@@ -639,6 +683,7 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
                         onChange={(e) => setIncomeSource(e.target.value)}
                         className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                       >
+                        <option value="">Select income source</option>
                         <option value="Salary">Salary (Form 16)</option>
                         <option value="Business / Profession">Business / Profession (44AD / 44ADA)</option>
                         <option value="House Property">Rental / House Property</option>
@@ -905,9 +950,10 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
             </span>
             <button
               type="submit"
+              disabled={isSubmitting}
               className="inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl px-6 py-3 cursor-pointer shadow-md shadow-blue-600/20 hover:shadow-lg transition-all"
             >
-              <span>Submit for 1-Hour Callback</span>
+              <span>{isSubmitting ? 'Securing submission...' : 'Submit for 1-Hour Callback'}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>

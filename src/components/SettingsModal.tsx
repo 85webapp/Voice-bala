@@ -21,22 +21,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 }) => {
   const { language: displayLanguage, setLanguage: setDisplayLanguage, t } = useDisplayLanguage();
   const [audioLang, setAudioLang] = useState<SupportedLanguage>(getStoredAudioLanguage);
-  const [showExampleDetails, setShowExampleDetails] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem('ctc_show_example_details') === 'true';
-    } catch {
-      return false;
-    }
-  });
-
-  const handleToggleExampleDetails = (checked: boolean) => {
-    setShowExampleDetails(checked);
-    try {
-      localStorage.setItem('ctc_show_example_details', String(checked));
-      window.dispatchEvent(new Event('ctc_settings_changed'));
-      window.dispatchEvent(new Event('ctc_example_details_changed'));
-    } catch {}
-  };
 
   const handleTermsClick = () => {
     onClose();
@@ -121,31 +105,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             )}
           </div>
 
-          {/* 2. Section: FORM & DRAFTING (EXAMPLE DETAILS) */}
-          <div>
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-2">
-              Form &amp; Drafting
-            </span>
-
-            <div className="bg-white border border-slate-200 rounded-xl p-3.5 space-y-2">
-              <label className="flex items-center justify-between cursor-pointer">
-                <div>
-                  <div className="font-bold text-slate-900 text-xs">Example Details</div>
-                  <div className="text-[11px] text-slate-400">
-                    Show example hints in form input boxes (Default: OFF)
-                  </div>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={showExampleDetails}
-                  onChange={(e) => handleToggleExampleDetails(e.target.checked)}
-                  className="w-4 h-4 rounded text-blue-600 accent-blue-600 cursor-pointer"
-                />
-              </label>
-            </div>
-          </div>
-
-          {/* 3. Section: PREFERENCES & LANGUAGES */}
+          {/* 2. Section: PREFERENCES & LANGUAGES */}
           <div className="space-y-3">
             <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
               Preferences &amp; Languages

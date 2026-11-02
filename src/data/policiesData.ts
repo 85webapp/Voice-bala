@@ -10,13 +10,13 @@ export const POLICIES_DATA: PolicySection[] = [
   {
     id: 'security-vault-policy',
     title: 'Data Security & Storage Vault Policy',
-    summary: 'Profile and demo order records are stored in browser localStorage. Do not enter sensitive information.',
+    summary: 'Account identity and saved form requests are stored in Supabase and are loaded only for the signed-in account.',
     content: []
   },
   {
     id: 'delivery-policy',
     title: 'Delivery & Express Fast-Track Policy',
-    summary: 'Delivery timelines and prices shown in the interface are demo values, not service commitments.',
+    summary: 'Displayed prices and delivery timelines are estimates and should be confirmed before proceeding.',
     content: []
   },
   {

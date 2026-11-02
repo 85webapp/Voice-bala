@@ -37,6 +37,8 @@ export interface OrderItem {
   deliveryFee: number;
   baseFee: number;
   totalFee: number;
+  hasPrice?: boolean;
+  details?: Record<string, unknown>;
   paymentStatus: 'Paid' | 'Unpaid' | 'Cancelled';
   status: 'Completed' | 'Processing' | 'Delivered' | 'In Review' | 'Declined' | 'Pending Process';
   pendingHours: number;

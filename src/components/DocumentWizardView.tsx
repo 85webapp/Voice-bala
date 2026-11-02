@@ -29,6 +29,7 @@ import { getDocumentConfig, CustomKeyValueTerm } from '../data/documentFormConfi
 import { INITIAL_FRONT_DOCUMENTS } from '../data/documentsData';
 import { getDocumentIdRule } from '../data/documentIdRequirements';
 import { DateOfBirthPicker } from './DateOfBirthPicker';
+import { submitEncryptedForm } from '../services/secureSubmission';
 import {
   SupportedLanguage,
   SUPPORTED_LANGUAGES,
@@ -461,8 +462,9 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
 
     if (!w1Name.trim() || !w1Mobile.trim()) {
       alert('Please fill at least Witness 1 Name and Mobile Number.');
@@ -488,6 +490,63 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
     }
 
     setIsSubmitting(true);
+    try {
+      await submitEncryptedForm({
+        firstPartyName,
+        formName: selectedDocTitle,
+        totalPrice: pricing.totalPayable,
+        details: {
+          selectedDocTitle,
+          selectedState,
+          paidBy,
+          overrideStampValue,
+          firstPartyEntityType,
+          firstPartyName,
+          firstPartySignatory,
+          firstPartyDesignation,
+          firstPartyCustomDesignation,
+          firstPartyFatherName,
+          firstPartyAgeOrIncDate,
+          firstPartyAddress,
+          firstPartyAadhaarLast4,
+          firstPartyMobile,
+          firstPartyPan,
+          secondPartyEntityType,
+          secondPartyName,
+          secondPartySignatory,
+          secondPartyDesignation,
+          secondPartyCustomDesignation,
+          secondPartyFatherName,
+          secondPartyAgeOrIncDate,
+          secondPartyAddress,
+          secondPartyAadhaarLast4,
+          secondPartyMobile,
+          secondPartyPan,
+          scopeOfWork,
+          considerationAmount,
+          durationMonths,
+          exclusivityTerritory,
+          noticePeriod,
+          customTerms,
+          witnesses: [
+            { name: w1Name, fatherName: w1FatherName, address: w1Address, mobile: w1Mobile, age: w1Age, aadhaarLast4: w1AadhaarLast4 },
+            { name: w2Name, fatherName: w2FatherName, address: w2Address, mobile: w2Mobile, age: w2Age, aadhaarLast4: w2AadhaarLast4 }
+          ],
+          deliveryType,
+          shippingAddress,
+          shippingPincode,
+          shippingRecipientName,
+          shippingPhone,
+          declarations,
+          verificationMode,
+          intermediaryDisclaimerAccepted
+        }
+      });
+    } catch (error) {
+      setIsSubmitting(false);
+      alert(error instanceof Error ? error.message : 'Could not securely submit this form.');
+      return;
+    }
 
     setTimeout(() => {
       const todayISO = new Date().toISOString().split('T')[0];
@@ -570,13 +629,13 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
 
           <div>
             <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200 uppercase tracking-wider">
-              Demo Record Saved Locally
+              Saved to Your Account
             </span>
             <h1 className="text-2xl sm:text-3xl font-black text-black mt-2">
-              Demo Docket Saved
+              Form Submission Saved
             </h1>
             <p className="text-sm text-slate-500 mt-1">
-              This record was saved only in this browser; it has not been submitted to a provider.
+              Your form details are saved to this account. No document is filed with a government agency by this form.
             </p>
             <div className="mt-3 inline-block bg-slate-50 border border-slate-300 rounded-xl px-4 py-2">
               <span className="text-xs text-slate-500 mr-2">Docket ID:</span>

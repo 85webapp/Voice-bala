@@ -23,6 +23,7 @@ import { LegalDocument, OrderItem } from '../types';
 import { STATE_CATEGORIES, getSafeStampDuty } from '../data/stampDutyMatrix';
 import { lookupGstJurisdiction } from '../data/gstJurisdictionData';
 import { useExampleDetails } from '../hooks/useExampleDetails';
+import { submitEncryptedForm } from '../services/secureSubmission';
 import {
   SupportedLanguage,
   SUPPORTED_LANGUAGES,
@@ -107,7 +108,7 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
   const [selectedState, setSelectedState] = useState<string>('Uttar Pradesh');
 
   // GST Jurisdiction Guide with PIN code lookup
-  const [pincode, setPincode] = useState('201301');
+  const [pincode, setPincode] = useState('');
   const [gstCommissionerate, setGstCommissionerate] = useState('');
   const [gstDivision, setGstDivision] = useState('');
   const [gstRange, setGstRange] = useState('');
@@ -319,8 +320,9 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
 
     if (deliveryPreference !== 'digital') {
       if (!shippingAddress.trim() || !shippingPincode.trim() || !shippingPhone.trim()) {
@@ -330,6 +332,28 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
     }
 
     setIsSubmitting(true);
+    try {
+      await submitEncryptedForm({
+        firstPartyName: applicantName || landlordName || corpCompanyName,
+        formName: 'Landlord NOC for GST Registration',
+        totalPrice: pricing.totalPayable,
+        details: {
+          premisesType, selectedState, pincode, gstCommissionerate, gstDivision, gstRange, stampMode,
+          manualStampValue, customManualStamp, stampFeePaidBy, ownershipStatus, landlordName,
+          landlordFatherName, landlordPan, landlordAadhaarLast4, landlordMobile, landlordEmail,
+          coOwners, corpCompanyName, corpCin, boardResolutionUploaded, proposedTradeName, legalBusinessName,
+          constitutionOfBusiness, granteePan, applicantName, signingAuthorityUploaded, premisesAddress,
+          wardNumber, propertyTaxAssessmentNo, ownershipDocType, utilityDocUploaded, docOwnerNameString,
+          clauseRule9Physical, clauseRule18Banner, clauseSec35Books, clauseTaxIndemnity,
+          clauseSubmeterConsent, customGstClauses, deliveryPreference, shippingAddress, shippingPincode,
+          shippingPhone
+        }
+      });
+    } catch (error) {
+      setIsSubmitting(false);
+      alert(error instanceof Error ? error.message : 'Could not securely submit this form.');
+      return;
+    }
 
     setTimeout(() => {
       const todayISO = new Date().toISOString().split('T')[0];
@@ -383,13 +407,13 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
 
           <div>
             <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200 uppercase tracking-wider">
-              Demo Record Saved Locally
+              Saved to Your Account
             </span>
             <h1 className="text-2xl sm:text-3xl font-black text-black mt-2">
-              Demo Docket Saved
+              Form Submission Saved
             </h1>
             <p className="text-sm text-slate-500 mt-1">
-              This record was saved only in this browser; it has not been submitted to a provider.
+              Your form details are saved to this account. No document is filed with a government agency by this form.
             </p>
             <div className="mt-3 inline-block bg-slate-50 border border-slate-300 rounded-xl px-4 py-2">
               <span className="text-xs text-slate-500 mr-2">Docket ID:</span>

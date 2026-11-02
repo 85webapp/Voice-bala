@@ -18,10 +18,12 @@ import { OrderItem } from '../types';
 
 interface DashboardViewProps {
   orders: OrderItem[];
+  isAuthenticated: boolean;
+  onRequestLogin: () => void;
   onUpdateOrder?: (updated: OrderItem) => void;
 }
 
-export const DashboardView: React.FC<DashboardViewProps> = ({ orders, onUpdateOrder }) => {
+export const DashboardView: React.FC<DashboardViewProps> = ({ orders, isAuthenticated, onRequestLogin, onUpdateOrder }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [fromMonth, setFromDate] = useState('');
   const [toMonth, setToDate] = useState('');
@@ -70,6 +72,23 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ orders, onUpdateOr
       return true;
     });
   }, [orders, searchQuery, fromMonth, toMonth]);
+
+  if (!isAuthenticated) {
+    return (
+      <div className="w-full max-w-4xl mx-auto px-4 py-12 text-center animate-fadeIn">
+        <ShieldCheck className="w-10 h-10 mx-auto text-blue-600 mb-3" />
+        <h1 className="text-2xl font-black text-slate-900">Sign in to view your forms</h1>
+        <p className="text-sm text-slate-600 mt-2">Your saved submissions are private to your account.</p>
+        <button
+          type="button"
+          onClick={onRequestLogin}
+          className="mt-5 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700"
+        >
+          Sign in
+        </button>
+      </div>
+    );
+  }
 
   const getStatusBadgeClass = (status: OrderItem['status']) => {
     switch (status) {
@@ -284,7 +303,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ orders, onUpdateOr
                     {order.orderId}
                   </span>
                   <span>&bull;</span>
-                  <span className="text-slate-600 font-medium">₹{order.totalFee}</span>
+                  <span className="text-slate-600 font-medium">{order.hasPrice === false ? 'Price not set' : `₹${order.totalFee}`}</span>
                 </div>
               </div>
 
@@ -354,6 +373,24 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ orders, onUpdateOr
                   <strong>{selectedOrder.createdAt}</strong>
                 </div>
               </div>
+
+              {selectedOrder.details && Object.keys(selectedOrder.details).length > 0 && (
+                <section className="rounded-xl border border-slate-200 overflow-hidden">
+                  <h4 className="px-3 py-2 bg-slate-50 border-b border-slate-200 font-bold text-slate-800">
+                    Saved Form Details
+                  </h4>
+                  <dl className="p-3 max-h-56 overflow-y-auto space-y-2">
+                    {Object.entries(selectedOrder.details).map(([key, value]) => (
+                      <div key={key} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-2">
+                        <dt className="text-slate-500 break-words">{key.replace(/([A-Z])/g, ' $1')}</dt>
+                        <dd className="text-slate-800 break-words text-right">
+                          {typeof value === 'string' ? value : JSON.stringify(value)}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </section>
+              )}
 
               {/* Status and Payment Information */}
               <div className="grid grid-cols-2 gap-3">
@@ -443,7 +480,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ orders, onUpdateOr
                 )}
                 <div className="border-t border-slate-200 pt-1.5 flex justify-between font-bold text-sm text-black">
                   <span>Total Amount:</span>
-                  <span>₹{selectedOrder.totalFee}</span>
+                  <span>{selectedOrder.hasPrice === false ? 'Not set' : `₹${selectedOrder.totalFee}`}</span>
                 </div>
               </div>
             </div>

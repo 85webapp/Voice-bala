@@ -23,6 +23,7 @@ import confetti from 'canvas-confetti';
 import { LegalDocument, OrderItem } from '../types';
 import { STATE_CATEGORIES, getSafeStampDuty } from '../data/stampDutyMatrix';
 import { DateOfBirthPicker } from './DateOfBirthPicker';
+import { submitEncryptedForm } from '../services/secureSubmission';
 import {
   SUPPORTED_LANGUAGES,
   SupportedLanguage,
@@ -515,8 +516,9 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
 
     if (!w1Name.trim() || !w1Mobile.trim() || !w2Name.trim() || !w2Mobile.trim()) {
       alert('Please fill complete details for both Witness 1 and Witness 2 (mandatory by law).');
@@ -541,6 +543,37 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
     }
 
     setIsSubmitting(true);
+    try {
+      await submitEncryptedForm({
+        firstPartyName: landlordName || authSignatoryName || commercialRepName || commercialCompanyName,
+        formName: 'Rent / Lease Agreement',
+        totalPrice: pricing.totalPayable,
+        details: {
+          docCategory, selectedState, tenancyPurpose, mixedUseArea, stampProcurementMode, physicalStampUploaded,
+          stampValue, customStampValue, stampCostBorneBy, customSplitText, landlordEntityType, coOwners,
+          landlordName, landlordFatherName, landlordDobOrAge, landlordAddress, landlordMobile, landlordEmail,
+          landlordAadhaarLast4, landlordPan, corporateRegNumber, corporateAddress, authSignatoryName,
+          authSignatoryDesignation, authSignatoryCustomDesignation, hasPoa, poaName, poaAadhaarLast4,
+          poaAddress, poaFileUploaded, ownershipProofType, propertyDocUploaded, tenantName, tenantFatherName,
+          tenantAge, tenantAddress, tenantMobile, tenantEmail, tenantAadhaarLast4, tenantPan, coOccupants,
+          commercialEntityType, commercialCompanyName, commercialOfficeAddress, commercialCin, commercialCompanyPan,
+          commercialRepName, commercialRepDesignation, commercialRepCustomDesignation, authDocUploaded,
+          commercialGstin, isUnregisteredGst, leaseTenure, customTenure, commencementDate, monthlyRent,
+          rentDueDate, securityDeposit, noticePeriod, paymentChannel, rentEscalation, customEscalation,
+          lockInPeriod, delayedRentInterest, maintenanceBearer, clauseUtility, clauseStructural, clauseSubletting,
+          clauseInspection, clauseForceMajeure, customClauses,
+          witnesses: [
+            { name: w1Name, fatherName: w1FatherName, address: w1Address, mobile: w1Mobile, age: w1Age, idNumber: w1IdNumber },
+            { name: w2Name, fatherName: w2FatherName, address: w2Address, mobile: w2Mobile, age: w2Age, idNumber: w2IdNumber }
+          ],
+          executionMode, shippingAddress, shippingPincode, shippingPhone, verificationMode, declarations, disclaimerAccepted
+        }
+      });
+    } catch (error) {
+      setIsSubmitting(false);
+      alert(error instanceof Error ? error.message : 'Could not securely submit this form.');
+      return;
+    }
 
     setTimeout(() => {
       const todayISO = new Date().toISOString().split('T')[0];
@@ -600,13 +633,13 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
 
           <div>
             <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200 uppercase tracking-wider">
-              Demo Record Saved Locally
+              Saved to Your Account
             </span>
             <h1 className="text-2xl sm:text-3xl font-black text-black mt-2">
-              Demo Docket Saved
+              Form Submission Saved
             </h1>
             <p className="text-sm text-slate-500 mt-1">
-              This record was saved only in this browser; it has not been submitted to a provider.
+              Your form details are saved to this account. No document is filed with a government agency by this form.
             </p>
             <div className="mt-3 inline-block bg-slate-50 border border-slate-300 rounded-xl px-4 py-2">
               <span className="text-xs text-slate-500 mr-2">Docket ID:</span>

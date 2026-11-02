@@ -21,6 +21,7 @@ import confetti from 'canvas-confetti';
 import { LegalDocument, OrderItem } from '../types';
 import { STATE_CATEGORIES, getSafeStampDuty } from '../data/stampDutyMatrix';
 import { useExampleDetails } from '../hooks/useExampleDetails';
+import { submitEncryptedForm } from '../services/secureSubmission';
 import {
   SupportedLanguage,
   SUPPORTED_LANGUAGES,
@@ -369,8 +370,9 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
 
     if (deliveryPreference !== 'digital') {
       if (!shippingAddress.trim() || !shippingPincode.trim() || !shippingPhone.trim()) {
@@ -380,6 +382,34 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
     }
 
     setIsSubmitting(true);
+    try {
+      await submitEncryptedForm({
+        firstPartyName: landlordName || corpRepName,
+        formName: 'Commercial No-Objection Certificate',
+        totalPrice: pricing.totalPayable,
+        details: {
+          selectedState, purposes, propertyClassification, stampFeePaidBy, stampMode, manualStampValue,
+          customManualStamp, landlordOwnershipType, landlordName, landlordFatherName, landlordPan,
+          landlordAadhaarLast4, landlordMobile, landlordEmail, clearTitleDeclared, corpCin, corpRegAddress,
+          corpRepName, corpRepDesignation, corpResolutionDate, coOwners, businessConstitution,
+          proposedBusinessName, granteePan, granteeCin, natureOfOperations, customNatureOfOperations,
+          granteeSignatoryName, granteeSignatoryFatherName, granteeDesignation, authorizationDocUploaded,
+          premisesAddress, wardNumber, propertyTaxAssessmentNo, superBuiltupArea, carpetArea, eastBound,
+          westBound, northBound, southBound, clauseMultiAgency, clausePhysicalVerification, clauseSignboard,
+          clauseBooks, clauseStructural, clauseFssai, clauseFireSafety, clauseHealthTrade, sublettingPermission,
+          propertyTaxEscalation, meterLoadConsent, landlordIndemnityAccepted, customClauses,
+          witnesses: [
+            { name: witness1Name, profession: witness1Profession, address: witness1Address, id: witness1Id, mobile: witness1Mobile },
+            { name: witness2Name, profession: witness2Profession, address: witness2Address, id: witness2Id, mobile: witness2Mobile }
+          ],
+          deliveryPreference, shippingAddress, shippingPincode, shippingPhone
+        }
+      });
+    } catch (error) {
+      setIsSubmitting(false);
+      alert(error instanceof Error ? error.message : 'Could not securely submit this form.');
+      return;
+    }
 
     setTimeout(() => {
       const todayISO = new Date().toISOString().split('T')[0];
@@ -433,10 +463,10 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
 
           <div>
             <h1 className="text-2xl sm:text-3xl font-black text-black">
-              Demo Docket Saved
+              Form Submission Saved
             </h1>
             <p className="text-sm text-slate-500 mt-1">
-              This record was saved only in this browser; it has not been submitted to a provider.
+              Your form details are saved to this account. No document is filed with a government agency by this form.
             </p>
             <div className="mt-3 inline-block bg-slate-50 border border-slate-300 rounded-xl px-4 py-2">
               <span className="text-xs text-slate-500 mr-2">Docket ID:</span>

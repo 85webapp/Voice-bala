@@ -12,6 +12,7 @@ import confetti from 'canvas-confetti';
 import { LegalDocument, OrderItem } from '../types';
 import { STAMP_PAPER_VALUES } from '../data/documentsData';
 import { INDIAN_STATES_LIST } from '../data/indianCities';
+import { submitEncryptedForm } from '../services/secureSubmission';
 
 interface DocumentOrderModalProps {
   document: LegalDocument;
@@ -43,6 +44,7 @@ export const DocumentOrderModal: React.FC<DocumentOrderModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (!party1Name.trim() || !phone.trim()) {
       alert('Please enter Primary Party Name & Mobile Number.');
       return;
@@ -50,9 +52,32 @@ export const DocumentOrderModal: React.FC<DocumentOrderModalProps> = ({
 
     setIsSubmitting(true);
 
-    setTimeout(() => {
+    setTimeout(async () => {
       const todayISO = new Date().toISOString().split('T')[0];
       const newOrderId = `CTC-${Math.floor(100000 + Math.random() * 900000)}`;
+      try {
+        await submitEncryptedForm({
+          firstPartyName: party1Name,
+          formName: document.title,
+          totalPrice: totalFee,
+          details: {
+            documentTitle: document.title,
+            party1Name,
+            party2Name,
+            phone,
+            email,
+            specialTerms,
+            deliveryHours,
+            selectedState,
+            stampValue,
+            totalFee
+          }
+        });
+      } catch (error) {
+        setIsSubmitting(false);
+        alert(error instanceof Error ? error.message : 'Could not securely submit this form.');
+        return;
+      }
       const newOrder: OrderItem = {
         orderId: newOrderId,
         docTitle: document.title,
@@ -123,10 +148,10 @@ export const DocumentOrderModal: React.FC<DocumentOrderModalProps> = ({
 
               <div>
                 <span className="text-xs font-bold text-emerald-600 uppercase tracking-wider">
-                  Demo Record Saved
+                  Saved to Your Account
                 </span>
                 <h3 className="text-xl font-black text-black mt-0.5">
-                  Demo Docket Created
+                  Submission Saved
                 </h3>
                 <p className="text-xs text-slate-500 mt-1">
                   Docket Number:{' '}
@@ -142,7 +167,7 @@ export const DocumentOrderModal: React.FC<DocumentOrderModalProps> = ({
                   <span className="font-bold text-slate-900">{submittedOrder.docTitle}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Selected demo timeline:</span>
+                  <span className="text-slate-500">Selected timeline:</span>
                   <span className="font-bold text-blue-600">
                     Within {submittedOrder.deliveryHours} Hours
                   </span>
@@ -160,7 +185,7 @@ export const DocumentOrderModal: React.FC<DocumentOrderModalProps> = ({
               <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-800 text-left flex items-start gap-2.5">
                 <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
                 <span>
-                  This record is saved only in this browser. It has not been sent to a service provider and no document or e-stamp will be delivered.
+                  Your form details are saved to this account. No payment or government filing is performed by this form.
                 </span>
               </div>
 
@@ -352,7 +377,7 @@ export const DocumentOrderModal: React.FC<DocumentOrderModalProps> = ({
                   disabled={isSubmitting}
                   className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-bold rounded-xl shadow-xs disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
                 >
-                  {isSubmitting ? 'Saving...' : 'Save Demo Record'}
+                  {isSubmitting ? 'Saving...' : 'Submit Securely'}
                   <Sparkles className="w-3.5 h-3.5" />
                 </button>
               </div>

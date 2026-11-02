@@ -3,6 +3,8 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
+import { createDecipheriv, createHmac, privateDecrypt, randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
+import { Pool } from 'pg';
 
 dotenv.config();
 
@@ -10,9 +12,13 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+export { app };
 const port = process.env.PORT || 3000;
+const submissionPool = process.env.SUPABASE_CONNECTION_STRING
+  ? new Pool({ connectionString: process.env.SUPABASE_CONNECTION_STRING, ssl: { rejectUnauthorized: true } })
+  : null;
 
-app.use(express.json({ limit: '32kb' }));
+app.use(express.json({ limit: '256kb' }));
 
 // Initialize Google GenAI
 const apiKey = process.env.GEMINI_API_KEY || '';
@@ -167,6 +173,255 @@ async function localizedRefusal(category: string, audioLanguage: string): Promis
 }
 
 app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'document-india', geminiConfigured: Boolean(apiKey) }));
+
+const SESSION_COOKIE = 'ctc_session';
+const SESSION_DURATION_SECONDS = 60 * 60 * 24 * 30;
+const PHONE_PATTERN = /^[0-9]{10}$/;
+
+function getSessionSecret(): string | null {
+  const secret = process.env.AUTH_SESSION_SECRET;
+  return secret && Buffer.byteLength(secret, 'utf8') >= 32 ? secret : null;
+}
+
+function createSessionToken(userId: string): string {
+  const secret = getSessionSecret();
+  if (!secret) throw new Error('Authentication is not configured.');
+  const payload = Buffer.from(JSON.stringify({ userId, expiresAt: Math.floor(Date.now() / 1000) + SESSION_DURATION_SECONDS })).toString('base64url');
+  const signature = createHmac('sha256', secret).update(payload).digest('base64url');
+  return `${payload}.${signature}`;
+}
+
+function getSessionUserId(req: express.Request): string | null {
+  const cookie = req.headers.cookie?.split(';').map((part) => part.trim()).find((part) => part.startsWith(`${SESSION_COOKIE}=`));
+  const token = cookie?.slice(SESSION_COOKIE.length + 1);
+  const [payload, encodedSignature] = token?.split('.') || [];
+  const secret = getSessionSecret();
+  if (!payload || !encodedSignature || !secret) return null;
+
+  const expected = createHmac('sha256', secret).update(payload).digest();
+  let actual: Buffer;
+  try {
+    actual = Buffer.from(encodedSignature, 'base64url');
+  } catch {
+    return null;
+  }
+  if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return null;
+
+  try {
+    const session = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+    return typeof session.userId === 'string' && /^[0-9a-f-]{36}$/i.test(session.userId) &&
+      Number.isInteger(session.expiresAt) && session.expiresAt > Math.floor(Date.now() / 1000)
+      ? session.userId
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function setSessionCookie(res: express.Response, userId: string): void {
+  const secure = process.env.NODE_ENV === 'production' || process.env.VERCEL === '1' ? '; Secure' : '';
+  res.setHeader('Set-Cookie', `${SESSION_COOKIE}=${createSessionToken(userId)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_DURATION_SECONDS}${secure}`);
+}
+
+function clearSessionCookie(res: express.Response): void {
+  const secure = process.env.NODE_ENV === 'production' || process.env.VERCEL === '1' ? '; Secure' : '';
+  res.setHeader('Set-Cookie', `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`);
+}
+
+function hashPassword(password: string, salt: Buffer): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    scrypt(password, salt, 64, (error, derivedKey) => error ? reject(error) : resolve(derivedKey));
+  });
+}
+
+function authUnavailable(res: express.Response): boolean {
+  if (!submissionPool || !getSessionSecret() || !getAccountDataPrivateKey()) {
+    res.status(503).json({ error: 'Account services are not configured.' });
+    return true;
+  }
+  return false;
+}
+
+function getAccountDataPrivateKey(): string | null {
+  const privateKey = process.env.ACCOUNT_DATA_PRIVATE_KEY?.replace(/\\n/g, '\n').trim();
+  return privateKey || null;
+}
+
+function decryptAccountPayload(accountPayload: string): Record<string, unknown> {
+  const privateKey = getAccountDataPrivateKey();
+  if (!privateKey) throw new Error('Account data decryption is not configured.');
+
+  const envelope = JSON.parse(Buffer.from(accountPayload, 'base64url').toString('utf8'));
+  if (envelope.version !== 1 || envelope.algorithm !== 'RSA-OAEP-256+A256GCM') {
+    throw new Error('Stored account form envelope is invalid.');
+  }
+  const aesKey = privateDecrypt(
+    { key: privateKey, oaepHash: 'sha256' },
+    Buffer.from(envelope.key, 'base64url')
+  );
+  const iv = Buffer.from(envelope.iv, 'base64url');
+  const sealed = Buffer.from(envelope.ciphertext, 'base64url');
+  if (aesKey.length !== 32 || iv.length !== 12 || sealed.length < 16) {
+    throw new Error('Stored account form envelope is invalid.');
+  }
+
+  const decipher = createDecipheriv('aes-256-gcm', aesKey, iv);
+  decipher.setAuthTag(sealed.subarray(sealed.length - 16));
+  const plaintext = Buffer.concat([
+    decipher.update(sealed.subarray(0, sealed.length - 16)),
+    decipher.final()
+  ]);
+  const details = JSON.parse(plaintext.toString('utf8'));
+  if (!details || typeof details !== 'object' || Array.isArray(details)) {
+    throw new Error('Stored account form details are invalid.');
+  }
+  return details as Record<string, unknown>;
+}
+
+app.post('/api/auth/register', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  if (authUnavailable(res)) return;
+  const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+  const phone = typeof req.body?.phone === 'string' ? req.body.phone : '';
+  const password = typeof req.body?.password === 'string' ? req.body.password : '';
+  if (!name || name.length > 120 || !PHONE_PATTERN.test(phone) || password.length < 8 || password.length > 128) {
+    return res.status(400).json({ error: 'Enter a name, a 10-digit mobile number, and a password of at least 8 characters.' });
+  }
+
+  try {
+    const salt = randomBytes(16);
+    const passwordHash = await hashPassword(password, salt);
+    const result = await submissionPool!.query(
+      'INSERT INTO app_users (full_name, phone, password_hash) VALUES ($1, $2, $3) RETURNING id, full_name, phone',
+      [name, phone, `${salt.toString('base64url')}.${passwordHash.toString('base64url')}`]
+    );
+    setSessionCookie(res, result.rows[0].id);
+    return res.status(201).json({ user: { name: result.rows[0].full_name, phone: result.rows[0].phone } });
+  } catch (error) {
+    if ((error as { code?: string })?.code === '23505') return res.status(409).json({ error: 'An account with this mobile number already exists.' });
+    console.error('Account registration failed:', error);
+    return res.status(503).json({ error: 'Could not create the account right now.' });
+  }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  if (authUnavailable(res)) return;
+  const phone = typeof req.body?.phone === 'string' ? req.body.phone : '';
+  const password = typeof req.body?.password === 'string' ? req.body.password : '';
+  if (!PHONE_PATTERN.test(phone) || !password || password.length > 128) {
+    return res.status(400).json({ error: 'Enter a valid 10-digit mobile number and password.' });
+  }
+
+  try {
+    const result = await submissionPool!.query(
+      'SELECT id, full_name, phone, password_hash FROM app_users WHERE phone = $1',
+      [phone]
+    );
+    const user = result.rows[0];
+    const [encodedSalt, encodedHash] = typeof user?.password_hash === 'string' ? user.password_hash.split('.') : [];
+    if (!user || !encodedSalt || !encodedHash) return res.status(401).json({ error: 'Mobile number or password is incorrect.' });
+    const expected = Buffer.from(encodedHash, 'base64url');
+    const actual = await hashPassword(password, Buffer.from(encodedSalt, 'base64url'));
+    if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
+      return res.status(401).json({ error: 'Mobile number or password is incorrect.' });
+    }
+    setSessionCookie(res, user.id);
+    return res.json({ user: { name: user.full_name, phone: user.phone } });
+  } catch (error) {
+    console.error('Account login failed:', error);
+    return res.status(503).json({ error: 'Could not sign in right now.' });
+  }
+});
+
+app.get('/api/auth/me', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  if (authUnavailable(res)) return;
+  const userId = getSessionUserId(req);
+  if (!userId) return res.status(401).json({ error: 'Sign in to continue.' });
+  try {
+    const result = await submissionPool!.query('SELECT full_name, phone FROM app_users WHERE id = $1', [userId]);
+    if (!result.rows[0]) return res.status(401).json({ error: 'Sign in to continue.' });
+    return res.json({ user: { name: result.rows[0].full_name, phone: result.rows[0].phone } });
+  } catch (error) {
+    console.error('Account session lookup failed:', error);
+    return res.status(503).json({ error: 'Could not load the account right now.' });
+  }
+});
+
+app.post('/api/auth/logout', (_req, res) => {
+  clearSessionCookie(res);
+  return res.json({ ok: true });
+});
+
+app.get('/api/submissions', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  if (authUnavailable(res)) return;
+  const userId = getSessionUserId(req);
+  if (!userId) return res.status(401).json({ error: 'Sign in to view your saved forms.' });
+  try {
+    const result = await submissionPool!.query(
+      'SELECT id, first_party_name, form_name, submitted_at, total_price, account_payload FROM form_submissions WHERE user_id = $1 ORDER BY submitted_at DESC',
+      [userId]
+    );
+    const submissions = result.rows.map((row) => ({
+      id: row.id,
+      first_party_name: row.first_party_name,
+      form_name: row.form_name,
+      submitted_at: row.submitted_at,
+      total_price: row.total_price,
+      details: decryptAccountPayload(row.account_payload)
+    }));
+    return res.json({ submissions });
+  } catch (error) {
+    console.error('Account submissions lookup failed:', error);
+    return res.status(503).json({ error: 'Could not load saved forms right now.' });
+  }
+});
+
+app.post('/api/submissions', async (req, res) => {
+  const { firstPartyName, formName, totalPrice, payload } = req.body || {};
+  const signatureSecret = process.env.SUBMISSION_HMAC_SECRET;
+  const userId = getSessionUserId(req);
+
+  if (authUnavailable(res)) return;
+  if (!submissionPool) return res.status(503).json({ error: 'Secure form submissions are not configured.' });
+  if (!signatureSecret || Buffer.byteLength(signatureSecret, 'utf8') < 32) {
+    return res.status(503).json({ error: 'Secure form submissions are not configured.' });
+  }
+  if (!userId) return res.status(401).json({ error: 'Sign in before saving a form.' });
+  const accountPayload = req.body?.accountPayload;
+  if (
+    typeof firstPartyName !== 'string' || !firstPartyName.trim() || firstPartyName.length > 160 ||
+    typeof formName !== 'string' || !formName.trim() || formName.length > 120 ||
+    !(totalPrice === null || (typeof totalPrice === 'number' && Number.isFinite(totalPrice) && totalPrice >= 0)) ||
+    typeof payload !== 'string' || payload.length > 5500 || !/^[A-Za-z0-9_-]+$/.test(payload) ||
+    typeof accountPayload !== 'string' || accountPayload.length > 200_000 || !/^[A-Za-z0-9_-]+$/.test(accountPayload)
+  ) {
+    return res.status(400).json({ error: 'Submission metadata or encrypted payload is invalid.' });
+  }
+
+  try {
+    const signature = createHmac('sha256', signatureSecret).update(payload, 'utf8').digest('hex');
+    const redirectUrl = new URL('https://website-b-admin.com/');
+    redirectUrl.searchParams.set('payload', payload);
+    redirectUrl.searchParams.set('signature', signature);
+
+    if (redirectUrl.toString().length > 7500) {
+      return res.status(413).json({ error: 'The encrypted submission exceeds Website B URL limits.' });
+    }
+
+    const submission = await submissionPool.query(
+      'INSERT INTO form_submissions (user_id, first_party_name, form_name, submitted_at, total_price, account_payload) VALUES ($1, $2, $3, NOW(), $4, $5) RETURNING submitted_at',
+      [userId, firstPartyName.trim(), formName.trim(), totalPrice, accountPayload]
+    );
+    res.setHeader('Cache-Control', 'no-store');
+    return res.json({ redirectUrl: redirectUrl.toString(), submittedAt: submission.rows[0].submitted_at });
+  } catch (error) {
+    console.error('Secure form submission failed:', error);
+    return res.status(503).json({ error: 'Submission storage is temporarily unavailable.' });
+  }
+});
 
 // 1. AI Voice / Text Intent Search Bar Endpoint
 app.post('/api/gemini/search', async (req, res) => {
@@ -519,4 +774,4 @@ async function startServer() {
   });
 }
 
-startServer();
+if (process.env.VERCEL !== '1') startServer();
