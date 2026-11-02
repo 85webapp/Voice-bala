@@ -3,16 +3,18 @@ import {
   ChevronDown,
   ChevronRight
 } from 'lucide-react';
-import { SERVICE_CATEGORIES, ServiceCategory } from '../data/servicesData';
+import { ServiceCategory, SERVICE_CATEGORIES } from '../data/servicesData';
 import { ServiceFormView } from './ServiceFormView';
 import { GstRegistrationWizard } from './GstRegistrationWizard';
 import { UdyamRegistrationWizard } from './UdyamRegistrationWizard';
+import { playServiceVoice } from '../services/googleVoiceGuidance';
 
 export const MenuView: React.FC = () => {
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const [selectedService, setSelectedService] = useState<{ category: ServiceCategory; title: string } | null>(null);
 
   const openService = (category: ServiceCategory, title: string) => {
+    playServiceVoice(title);
     setSelectedService({ category, title });
   };
 

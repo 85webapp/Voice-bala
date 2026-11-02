@@ -22,6 +22,7 @@ import {
 import confetti from 'canvas-confetti';
 import { LegalDocument, OrderItem } from '../types';
 import { STATE_CATEGORIES, getSafeStampDuty } from '../data/stampDutyMatrix';
+import { DateOfBirthPicker } from './DateOfBirthPicker';
 import {
   SUPPORTED_LANGUAGES,
   SupportedLanguage,
@@ -168,11 +169,28 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
   const [landlordAadhaarLast4, setLandlordAadhaarLast4] = useState('');
   const [landlordPan, setLandlordPan] = useState('');
 
+  const STANDARD_DESIGNATIONS = [
+    'Authorized Signatory',
+    'Managing Director',
+    'Director',
+    'Proprietor',
+    'Partner',
+    'POA Holder',
+    'Other'
+  ];
+
+  // Strict 10-char PAN input sanitization
+  const handlePanInput = (raw: string, setter: (val: string) => void) => {
+    const sanitized = raw.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
+    setter(sanitized);
+  };
+
   // Corporate Landlord fields
   const [corporateRegNumber, setCorporateRegNumber] = useState('');
   const [corporateAddress, setCorporateAddress] = useState('');
   const [authSignatoryName, setAuthSignatoryName] = useState('');
-  const [authSignatoryDesignation, setAuthSignatoryDesignation] = useState('Director');
+  const [authSignatoryDesignation, setAuthSignatoryDesignation] = useState('Authorized Signatory');
+  const [authSignatoryCustomDesignation, setAuthSignatoryCustomDesignation] = useState('');
 
   // POA Holder fields
   const [hasPoa, setHasPoa] = useState(false);
@@ -249,7 +267,8 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
   const [commercialCin, setCommercialCin] = useState('');
   const [commercialCompanyPan, setCommercialCompanyPan] = useState('');
   const [commercialRepName, setCommercialRepName] = useState('');
-  const [commercialRepDesignation, setCommercialRepDesignation] = useState('Director');
+  const [commercialRepDesignation, setCommercialRepDesignation] = useState('Authorized Signatory');
+  const [commercialRepCustomDesignation, setCommercialRepCustomDesignation] = useState('');
   const [authDocUploaded, setAuthDocUploaded] = useState(false);
   const [commercialGstin, setCommercialGstin] = useState('');
   const [isUnregisteredGst, setIsUnregisteredGst] = useState(false);
@@ -338,12 +357,14 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
   const [w1FatherName, setW1FatherName] = useState('');
   const [w1Address, setW1Address] = useState('');
   const [w1Mobile, setW1Mobile] = useState('');
+  const [w1Age, setW1Age] = useState('');
   const [w1IdNumber, setW1IdNumber] = useState('');
 
   const [w2Name, setW2Name] = useState('');
   const [w2FatherName, setW2FatherName] = useState('');
   const [w2Address, setW2Address] = useState('');
   const [w2Mobile, setW2Mobile] = useState('');
+  const [w2Age, setW2Age] = useState('');
   const [w2IdNumber, setW2IdNumber] = useState('');
 
   const [executionMode, setExecutionMode] = useState<'digital' | 'physical' | 'hybrid'>('digital');
@@ -351,9 +372,49 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
   const [shippingPincode, setShippingPincode] = useState('');
   const [shippingPhone, setShippingPhone] = useState('');
 
+  // Verification Mode: 'self' (₹0) vs 'expert' (+₹10)
+  const [verificationMode, setVerificationMode] = useState<'self' | 'expert'>('self');
+
+  // 5 Legal Declaration Checkboxes
+  const [declarations, setDeclarations] = useState<boolean[]>([false, false, false, false, false]);
+  const [isSpeakingDeclarations, setIsSpeakingDeclarations] = useState(false);
+
   const [disclaimerAccepted, setDisclaimerAccepted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submittedOrder, setSubmittedOrder] = useState<OrderItem | null>(null);
+
+  // Toggle all 5 declarations
+  const handleToggleAllDeclarations = () => {
+    const allChecked = declarations.every(Boolean);
+    setDeclarations([!allChecked, !allChecked, !allChecked, !allChecked, !allChecked]);
+  };
+
+  // TTS Readout of 5 Declarations
+  const handlePlayDeclarationsSpeech = () => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+    if (isSpeakingDeclarations) {
+      window.speechSynthesis.cancel();
+      setIsSpeakingDeclarations(false);
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const declarationText = [
+      "किराया अनुबंध कानूनी घोषणाएँ:",
+      "पहला: मैंने रेंट एग्रीमेंट के सभी नियम व शर्तें ध्यानपूर्वक पढ़ ली हैं और मैं इनसे पूर्णतः सहमत हूँ।",
+      "दूसरा: प्रस्तुत की गई मकान मालिक, किरायेदार और गवाहों की व्यक्तिगत पहचान व पते की जानकारी पूर्णतः सत्य और प्रामाणिक है।",
+      "तीसरा: इस विलेख का निष्पादन बिना किसी दबाव, कपट अथवा अनुचित प्रभाव के स्वतंत्र सहमति से किया जा रहा है।",
+      "चौथा: राज्य सरकार की स्टाम्प ड्यूटी एवं ई-हस्ताक्षर नियमों के अनुपालन की पूरी ज़िम्मेदारी पक्षों की है।",
+      "पाँचवाँ: मैं पुष्टि करता हूँ कि दस्तावेज़ डिलीवरी के पश्चात देय राशि का भुगतान नियमानुसार करूँगा।"
+    ].join(" ");
+
+    const utterance = new SpeechSynthesisUtterance(declarationText);
+    utterance.lang = 'hi-IN';
+    utterance.rate = 1.3;
+    utterance.onend = () => setIsSpeakingDeclarations(false);
+    utterance.onerror = () => setIsSpeakingDeclarations(false);
+    setIsSpeakingDeclarations(true);
+    window.speechSynthesis.speak(utterance);
+  };
 
   // Pricing Calculation
   const pricing = useMemo(() => {
@@ -362,8 +423,9 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
     const govtPurchasing = 40;
     const platformFee = 49;
     const courierFee = executionMode === 'digital' ? 0 : 50;
+    const expertFee = verificationMode === 'expert' ? 10 : 0;
 
-    const rawTotal = effectiveStamp + eSign + govtPurchasing + platformFee + courierFee;
+    const rawTotal = effectiveStamp + eSign + govtPurchasing + platformFee + courierFee + expertFee;
     const remainder = rawTotal % 10;
     const totalPayable = remainder === 9 ? rawTotal : rawTotal + ((9 - remainder + 10) % 10);
 
@@ -373,9 +435,10 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
       govtPurchasing,
       platformFee,
       courierFee,
+      expertFee,
       totalPayable
     };
-  }, [stampValue, customStampValue, executionMode]);
+  }, [stampValue, customStampValue, executionMode, verificationMode]);
 
   // Validation
   const validateAndProceed = (targetNext: number) => {
@@ -465,6 +528,11 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
         alert('Please provide complete physical shipping address, pincode, and contact number.');
         return;
       }
+    }
+
+    if (declarations.some((val) => !val)) {
+      alert('कृपया आगे बढ़ने के लिए सभी 5 कानूनी घोषणाओं (Declarations) को स्वीकार करें।');
+      return;
     }
 
     if (!disclaimerAccepted) {
@@ -1083,6 +1151,28 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
         {/* ================= PAGE 2 ================= */}
         {currentPage === 2 && (
           <div className="space-y-5 animate-fadeIn">
+            {/* Page 2 Mandatory Distinct Header */}
+            <div className="bg-gradient-to-r from-blue-700 via-blue-800 to-indigo-900 text-white rounded-2xl p-4 sm:p-5 shadow-sm border border-blue-600 mb-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center font-black text-lg border border-white/20">
+                    1
+                  </div>
+                  <div>
+                    <h3 className="text-base sm:text-lg font-black tracking-wide uppercase">
+                      Only First Party Information
+                    </h3>
+                    <p className="text-xs text-blue-100 font-medium">
+                      केवल प्रथम पक्ष की जानकारी / First Party Only (मकान मालिक / Landlord / Lessor)
+                    </p>
+                  </div>
+                </div>
+                <span className="hidden sm:inline-block px-3 py-1 bg-white/20 text-white text-xs font-bold rounded-full backdrop-blur-xs">
+                  Step 2 of 5
+                </span>
+              </div>
+            </div>
+
             {/* Landlord Entity Type */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
@@ -1183,13 +1273,24 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                     <label className="block text-xs font-bold text-slate-700 mb-1">
                       Signatory Designation <span className="text-red-500 font-bold">*</span>
                     </label>
-                    <input
-                      type="text"
+                    <select
                       value={authSignatoryDesignation}
                       onChange={(e) => setAuthSignatoryDesignation(e.target.value)}
-                      placeholder="Enter Designation"
                       className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                    />
+                    >
+                      {STANDARD_DESIGNATIONS.map((desig) => (
+                        <option key={desig} value={desig}>{desig}</option>
+                      ))}
+                    </select>
+                    {authSignatoryDesignation === 'Other' && (
+                      <input
+                        type="text"
+                        value={authSignatoryCustomDesignation}
+                        onChange={(e) => setAuthSignatoryCustomDesignation(e.target.value)}
+                        placeholder="Enter Designation"
+                        className="mt-2 w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-600"
+                      />
+                    )}
                   </div>
                 </div>
               </div>
@@ -1248,26 +1349,13 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="block text-xs font-bold text-slate-700">
-                        Age / Date of Birth (Age ≥ 18) <span className="text-red-500 font-bold">*</span>
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => handlePlayFieldSpeech('landlordAge')}
-                        className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                        title="Listen to field guide"
-                      >
-                        <Volume2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                    <input
-                      type="text"
-                      required
+                    <DateOfBirthPicker
+                      label="Age / Date of Birth (Age ≥ 18)"
                       value={landlordDobOrAge}
-                      onChange={(e) => setLandlordDobOrAge(e.target.value)}
-                      placeholder="Enter Age or Date of Birth"
-                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      onChange={setLandlordDobOrAge}
+                      required={true}
+                      placeholder="DD/MM/YYYY"
+                      helperText="DD/MM/YYYY टाइप करें या कैलेंडर चुनें"
                     />
                   </div>
 
@@ -1404,7 +1492,12 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                   required={isPanMandatoryUnder194IB}
                   maxLength={10}
                   value={landlordPan}
-                  onChange={(e) => setLandlordPan(e.target.value.toUpperCase())}
+                  onChange={(e) => handlePanInput(e.target.value, setLandlordPan)}
+                  onKeyDown={(e) => {
+                    if (landlordPan.length >= 10 && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                      e.preventDefault();
+                    }
+                  }}
                   placeholder="Enter 10-Character PAN"
                   className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm font-mono uppercase text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
@@ -1606,6 +1699,28 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
         {/* ================= PAGE 3: SECOND PARTY / TENANT DETAILS ================= */}
         {currentPage === 3 && (
           <div className="space-y-5 animate-fadeIn">
+            {/* Page 3 Mandatory Distinct Header */}
+            <div className="bg-gradient-to-r from-purple-700 via-purple-800 to-indigo-900 text-white rounded-2xl p-4 sm:p-5 shadow-sm border border-purple-600 mb-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center font-black text-lg border border-white/20">
+                    2
+                  </div>
+                  <div>
+                    <h3 className="text-base sm:text-lg font-black tracking-wide uppercase">
+                      Only Second Party Information
+                    </h3>
+                    <p className="text-xs text-purple-100 font-medium">
+                      केवल द्वितीय पक्ष की जानकारी / Second Party Only (किरायेदार / Tenant / Lessee)
+                    </p>
+                  </div>
+                </div>
+                <span className="hidden sm:inline-block px-3 py-1 bg-white/20 text-white text-xs font-bold rounded-full backdrop-blur-xs">
+                  Step 3 of 5
+                </span>
+              </div>
+            </div>
+
             {docCategory === 'residential' ? (
               /* CASE A: RESIDENTIAL TENANCY */
               <div className="space-y-4">
@@ -1661,16 +1776,13 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Age / Date of Birth (Age ≥ 18) <span className="text-red-500 font-bold">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
+                    <DateOfBirthPicker
+                      label="Age / Date of Birth (Age ≥ 18)"
                       value={tenantAge}
-                      onChange={(e) => setTenantAge(e.target.value)}
-                      placeholder="Enter Age or Date of Birth"
-                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      onChange={setTenantAge}
+                      required={true}
+                      placeholder="DD/MM/YYYY"
+                      helperText="DD/MM/YYYY टाइप करें या कैलेंडर चुनें"
                     />
                   </div>
 
@@ -1757,7 +1869,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                         inputMode="numeric"
                         pattern="[0-9]*"
                         value={tenantAadhaarLast4}
-                        onChange={(e) => setTenantAadhaarLast4(e.target.value.replace(/\D/g, ''))}
+                        onChange={(e) => setTenantAadhaarLast4(e.target.value.replace(/\D/g, '').slice(0, 4))}
                         placeholder="4 Digits"
                         className="w-24 bg-white border border-slate-300 rounded-lg px-2.5 py-2 text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                       />
@@ -1772,7 +1884,12 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                       type="text"
                       maxLength={10}
                       value={tenantPan}
-                      onChange={(e) => setTenantPan(e.target.value.toUpperCase())}
+                      onChange={(e) => handlePanInput(e.target.value, setTenantPan)}
+                      onKeyDown={(e) => {
+                        if (tenantPan.length >= 10 && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                          e.preventDefault();
+                        }
+                      }}
                       placeholder="Enter 10-Character PAN"
                       className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm font-mono uppercase text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                     />
@@ -1992,11 +2109,19 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                         onChange={(e) => setCommercialRepDesignation(e.target.value)}
                         className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-600"
                       >
-                        <option value="Director">Director</option>
-                        <option value="Managing Partner">Managing Partner</option>
-                        <option value="Proprietor">Proprietor</option>
-                        <option value="Authorized Representative via Board Resolution / POA">Authorized Representative via Board Resolution / POA</option>
+                        {STANDARD_DESIGNATIONS.map((desig) => (
+                          <option key={desig} value={desig}>{desig}</option>
+                        ))}
                       </select>
+                      {commercialRepDesignation === 'Other' && (
+                        <input
+                          type="text"
+                          value={commercialRepCustomDesignation}
+                          onChange={(e) => setCommercialRepCustomDesignation(e.target.value)}
+                          placeholder="Enter Custom Designation"
+                          className="mt-2 w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-600"
+                        />
+                      )}
                     </div>
                   </div>
 
@@ -2105,21 +2230,37 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                     onChange={(e) => setLeaseTenure(e.target.value)}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   >
-                    <option value="11 Months">11 Months (Standard Non-Registration Threshold)</option>
-                    <option value="22 Months">22 Months</option>
-                    <option value="33 Months">33 Months</option>
-                    <option value="Custom Tenure">Custom Tenure (Months/Years)</option>
+                    <option value="11 Months">11 Months (Highest Allowed Non-Registration Limit / अधिकतम मान्य)</option>
+                    <option value="10 Months">10 Months</option>
+                    <option value="9 Months">9 Months</option>
+                    <option value="8 Months">8 Months</option>
+                    <option value="7 Months">7 Months</option>
+                    <option value="6 Months">6 Months</option>
+                    <option value="5 Months">5 Months</option>
+                    <option value="4 Months">4 Months</option>
+                    <option value="3 Months">3 Months</option>
+                    <option value="2 Months">2 Months</option>
+                    <option value="1 Month">1 Month</option>
+                    <option value="Custom Tenure">Custom Tenure (1 to 11 Months Only)</option>
                   </select>
 
                   {leaseTenure === 'Custom Tenure' && (
-                    <div className="mt-2">
+                    <div className="mt-2 space-y-1">
                       <input
-                        type="text"
+                        type="number"
+                        min={1}
+                        max={11}
                         value={customTenure}
-                        onChange={(e) => setCustomTenure(e.target.value)}
-                        placeholder="Enter tenure in months or years"
+                        onChange={(e) => {
+                          const val = Math.min(11, Math.max(1, Number(e.target.value) || 1));
+                          setCustomTenure(`${val} Months`);
+                        }}
+                        placeholder="Enter months (1 to 11 only)"
                         className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
                       />
+                      <span className="text-[10px] text-blue-600 block">
+                        Maximum 11 Months allowed under Section 17 of Registration Act, 1908.
+                      </span>
                     </div>
                   )}
                 </div>
@@ -2567,7 +2708,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                   placeholder="Complete Residential Address"
                   className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
                 />
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <input
                     type="tel"
                     required
@@ -2578,6 +2719,13 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                     onChange={(e) => setW1Mobile(e.target.value.replace(/\D/g, ''))}
                     placeholder="10-Digit Mobile Number"
                     className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
+                  />
+                  <DateOfBirthPicker
+                    label="Age / Date of Birth"
+                    value={w1Age}
+                    onChange={setW1Age}
+                    placeholder="DD/MM/YYYY"
+                    helperText="वैकल्पिक / Optional"
                   />
                   <input
                     type="text"
@@ -2618,7 +2766,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                   placeholder="Complete Residential Address"
                   className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
                 />
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <input
                     type="tel"
                     required
@@ -2629,6 +2777,13 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                     onChange={(e) => setW2Mobile(e.target.value.replace(/\D/g, ''))}
                     placeholder="10-Digit Mobile Number"
                     className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
+                  />
+                  <DateOfBirthPicker
+                    label="Age / Date of Birth"
+                    value={w2Age}
+                    onChange={setW2Age}
+                    placeholder="DD/MM/YYYY"
+                    helperText="वैकल्पिक / Optional"
                   />
                   <input
                     type="text"
@@ -2790,6 +2945,77 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
               )}
             </div>
 
+            {/* Submit Verification Mode Selection */}
+            <div className="space-y-3 pt-4 border-t border-slate-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
+                    Verification &amp; Review Mode (सत्यापन विकल्प) <span className="text-red-500">*</span>
+                  </span>
+                  <span className="text-[11px] text-slate-500">
+                    Choose how your rental draft should be reviewed before e-stamp procurement
+                  </span>
+                </div>
+                <span className="text-[11px] text-blue-600 font-semibold hidden sm:inline">2 Options Available</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Mode A: Self-Verified (₹0) */}
+                <div
+                  onClick={() => setVerificationMode('self')}
+                  role="button"
+                  tabIndex={0}
+                  className={`p-4 rounded-xl border cursor-pointer transition-all ${
+                    verificationMode === 'self'
+                      ? 'bg-blue-50/80 border-blue-600 shadow-xs ring-2 ring-blue-600/50'
+                      : 'bg-white border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className={`w-5 h-5 ${verificationMode === 'self' ? 'text-blue-600' : 'text-slate-400'}`} />
+                      <h4 className="text-xs sm:text-sm font-bold text-slate-900">
+                        Self-Verified (स्व-सत्यापित)
+                      </h4>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      ₹0 Extra (Free)
+                    </span>
+                  </div>
+                  <p className="mt-2 text-[11px] text-slate-600 leading-relaxed">
+                    आप स्वयं दर्ज की गई सभी जानकारियों की पुष्टि करते हैं। स्वचालित प्रणाली द्वारा तत्काल प्रोसेसिंग।
+                  </p>
+                </div>
+
+                {/* Mode B: Expert Legal Re-check (+₹10) */}
+                <div
+                  onClick={() => setVerificationMode('expert')}
+                  role="button"
+                  tabIndex={0}
+                  className={`p-4 rounded-xl border cursor-pointer transition-all ${
+                    verificationMode === 'expert'
+                      ? 'bg-purple-50/80 border-purple-600 shadow-xs ring-2 ring-purple-600/50'
+                      : 'bg-white border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className={`w-5 h-5 ${verificationMode === 'expert' ? 'text-purple-600' : 'text-slate-400'}`} />
+                      <h4 className="text-xs sm:text-sm font-bold text-slate-900">
+                        Expert Legal Re-check
+                      </h4>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                      +₹10 Extra
+                    </span>
+                  </div>
+                  <p className="mt-2 text-[11px] text-slate-600 leading-relaxed">
+                    वरिष्ठ कानूनी विशेषज्ञ द्वारा नामों, पतों, किराया क्लॉज और स्टाम्प सटीकता की मैन्युअल पुनः-जांच।
+                  </p>
+                </div>
+              </div>
+            </div>
+
             {/* Dynamic Pricing Summary */}
             <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 pb-3 border-b border-slate-200">
@@ -2831,10 +3057,87 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                     <span>+₹{pricing.courierFee}</span>
                   </div>
                 )}
+                {pricing.expertFee > 0 && (
+                  <div className="flex justify-between text-purple-700 font-semibold">
+                    <span>Expert Legal Re-check (Manual Verification):</span>
+                    <span>+₹{pricing.expertFee}</span>
+                  </div>
+                )}
                 <div className="pt-2 border-t border-slate-200 flex justify-between font-bold text-sm text-black">
                   <span>Total Amount Due (Post-Delivery):</span>
                   <span className="text-blue-600">₹{pricing.totalPayable}</span>
                 </div>
+              </div>
+            </div>
+
+            {/* 5 Legal Declaration Checkboxes with Speaker Voice Audio */}
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 sm:p-5 space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-200 flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  <span className="text-xs font-bold text-slate-900 uppercase tracking-wide">
+                    कानूनी शपथ एवं घोषणाएँ (5 Declarations) <span className="text-red-500">*</span>
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {/* Speaker button to read all 5 declarations aloud */}
+                  <button
+                    type="button"
+                    onClick={handlePlayDeclarationsSpeech}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      isSpeakingDeclarations
+                        ? 'bg-rose-100 text-rose-700 border border-rose-300 animate-pulse'
+                        : 'bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-200'
+                    }`}
+                    title="Listen to 5 declarations in voice"
+                  >
+                    <Volume2 className="w-3.5 h-3.5" />
+                    <span>{isSpeakingDeclarations ? 'रोकें (Stop Voice)' : '🔊 5 घोषणाएँ सुनें (Voice)'}</span>
+                  </button>
+
+                  {/* Select All toggle */}
+                  <button
+                    type="button"
+                    onClick={handleToggleAllDeclarations}
+                    className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-white text-slate-700 border border-slate-300 hover:bg-slate-100 cursor-pointer"
+                  >
+                    {declarations.every(Boolean) ? 'Deselect All' : 'Select All'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-2.5">
+                {[
+                  "1. मैंने रेंट एग्रीमेंट के सभी नियम व शर्तें ध्यानपूर्वक पढ़ ली हैं और मैं इनसे सहमत हूँ। (I have carefully read and agreed to all terms and conditions of this rental agreement.)",
+                  "2. प्रस्तुत की गई मकान मालिक, किरायेदार और गवाहों की व्यक्तिगत पहचान (PAN/Aadhaar) व पते की जानकारी पूर्णतः सत्य और प्रामाणिक है। (All personal identity and address details of landlord, tenant, and witnesses provided are true and verified.)",
+                  "3. इस विलेख/करार का निष्पादन बिना किसी दबाव, कपट अथवा अनुचित प्रभाव के स्वतंत्र सहमति से किया जा रहा है। (This deed/agreement is being executed with free consent without any coercion, fraud, or undue influence.)",
+                  "4. संबंधित राज्य सरकार की स्टाम्प ड्यूटी एवं ई-हस्ताक्षर (Aadhaar e-Sign) नियमों के अनुपालन की पूरी ज़िम्मेदारी मेरी है। (I understand and accept full responsibility for compliance with state stamp duty and Aadhaar e-Sign regulations.)",
+                  "5. मैं पुष्टि करता हूँ कि दस्तावेज़ डिलीवरी के पश्चात देय राशि का भुगतान नियमानुसार करूँगा। (I confirm and agree to pay the post-delivery fee upon receipt of the verified legal document.)"
+                ].map((declarationText, idx) => (
+                  <label
+                    key={idx}
+                    className={`flex items-start gap-3 p-2.5 rounded-xl border transition-all cursor-pointer select-none ${
+                      declarations[idx]
+                        ? 'bg-emerald-50/70 border-emerald-300 text-slate-900 shadow-2xs'
+                        : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={declarations[idx]}
+                      onChange={(e) => {
+                        const updated = [...declarations];
+                        updated[idx] = e.target.checked;
+                        setDeclarations(updated);
+                      }}
+                      className="mt-0.5 w-4 h-4 rounded text-emerald-600 border-slate-300 focus:ring-emerald-500 cursor-pointer shrink-0"
+                    />
+                    <span className="text-xs leading-relaxed">
+                      {declarationText}
+                    </span>
+                  </label>
+                ))}
               </div>
             </div>
 

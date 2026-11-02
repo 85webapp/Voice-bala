@@ -133,11 +133,11 @@ class SpeechController {
 export const speechController = new SpeechController();
 
 // Preferences & Storage Key for Audio Explainer Language
-export const AUDIO_LANG_STORAGE_KEY = 'ctc_audio_language_v2';
+export const AUDIO_LANG_STORAGE_KEY = 'userAudioLanguage';
 
 export function getStoredAudioLanguage(): SupportedLanguage {
   try {
-    const saved = localStorage.getItem(AUDIO_LANG_STORAGE_KEY) as SupportedLanguage;
+    const saved = (localStorage.getItem('userAudioLanguage') || localStorage.getItem('ctc_audio_language_v2')) as SupportedLanguage;
     if (saved && SUPPORTED_LANGUAGES.some((l) => l.code === saved)) {
       return saved;
     }
@@ -147,67 +147,27 @@ export function getStoredAudioLanguage(): SupportedLanguage {
 
 export function setStoredAudioLanguage(lang: SupportedLanguage) {
   try {
-    localStorage.setItem(AUDIO_LANG_STORAGE_KEY, lang);
+    localStorage.setItem('userAudioLanguage', lang);
+    localStorage.setItem('ctc_audio_language_v2', lang);
     window.dispatchEvent(new CustomEvent('ctc_audio_language_changed', { detail: { lang } }));
   } catch {}
 }
 
 export function getServiceVoiceScript(serviceTitle: string, lang: SupportedLanguage): string {
-  const lower = serviceTitle.toLowerCase();
-  
+  const lower = (serviceTitle || '').toLowerCase();
   if (lower.includes('gst reg') || (lower.includes('gst') && lower.includes('registration'))) {
     if (lang === 'hi') {
-      return "जीएसटी रजिस्ट्रेशन के लिए आप चाहें तो यह 4-स्टेप फॉर्म खुद भर सकते हैं, या ऊपर दिए गए रिक्वेस्ट स्लाइडर पर क्लिक करके केवल अपना नाम और नंबर सबमिट कर सकते हैं। हमारे कंप्लायंस ऑफिसर एक घंटे के अंदर आपसे संपर्क करेंगे और आपका जीएसटी रजिस्ट्रेशन पूरा करवा देंगे।";
+      return "नमस्कार! जीएसटी रजिस्ट्रेशन के लिए आप यह फॉर्म भर सकते हैं या फिर 'रिक्वेस्ट' टैब पर स्वाइप करके अपनी बेसिक डिटेल्स सबमिट कर सकते हैं। फॉर्म सबमिट होने के बाद, हमारी टीम एक घंटे के भीतर आपसे खुद संपर्क करेगी। अगर आप फॉर्म नहीं भरना चाहते, तो सीधे 'कॉल' या 'व्हाट्सएप' बटन पर क्लिक करके भी हमारी टीम से तुरंत बात कर सकते हैं।";
     }
-    return "For GST Registration, you can complete this 4-step form, or switch to the Request tab above to submit your basic details. Our agent will call you within one hour to assist and process your GSTIN.";
+    return "Hello! For GST registration, you can fill out this form or swipe to the 'Request' tab to submit your basic details. Once submitted, our team will contact you within an hour. If you prefer not to fill out the form, you can click the 'Call' or 'WhatsApp' button to speak with our team immediately.";
   }
-
   if (lower.includes('udyam') || lower.includes('msme')) {
     if (lang === 'hi') {
-      return "उद्यम रजिस्ट्रेशन के लिए आप यह 5-स्टेप फॉर्म भर सकते हैं या रिक्वेस्ट स्लाइडर पर क्लिक करके अपनी बेसिक डिटेल्स सबमिट कर सकते हैं। हमारी टीम एक घंटे के अंदर आपसे संपर्क करेगी और तुरंत आपका उद्यम सर्टिफिकेट प्रोसेस करके आपको हैंडओवर कर देगी।";
+      return "नमस्कार! उद्यम रजिस्ट्रेशन के लिए आप यह फॉर्म भर सकते हैं या फिर 'रिक्वेस्ट' टैब पर स्वाइप करके अपनी बेसिक डिटेल्स सबमिट कर सकते हैं। फॉर्म सबमिट होने के बाद, हमारी टीम एक घंटे के भीतर आपसे खुद संपर्क करेगी। अगर आप फॉर्म नहीं भरना चाहते, तो सीधे 'कॉल' या 'व्हाट्सएप' बटन पर क्लिक करके भी हमारी टीम से तुरंत बात कर सकते हैं।";
     }
-    return "For Udyam Registration, you can fill this complete 5-step form or switch to Request to submit basic details. Our team will coordinate with you within one hour to issue your Udyam Certificate.";
+    return "Hello! For Udyam registration, you can fill out this form or swipe to the 'Request' tab to submit your basic details. Once submitted, our team will contact you within an hour. If you prefer not to fill out the form, you can click the 'Call' or 'WhatsApp' button to speak with our team immediately.";
   }
-
-  if (lower.includes('insurance')) {
-    if (lower.includes('other')) {
-      if (lang === 'hi') {
-        return "आपने अन्य वाहन बीमा चुना है। आप अपनी डिटेल्स सबमिट करके रिक्वेस्ट भेज सकते हैं। एक घंटे के भीतर आपसे संपर्क किया जाएगा या आप सीधे कॉल अथवा व्हाट्सएप बटन पर क्लिक करके संपर्क कर सकते हैं, क्योंकि बीमा के लिए कोऑर्डिनेशन जरूरी है।";
-      }
-      return "You have selected Other Vehicle Insurance. Submit this form request and our team will contact you within one hour, or call our 24/7 support line directly.";
-    }
-    if (lang === 'hi') {
-      return "वाहन बीमा के लिए आप यह फॉर्म भरकर रिक्वेस्ट सबमिट कर सकते हैं। एक घंटे में हमारे एजेंट आपसे संपर्क करेंगे या आप सीधे कॉल अथवा व्हाट्सएप पर बात कर सकते हैं, क्योंकि यह केवल फॉर्म से संभव नहीं है और कोऑर्डिनेशन जरूरी है।";
-    }
-    return "For vehicle insurance, submit your details and our policy agent will reach out within one hour. You can also connect directly via phone call or WhatsApp for instant quotation.";
-  }
-
-  if (lower.includes('gst filing') || (lower.includes('gst') && lower.includes('filing'))) {
-    if (lang === 'hi') {
-      return "जीएसटी फाइलिंग केवल एक फॉर्म से नहीं की जा सकती, इसके लिए समन्वय जरूरी है। आप फॉर्म भरकर रिक्वेस्ट भेज सकते हैं, हमारे एजेंट एक घंटे में आपसे संपर्क करेंगे या आप डायरेक्ट कॉल अथवा व्हाट्सएप पर बात कर सकते हैं।";
-    }
-    return "GST filing requires invoice reconciliation and return coordination. Submit your details for our tax advisor to call you within one hour, or contact us directly via call or WhatsApp.";
-  }
-
-  if (lower.includes('income tax') || lower.includes('itr')) {
-    if (lang === 'hi') {
-      return "इनकम टैक्स फाइलिंग केवल फॉर्म से नहीं हो सकती, इसके लिए कोऑर्डिनेशन जरूरी है। आप फॉर्म सबमिट कर दें, हमारी टीम एक घंटे में आपको संपर्क करेगी या आप डायरेक्ट कॉल अथवा व्हाट्सएप पर बात कर सकते हैं।";
-    }
-    return "Income tax return filing requires financial computation. Submit your details for our tax team to connect within one hour, or call our 24/7 support desk.";
-  }
-
-  if (lower.includes('other filing')) {
-    if (lang === 'hi') {
-      return "आपने अदर फाइलिंग सेलेक्ट किया है। यह केवल फॉर्म से फाइल नहीं हो सकती। आप यह फॉर्म सबमिट कर दें, एक घंटे में टीम आपसे संपर्क करेगी या आप डायरेक्ट कॉल अथवा व्हाट्सएप कर सकते हैं।";
-    }
-    return "For custom filing requests, submit your requirement description. Our compliance team will reach out within one hour, or contact us via call or WhatsApp.";
-  }
-
-  // Other legal registrations: Pvt Ltd, LLP, Trademark, FSSAI
-  if (lang === 'hi') {
-    return "यह रजिस्ट्रेशन एक कानूनी और तकनीकी प्रक्रिया है। आप यहाँ फॉर्म भरकर रिक्वेस्ट सबमिट कर सकते हैं, एक घंटे में हमारे एजेंट आपसे बात करेंगे या आप डायरेक्ट कॉल सपोर्ट अथवा व्हाट्सएप पर बात कर सकते हैं।";
-  }
-  return "This registration involves statutory compliance. Submit this request for our experts to contact you within one hour, or connect directly via Call Support or WhatsApp.";
+  return "";
 }
 
 /** Collect visible form labels from the active document wizard, not hidden templates. */

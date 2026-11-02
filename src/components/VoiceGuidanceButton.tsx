@@ -1,7 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { Volume2, VolumeX } from 'lucide-react';
-import { ttsService, TTSState } from '../services/textToSpeechService';
-import { SUPPORTED_LANGUAGES } from '../data/voiceNarrationData';
+import {
+  playServiceVoice,
+  stopServiceVoice,
+  toggleServiceVoice,
+  subscribeVoiceState,
+  isServiceVoicePlaying
+} from '../services/googleVoiceGuidance';
+import { SUPPORTED_LANGUAGES, getStoredAudioLanguage } from '../data/voiceNarrationData';
 
 interface VoiceGuidanceButtonProps {
   serviceTitle: string;
@@ -18,36 +24,45 @@ export const VoiceGuidanceButton: React.FC<VoiceGuidanceButtonProps> = ({
   className = '',
   variant = 'full'
 }) => {
-  const [ttsState, setTtsState] = useState<TTSState>(ttsService.getState());
+  const [isPlaying, setIsPlaying] = useState<boolean>(() => isServiceVoicePlaying(serviceTitle));
+  const [currentLang, setCurrentLang] = useState(getStoredAudioLanguage);
 
   useEffect(() => {
-    const unsubscribe = ttsService.subscribe((newState) => {
-      setTtsState(newState);
+    const handleLangChange = () => {
+      setCurrentLang(getStoredAudioLanguage());
+    };
+    window.addEventListener('ctc_audio_language_changed', handleLangChange);
+
+    const unsubscribe = subscribeVoiceState(() => {
+      setIsPlaying(isServiceVoicePlaying(serviceTitle));
     });
 
     let autoTimer: any = null;
     if (autoPlay) {
       autoTimer = setTimeout(() => {
-        ttsService.speak(serviceTitle);
+        playServiceVoice(serviceTitle);
       }, autoPlayDelayMs);
     }
 
     return () => {
       if (autoTimer) clearTimeout(autoTimer);
-      ttsService.stop();
       unsubscribe();
+      window.removeEventListener('ctc_audio_language_changed', handleLangChange);
     };
   }, [serviceTitle, autoPlay, autoPlayDelayMs]);
 
   const handleToggle = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    // Tap-to-stop interaction: if speaking, halts instantly; if idle, starts playback.
-    ttsService.toggle(serviceTitle);
+    // Rule 4: Top-right corner speaker button that calls stopServiceVoice() when active
+    if (isPlaying) {
+      stopServiceVoice();
+    } else {
+      playServiceVoice(serviceTitle);
+    }
   };
 
-  const isCurrentServiceSpeaking = ttsState.isSpeaking && ttsState.activeTitle === serviceTitle;
-  const langConfig = SUPPORTED_LANGUAGES.find((l) => l.code === ttsState.language) || SUPPORTED_LANGUAGES[0];
+  const langConfig = SUPPORTED_LANGUAGES.find((l) => l.code === currentLang) || SUPPORTED_LANGUAGES[0];
 
   return (
     <div className={`relative inline-flex items-center ${className}`}>
@@ -55,23 +70,23 @@ export const VoiceGuidanceButton: React.FC<VoiceGuidanceButtonProps> = ({
         type="button"
         onClick={handleToggle}
         aria-label={
-          isCurrentServiceSpeaking
+          isPlaying
             ? 'Stop voice guidance (Tap to stop)'
             : `Listen to voice guidance in ${langConfig.name}`
         }
-        aria-pressed={isCurrentServiceSpeaking}
+        aria-pressed={isPlaying}
         title={
-          isCurrentServiceSpeaking
+          isPlaying
             ? 'Tap to stop voice guidance'
             : `Listen to voice guidance in ${langConfig.nativeName} (${langConfig.name})`
         }
         className={`group relative inline-flex items-center gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 shadow-xs ${
-          isCurrentServiceSpeaking
+          isPlaying
             ? 'bg-amber-500 hover:bg-amber-600 text-white border border-amber-600 ring-2 ring-amber-300/80 shadow-md animate-pulse'
             : 'bg-white hover:bg-slate-50 active:bg-slate-100 text-slate-700 hover:text-blue-700 border border-slate-300 hover:border-blue-400'
         }`}
       >
-        {isCurrentServiceSpeaking ? (
+        {isPlaying ? (
           <>
             {/* Animated Equalizer soundwave bars */}
             <span className="flex items-end gap-0.5 h-3.5 mr-0.5" aria-hidden="true">
@@ -104,7 +119,7 @@ export const VoiceGuidanceButton: React.FC<VoiceGuidanceButtonProps> = ({
       </button>
 
       {/* Helper floating hint pill when speaking */}
-      {isCurrentServiceSpeaking && (
+      {isPlaying && (
         <span className="absolute -bottom-6 right-0 text-[10px] text-amber-700 font-medium whitespace-nowrap bg-amber-50 px-2 py-0.5 rounded border border-amber-200 pointer-events-none animate-fadeIn hidden sm:inline-block">
           Playing voice guide · Tap to stop
         </span>

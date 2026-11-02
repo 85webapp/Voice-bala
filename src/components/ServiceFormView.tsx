@@ -17,6 +17,7 @@ import {
 import { ServiceCategory, SERVICE_CATEGORIES } from '../data/servicesData';
 import { VoiceGuidanceButton } from './VoiceGuidanceButton';
 import { ttsService } from '../services/textToSpeechService';
+import { stopServiceVoice } from '../services/googleVoiceGuidance';
 import { useExampleDetails } from '../hooks/useExampleDetails';
 
 interface ServiceFormViewProps {
@@ -92,6 +93,7 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
     setReferenceId(ref);
     setIsSubmitted(true);
     ttsService.stop();
+    stopServiceVoice();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -115,6 +117,7 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
           type="button"
           onClick={() => {
             ttsService.stop();
+            stopServiceVoice();
             onBack();
           }}
           className="inline-flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-800 py-1.5 px-3 rounded-lg hover:bg-blue-50 cursor-pointer transition-colors"

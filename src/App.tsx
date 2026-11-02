@@ -21,6 +21,7 @@ import { SERVICE_CATEGORIES, ServiceCategory } from './data/servicesData';
 import { POLICIES_DATA } from './data/policiesData';
 import { LegalDocument, OrderItem, PolicySection, UserProfile } from './types';
 import { useDisplayLanguage } from './hooks/useDisplayLanguage';
+import { playServiceVoice } from './services/googleVoiceGuidance';
 
 const DocumentWizardView = lazy(() => import('./components/DocumentWizardView').then((module) => ({ default: module.DocumentWizardView })));
 const RentLeaseWizardView = lazy(() => import('./components/RentLeaseWizardView').then((module) => ({ default: module.RentLeaseWizardView })));
@@ -189,6 +190,13 @@ export default function App() {
         onOpenProfile={() => setIsProfileOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
         orderCount={orders.length}
+        onNavigateHome={() => {
+          setActiveWizardDoc(null);
+          setActivePolicyPage(null);
+          setActiveService(null);
+          setActiveTab('home');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
       />
 
       {/* Main Content Area */}
@@ -331,6 +339,7 @@ export default function App() {
                         key={doc.id}
                         document={doc}
                         onClick={(d) => {
+                          playServiceVoice(d.title);
                           setActiveWizardDoc(d);
                           window.scrollTo({ top: 0, behavior: 'smooth' });
                         }}
@@ -376,6 +385,7 @@ export default function App() {
                             <div
                               key={serviceName}
                               onClick={() => {
+                                playServiceVoice(serviceName);
                                 setActiveService({ category: currentCat, title: serviceName });
                                 window.scrollTo({ top: 0, behavior: 'smooth' });
                               }}
@@ -384,6 +394,7 @@ export default function App() {
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter' || e.key === ' ') {
                                   e.preventDefault();
+                                  playServiceVoice(serviceName);
                                   setActiveService({ category: currentCat, title: serviceName });
                                 }
                               }}
@@ -405,10 +416,19 @@ export default function App() {
                               </div>
 
                               <div className="shrink-0 flex items-center">
-                                <div className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-blue-600 group-hover:bg-blue-700 text-white font-bold text-xs shadow-xs transition-all">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    playServiceVoice(serviceName);
+                                    setActiveService({ category: currentCat, title: serviceName });
+                                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                                  }}
+                                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-blue-600 group-hover:bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs shadow-xs transition-all cursor-pointer"
+                                >
                                   <span>{homeCategory === 'filings' ? 'File' : 'Apply'}</span>
                                   <span className="font-extrabold text-sm">→</span>
-                                </div>
+                                </button>
                               </div>
                             </div>
                           );

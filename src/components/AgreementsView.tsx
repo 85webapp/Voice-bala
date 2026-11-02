@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { ChevronDown, ChevronRight, FileText, Search, Mic, MicOff, X } from 'lucide-react';
 import { MASTER_CATEGORIES, INITIAL_FRONT_DOCUMENTS } from '../data/documentsData';
 import { LegalDocument } from '../types';
+import { playServiceVoice } from '../services/googleVoiceGuidance';
 
 interface AgreementsViewProps {
   onSelectDocument: (doc: LegalDocument) => void;
@@ -47,6 +48,7 @@ export const AgreementsView: React.FC<AgreementsViewProps> = ({ onSelectDocument
   };
 
   const handleItemClick = (itemTitle: string, categoryName: string) => {
+    playServiceVoice(itemTitle);
     const existing = INITIAL_FRONT_DOCUMENTS.find(
       (d) => d.title.toLowerCase() === itemTitle.toLowerCase()
     );
