@@ -93,15 +93,12 @@ export const DocumentRow: React.FC<DocumentRowProps> = ({ document, onClick }) =
           <span className="text-sm sm:text-base font-semibold text-black group-hover:text-blue-700 transition-colors truncate">
             {document.title}
           </span>
-          <span className="text-xs text-slate-400 font-normal truncate">
-            {document.category} · Drafting template
-          </span>
         </div>
       </div>
 
       {/* Right Section: Make → Action Button */}
       <div className="shrink-0 flex items-center">
-        <div className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-blue-600 group-hover:bg-blue-700 text-white font-bold text-xs shadow-xs transition-all">
+        <div className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#15803d] group-hover:bg-[#166534] text-white font-bold text-xs shadow-xs transition-all">
           <span>Make</span>
           <span className="font-extrabold text-sm">→</span>
         </div>

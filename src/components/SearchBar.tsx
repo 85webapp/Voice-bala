@@ -347,7 +347,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
             className={`p-2 rounded-lg transition-all duration-200 cursor-pointer flex items-center justify-center ${
               isListening
                 ? 'bg-red-500 text-white animate-pulse shadow-md shadow-red-500/30 ring-2 ring-red-400'
-                : 'bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white'
+                : 'bg-slate-100 text-black hover:bg-slate-200'
             }`}
             title={isListening ? 'Listening... Speak now' : 'Search by Voice'}
           >

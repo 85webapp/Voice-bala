@@ -196,7 +196,7 @@ export const AgreementsView: React.FC<AgreementsViewProps> = ({ onSelectDocument
                         {item}
                       </span>
                       <div className="shrink-0 flex items-center">
-                        <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-blue-600 group-hover:bg-blue-700 text-white font-bold text-xs shadow-2xs transition-all">
+                        <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-[#15803d] group-hover:bg-[#166534] text-white font-bold text-xs shadow-2xs transition-all">
                           <span>Make</span>
                           <span className="font-extrabold text-xs">→</span>
                         </div>

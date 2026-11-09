@@ -621,8 +621,15 @@ export function playServiceVoice(serviceKey: string) {
     };
 
     utterance.onerror = (e) => {
+      // Standard browser interruption/cancellation when audio is stopped, pre-empted or page changes
+      if (e.error === 'interrupted' || e.error === 'canceled') {
+        if (thisSession === currentPlaySessionId) {
+          currentPlayingServiceKey = null;
+          notifyListeners();
+        }
+        return;
+      }
       if (thisSession !== currentPlaySessionId) return;
-      console.error('❌ [VoiceGuidance] SPEECH ONERROR (error event):', e.error || e, e);
       stopServiceVoice();
     };
 
@@ -631,7 +638,6 @@ export function playServiceVoice(serviceKey: string) {
       if (window.speechSynthesis.paused) {
         window.speechSynthesis.resume();
       }
-      console.log('🔊 [VoiceGuidance] Calling window.speechSynthesis.speak() immediately on click for session #' + thisSession);
       window.speechSynthesis.speak(utterance);
       currentPlayingServiceKey = canonicalKey;
       notifyListeners();
@@ -641,11 +647,9 @@ export function playServiceVoice(serviceKey: string) {
         window.speechSynthesis.resume();
       }
     } catch (speakErr) {
-      console.error('[VoiceGuidance] Exception executing speak():', speakErr);
       stopServiceVoice();
     }
   } catch (err) {
-    console.error('[VoiceGuidance] Exception setting up speech:', err);
     stopServiceVoice();
   }
 }

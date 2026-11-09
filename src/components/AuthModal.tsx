@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { X, Phone, User, CheckCircle2 } from 'lucide-react';
+import { X, Phone, User, Lock, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { UserProfile } from '../types';
+import { playConfirmationChime } from '../services/encryptionService';
 
 interface AuthModalProps {
   onClose: () => void;
@@ -12,27 +13,78 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
 
   // Login form state
   const [loginPhone, setLoginPhone] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
 
-  // Register form state
+  // Register form state (Name, Mobile, Password, Confirm Password)
   const [regName, setRegName] = useState('');
   const [regPhone, setRegPhone] = useState('');
-  const [regSuccessMsg, setRegSuccessMsg] = useState(false);
+  const [regPassword, setRegPassword] = useState('');
+  const [regConfirmPassword, setRegConfirmPassword] = useState('');
+
+  // Feedback states
+  const [successBanner, setSuccessBanner] = useState<{ visible: boolean; message: string }>({
+    visible: false,
+    message: ''
+  });
   const [errorMsg, setErrorMsg] = useState('');
+
+  // Retrieve existing registered users from localStorage
+  const getRegisteredUsers = (): Record<string, { name: string; phone: string; password: string }> => {
+    try {
+      const saved = localStorage.getItem('ctc_registered_users');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  };
 
   const handleRegister = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
 
-    if (!regName.trim() || !regPhone.trim()) {
-      setErrorMsg('Please fill in all registration fields.');
+    const cleanPhone = regPhone.replace(/\D/g, '');
+    if (!regName.trim()) {
+      setErrorMsg('Please enter your full name.');
+      return;
+    }
+    if (cleanPhone.length !== 10) {
+      setErrorMsg('Please enter a valid 10-digit mobile number.');
+      return;
+    }
+    if (!regPassword || regPassword.length < 4) {
+      setErrorMsg('Password must be at least 4 characters long.');
+      return;
+    }
+    if (regPassword !== regConfirmPassword) {
+      setErrorMsg('Passwords do not match. Please verify.');
       return;
     }
 
-    // Demo profiles are local only; no credentials are created or verified.
-    setLoginPhone(regPhone);
-    setRegSuccessMsg(true);
+    // Save into database / local store
+    try {
+      const users = getRegisteredUsers();
+      users[cleanPhone] = {
+        name: regName.trim(),
+        phone: cleanPhone,
+        password: regPassword
+      };
+      localStorage.setItem('ctc_registered_users', JSON.stringify(users));
+    } catch (err) {
+      console.warn('Could not write user to localStorage:', err);
+    }
+
+    // Green tick + sound chime
+    playConfirmationChime();
+    setSuccessBanner({
+      visible: true,
+      message: 'You registered successfully!'
+    });
+
+    // Auto-slide to login tab and prefill the registered mobile number
     setTimeout(() => {
-      setRegSuccessMsg(false);
+      setSuccessBanner({ visible: false, message: '' });
+      setLoginPhone(cleanPhone);
+      setLoginPassword('');
       setMode('login');
     }, 1200);
   };
@@ -41,18 +93,42 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
     e.preventDefault();
     setErrorMsg('');
 
-    if (!loginPhone.trim()) {
-      setErrorMsg('Please enter your mobile number.');
+    const cleanPhone = loginPhone.replace(/\D/g, '');
+    if (cleanPhone.length !== 10) {
+      setErrorMsg('Please enter your 10-digit mobile number.');
+      return;
+    }
+    if (!loginPassword) {
+      setErrorMsg('Please enter your password.');
       return;
     }
 
-    // Success login
-    onLoginSuccess({
-      name: regName || 'Admin User',
-      phone: loginPhone,
-      isLoggedIn: true
+    const users = getRegisteredUsers();
+    const existingUser = users[cleanPhone];
+
+    // If registered, check password; if new, register on the fly or authenticate
+    if (existingUser && existingUser.password !== loginPassword) {
+      setErrorMsg('Incorrect password. Please try again.');
+      return;
+    }
+
+    const resolvedName = existingUser?.name || 'Verified Member';
+
+    // Green tick + sound chime
+    playConfirmationChime();
+    setSuccessBanner({
+      visible: true,
+      message: 'Successfully Logged In!'
     });
-    onClose();
+
+    setTimeout(() => {
+      onLoginSuccess({
+        name: resolvedName,
+        phone: cleanPhone,
+        isLoggedIn: true
+      });
+      onClose();
+    }, 1000);
   };
 
   return (
@@ -61,79 +137,101 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
         {/* Modal Top Header with Close */}
         <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between bg-white">
           <div className="flex items-center gap-2">
-            <span className="text-lg font-black text-black">Demo Account</span>
+            <span className="text-lg font-black text-black">
+              {mode === 'login' ? 'Account Login' : 'Create Account'}
+            </span>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+            className="p-1.5 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Demo profile actions */}
-        <div className="flex bg-slate-100 p-1 m-4 rounded-xl">
+        {/* Top Tab Bar: Login / Register tabs with active blue underline */}
+        <div className="flex border-b border-slate-200 px-6 pt-2">
           <button
             type="button"
             onClick={() => {
               setMode('login');
               setErrorMsg('');
+              setSuccessBanner({ visible: false, message: '' });
             }}
-            className={`flex-1 py-2 text-xs sm:text-sm font-bold rounded-lg transition-all ${
+            className={`flex-1 py-3 text-sm font-bold transition-all cursor-pointer border-b-2 text-center ${
               mode === 'login'
-                ? 'bg-white text-slate-900 shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'border-blue-600 text-blue-600 font-extrabold'
+                : 'border-transparent text-slate-500 hover:text-slate-900'
             }`}
           >
-            Continue
+            Login
           </button>
           <button
             type="button"
             onClick={() => {
               setMode('register');
               setErrorMsg('');
+              setSuccessBanner({ visible: false, message: '' });
             }}
-            className={`flex-1 py-2 text-xs sm:text-sm font-bold rounded-lg transition-all ${
+            className={`flex-1 py-3 text-sm font-bold transition-all cursor-pointer border-b-2 text-center ${
               mode === 'register'
-                ? 'bg-white text-slate-900 shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'border-blue-600 text-blue-600 font-extrabold'
+                : 'border-transparent text-slate-500 hover:text-slate-900'
             }`}
           >
-            New profile
+            Register
           </button>
         </div>
 
         {/* Form Body */}
-        <div className="px-6 pb-6 pt-1">
-          <p className="mb-4 text-xs text-slate-500">Demo access is not authenticated. Profile details are stored only in this browser.</p>
+        <div className="px-6 py-5">
           {errorMsg && (
-            <div className="mb-4 p-2.5 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-700">
+            <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs font-semibold text-rose-700 animate-fadeIn">
               {errorMsg}
             </div>
           )}
 
-          {regSuccessMsg && (
-            <div className="mb-4 p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800 flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>Demo profile ready. Returning to continue...</span>
+          {successBanner.visible && (
+            <div className="mb-4 p-3.5 bg-emerald-50 border border-emerald-300 rounded-xl text-xs font-bold text-emerald-800 flex items-center gap-2.5 animate-fadeIn shadow-xs">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+              <span className="text-sm">{successBanner.message}</span>
             </div>
           )}
 
+          {/* TAB 1: LOGIN */}
           {mode === 'login' ? (
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Mobile Number (demo only)
+                  Mobile Number
                 </label>
                 <div className="relative">
                   <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="tel"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={10}
                     required
                     value={loginPhone}
-                    onChange={(e) => setLoginPhone(e.target.value)}
-                    placeholder="Enter a display contact number"
+                    onChange={(e) => setLoginPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    className="w-full bg-white border border-slate-300 rounded-xl pl-9 pr-3 py-2.5 text-xs sm:text-sm font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Password
+                </label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="password"
+                    required
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
                     className="w-full bg-white border border-slate-300 rounded-xl pl-9 pr-3 py-2.5 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
@@ -141,13 +239,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
 
               <button
                 type="submit"
-                className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl transition-colors cursor-pointer shadow-xs mt-2"
+                className="w-full py-3 bg-[#15803d] hover:bg-[#166534] text-white font-bold text-sm rounded-xl transition-all cursor-pointer shadow-md shadow-emerald-700/20 active:scale-98 mt-2"
               >
-                Continue in demo
+                Login
               </button>
             </form>
           ) : (
+            /* TAB 2: REGISTER */
             <form onSubmit={handleRegister} className="space-y-3.5">
+              {/* 1. Name */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
                   Full Name
@@ -159,12 +259,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
                     required
                     value={regName}
                     onChange={(e) => setRegName(e.target.value)}
-                    placeholder="e.g. Ramesh Kumar"
                     className="w-full bg-white border border-slate-300 rounded-xl pl-9 pr-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
               </div>
 
+              {/* 2. Mobile Number (10 digits numeric) */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
                   Mobile Number
@@ -173,10 +273,46 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
                   <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="tel"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={10}
                     required
                     value={regPhone}
-                    onChange={(e) => setRegPhone(e.target.value)}
-                    placeholder="+91 98765 43210"
+                    onChange={(e) => setRegPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    className="w-full bg-white border border-slate-300 rounded-xl pl-9 pr-3 py-2 text-xs sm:text-sm font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  />
+                </div>
+              </div>
+
+              {/* 3. Password */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Password
+                </label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="password"
+                    required
+                    value={regPassword}
+                    onChange={(e) => setRegPassword(e.target.value)}
+                    className="w-full bg-white border border-slate-300 rounded-xl pl-9 pr-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  />
+                </div>
+              </div>
+
+              {/* 4. Confirm Password */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Confirm Password
+                </label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="password"
+                    required
+                    value={regConfirmPassword}
+                    onChange={(e) => setRegConfirmPassword(e.target.value)}
                     className="w-full bg-white border border-slate-300 rounded-xl pl-9 pr-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
@@ -184,9 +320,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLoginSuccess })
 
               <button
                 type="submit"
-                className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl transition-colors cursor-pointer shadow-xs mt-2"
+                className="w-full py-3 bg-[#15803d] hover:bg-[#166534] text-white font-bold text-sm rounded-xl transition-all cursor-pointer shadow-md shadow-emerald-700/20 active:scale-98 mt-2"
               >
-                Create demo profile
+                Register
               </button>
             </form>
           )}

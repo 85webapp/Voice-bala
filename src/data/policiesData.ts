@@ -30,5 +30,11 @@ export const POLICIES_DATA: PolicySection[] = [
     title: '24/7 Contact & Customer Support Policy',
     summary: 'No customer support channel is connected in this prototype.',
     content: []
+  },
+  {
+    id: 'check-steps',
+    title: 'Check Steps',
+    summary: 'Cotrix Tcg step-by-step verification and process guide.',
+    content: []
   }
 ];

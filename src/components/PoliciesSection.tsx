@@ -25,7 +25,7 @@ export const PoliciesSection: React.FC<PoliciesSectionProps> = ({ onSelectPolicy
       <div className="max-w-md mx-auto px-4 space-y-3">
         {POLICIES_DATA.map((policy) => (
           <div key={policy.id} className="flex items-start gap-2.5">
-            <span className="text-blue-600 font-bold text-base leading-none select-none">
+            <span className="text-black font-black text-lg leading-none select-none">
               &bull;
             </span>
             <button

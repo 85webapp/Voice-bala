@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, LogOut, LogIn, ChevronRight, ShieldCheck, Volume2, Globe } from 'lucide-react';
+import { X, LogOut, LogIn, ChevronRight, ShieldCheck, Volume2, Globe, CheckCircle2 } from 'lucide-react';
 import { UserProfile } from '../types';
 import { SUPPORTED_LANGUAGES, SupportedLanguage, getStoredAudioLanguage, setStoredAudioLanguage } from '../data/voiceNarrationData';
 import { useDisplayLanguage } from '../hooks/useDisplayLanguage';
@@ -9,6 +9,7 @@ interface SettingsModalProps {
   onOpenPolicies: () => void;
   onOpenAuth: () => void;
   onLogout: () => void;
+  onOpenCheckSteps?: () => void;
   profile: UserProfile;
 }
 
@@ -17,6 +18,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onOpenPolicies,
   onOpenAuth,
   onLogout,
+  onOpenCheckSteps,
   profile
 }) => {
   const { language: displayLanguage, setLanguage: setDisplayLanguage, t } = useDisplayLanguage();
@@ -226,6 +228,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
               </div>
               <ChevronRight className="w-4 h-4 text-blue-600" />
+            </button>
+
+            {/* Check Steps Option as explicitly requested */}
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onOpenCheckSteps?.();
+              }}
+              className="w-full mt-2.5 bg-emerald-50/60 hover:bg-emerald-100/60 border border-emerald-200 rounded-xl p-3.5 flex items-center justify-between text-left transition-colors cursor-pointer"
+            >
+              <div className="flex items-center gap-2.5">
+                <CheckCircle2 className="w-4 h-4 text-[#15803d]" />
+                <div>
+                  <div className="font-bold text-slate-900">Check Steps</div>
+                  <div className="text-[11px] text-slate-500">Cotrix Tcg 4-step process guide with continuous video</div>
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-[#15803d]" />
             </button>
           </div>
         </div>

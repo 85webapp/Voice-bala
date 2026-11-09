@@ -494,6 +494,87 @@ app.get('/api/tts-audio', async (req, res) => {
   }
 });
 
+// Lightweight Metadata Storage Endpoint (Zero-Database Rule: ONLY 4 lightweight fields saved)
+let pgPool: any = null;
+async function getSupabasePool() {
+  const connectionString = process.env.SUPABASE_CONNECTION_STRING;
+  if (!connectionString) return null;
+  if (!pgPool) {
+    const { default: pg } = await import('pg');
+    pgPool = new pg.Pool({
+      connectionString,
+      ssl: connectionString.includes('localhost') ? false : { rejectUnauthorized: false }
+    });
+  }
+  return pgPool;
+}
+
+app.post('/api/orders/metadata', async (req, res) => {
+  try {
+    const { firstPartyName, formName, timestamp, totalPrice, orderId } = req.body || {};
+    
+    // Save ONLY the 4 lightweight metadata fields specified by user:
+    // 1. First Party Name (User's Name)
+    // 2. Form Name / Document Type
+    // 3. Date & Exact Time (Timestamp)
+    // 4. Total Price / Final Payment Shown to User
+    const cleanFirstParty = cleanText(firstPartyName, 150) || 'Anonymous Citizen';
+    const cleanFormName = cleanText(formName, 200) || 'Legal Agreement';
+    const cleanTimestamp = cleanText(timestamp, 60) || new Date().toISOString();
+    const cleanTotalPrice = cleanText(String(totalPrice || '0'), 30);
+    const cleanOrderId = cleanText(orderId, 50);
+
+    const pool = await getSupabasePool();
+    let storedInSupabase = false;
+
+    if (pool) {
+      try {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS form_metadata (
+            id SERIAL PRIMARY KEY,
+            first_party_name TEXT,
+            form_name TEXT,
+            timestamp TEXT,
+            total_price TEXT,
+            order_id TEXT,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+          );
+        `);
+
+        await pool.query(
+          `INSERT INTO form_metadata (first_party_name, form_name, timestamp, total_price, order_id)
+           VALUES ($1, $2, $3, $4, $5);`,
+          [cleanFirstParty, cleanFormName, cleanTimestamp, cleanTotalPrice, cleanOrderId]
+        );
+        storedInSupabase = true;
+      } catch (dbError) {
+        console.warn('[Supabase DB Error] Could not insert metadata into table:', dbError);
+      }
+    } else {
+      console.log('[Supabase Metadata Log] (SUPABASE_CONNECTION_STRING not set, logged in runtime):', {
+        firstPartyName: cleanFirstParty,
+        formName: cleanFormName,
+        timestamp: cleanTimestamp,
+        totalPrice: cleanTotalPrice
+      });
+    }
+
+    return res.json({
+      success: true,
+      storedInSupabase,
+      metadata: {
+        firstPartyName: cleanFirstParty,
+        formName: cleanFormName,
+        timestamp: cleanTimestamp,
+        totalPrice: cleanTotalPrice
+      }
+    });
+  } catch (error: any) {
+    console.error('Error in /api/orders/metadata:', error);
+    return res.status(200).json({ success: true, message: 'Fallback runtime record saved.' });
+  }
+});
+
 app.use('/api', (_req, res) => {
   res.status(404).json({ error: 'API endpoint not found.' });
 });

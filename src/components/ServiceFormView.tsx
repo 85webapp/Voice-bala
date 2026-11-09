@@ -12,13 +12,16 @@ import {
   Building2,
   FileCheck2,
   Car,
-  FileText
+  FileText,
+  Lock,
+  ExternalLink
 } from 'lucide-react';
 import { ServiceCategory, SERVICE_CATEGORIES } from '../data/servicesData';
 import { VoiceGuidanceButton } from './VoiceGuidanceButton';
 import { ttsService } from '../services/textToSpeechService';
 import { stopServiceVoice } from '../services/googleVoiceGuidance';
 import { useExampleDetails } from '../hooks/useExampleDetails';
+import { encryptFormDataAndSign, saveLightweightMetadata, playConfirmationChime } from '../services/encryptionService';
 
 interface ServiceFormViewProps {
   category: ServiceCategory;
@@ -35,6 +38,27 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
   const [selectedTitle, setSelectedTitle] = useState(initialTitle);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [referenceId, setReferenceId] = useState('');
+  const [submissionSecurityDetails, setSubmissionSecurityDetails] = useState<{
+    encryptedPayload: string;
+    signature: string;
+    websiteBUrl: string;
+  } | null>(null);
+  const [redirectCountdown, setRedirectCountdown] = useState<number>(5);
+
+  useEffect(() => {
+    if (!submissionSecurityDetails) return;
+    const timer = setInterval(() => {
+      setRedirectCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          window.location.href = submissionSecurityDetails.websiteBUrl;
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [submissionSecurityDetails]);
 
   // Common Contact fields
   const [name, setName] = useState('');
@@ -47,6 +71,39 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
   const [engineNumber, setEngineNumber] = useState('');
   const [policyExpired, setPolicyExpired] = useState<'yes' | 'no'>('no');
   const [policyType, setPolicyType] = useState<'comprehensive' | 'third_party'>('comprehensive');
+  const handleVehicleNumberChange = (raw: string) => {
+    const clean = raw.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    let p1 = '';
+    let p2 = '';
+    let p3 = '';
+    let p4 = '';
+
+    let i = 0;
+    while (i < clean.length && p1.length < 2) {
+      if (/[A-Z]/.test(clean[i])) p1 += clean[i];
+      i++;
+    }
+    while (i < clean.length && p2.length < 2) {
+      if (/[0-9]/.test(clean[i])) p2 += clean[i];
+      i++;
+    }
+    while (i < clean.length && p3.length < 2) {
+      if (/[A-Z]/.test(clean[i])) {
+        p3 += clean[i];
+      } else if (/[0-9]/.test(clean[i]) && p3.length > 0) {
+        break;
+      }
+      i++;
+    }
+    while (i < clean.length && p4.length < 4) {
+      if (/[0-9]/.test(clean[i])) p4 += clean[i];
+      i++;
+    }
+
+    const res = [p1, p2, p3, p4].filter(Boolean).join(' ');
+    setVehicleNumber(res);
+  };
+
   const [insuranceNotes, setInsuranceNotes] = useState('');
 
   // GST Filing specific fields
@@ -87,13 +144,46 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
   const isItrFiling = selectedTitle.toLowerCase().includes('income tax') || selectedTitle.toLowerCase().includes('itr');
   const isOtherFiling = selectedTitle.toLowerCase().includes('other filing');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const ref = `CTC-${Math.floor(100000 + Math.random() * 900000)}`;
     setReferenceId(ref);
+
+    // 1. Zero-Database Client-Side Encryption
+    const sensitiveData = {
+      orderId: ref,
+      category: category.title,
+      service: selectedTitle,
+      name,
+      phone,
+      email,
+      vehicleNumber,
+      chassisNumber,
+      engineNumber,
+      businessName,
+      businessAddress,
+      businessActivity,
+      generalDetails,
+      timestamp: new Date().toISOString()
+    };
+    const { encryptedPayload, signature, websiteBUrl } = encryptFormDataAndSign(sensitiveData);
+
+    // 2. Save ONLY 4 lightweight metadata fields in Supabase
+    await saveLightweightMetadata({
+      firstPartyName: name || 'Service Applicant',
+      formName: selectedTitle,
+      timestamp: new Date().toISOString(),
+      totalPrice: '0',
+      orderId: ref
+    });
+
+    setSubmissionSecurityDetails({ encryptedPayload, signature, websiteBUrl });
     setIsSubmitted(true);
     ttsService.stop();
     stopServiceVoice();
+    try {
+      playConfirmationChime();
+    } catch {}
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -190,7 +280,11 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
             <CheckCircle2 className="w-8 h-8" />
           </div>
           <div>
-            <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">
+            <div className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-[#15803d] text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider mb-2">
+              <Lock className="w-3.5 h-3.5 text-[#15803d]" />
+              <span>AES-256 Client Encrypted • Zero-Database Rule</span>
+            </div>
+            <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider block">
               Request Successfully Recorded
             </span>
             <h2 className="text-xl sm:text-2xl font-black text-slate-900 mt-1">
@@ -200,6 +294,36 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
               Reference ID: {referenceId}
             </div>
           </div>
+
+          {/* Website B Automatic Redirection Card */}
+          {submissionSecurityDetails && (
+            <div className="bg-emerald-50/70 border-2 border-[#15803d]/30 rounded-2xl p-4 sm:p-5 text-left space-y-3 max-w-lg mx-auto">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-emerald-900 flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#15803d] animate-pulse"></span>
+                  Website B Production Redirection
+                </span>
+                <span className="text-xs font-bold text-[#15803d] bg-white px-2.5 py-0.5 rounded-full border border-emerald-200">
+                  Redirecting in {redirectCountdown}s
+                </span>
+              </div>
+              <p className="text-xs text-slate-600">
+                Encrypted payload &amp; HMAC signature ready for transmission. Proceeding to:
+              </p>
+              <div className="p-2.5 bg-white border border-slate-200 rounded-xl font-mono text-[11px] text-slate-700 break-all select-all">
+                {submissionSecurityDetails.websiteBUrl}
+              </div>
+              <div className="pt-1">
+                <a
+                  href={submissionSecurityDetails.websiteBUrl}
+                  className="w-full inline-flex items-center justify-center gap-2 py-3 px-5 bg-[#15803d] hover:bg-[#166534] text-white font-bold text-sm rounded-xl shadow-md transition-all cursor-pointer"
+                >
+                  <span>Proceed to Website B Immediately</span>
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+              </div>
+            </div>
+          )}
 
           <p className="text-sm text-slate-600 max-w-md mx-auto">
             Our compliance executive is reviewing your request for <strong className="text-slate-900">{selectedTitle}</strong> and will call you on <strong className="text-slate-900">+91 {phone}</strong> within 1 hour.
@@ -321,39 +445,44 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
                   <input
                     type="text"
                     required={!isOtherInsurance}
-                    placeholder={getPlaceholder('e.g. UP 84 AB 1234 or DL 01 AB 9999')}
+                    maxLength={13}
+                    placeholder={getPlaceholder('e.g. UP 84 AB 1234')}
                     value={vehicleNumber}
-                    onChange={(e) => setVehicleNumber(e.target.value.toUpperCase())}
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm font-mono font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    onChange={(e) => handleVehicleNumberChange(e.target.value)}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm font-mono font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 uppercase"
                   />
                 </div>
 
-                {/* Optional Chassis Number (last 6) */}
+                {/* Optional Chassis Number (last 6 digits, opens numeric pad) */}
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1.5">
                     Chassis Number <span className="text-slate-400 font-normal">(Last 6 digits, optional)</span>
                   </label>
                   <input
                     type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     maxLength={6}
-                    placeholder={getPlaceholder('e.g. 543210')}
+                    placeholder={getPlaceholder('6-Digit Number')}
                     value={chassisNumber}
-                    onChange={(e) => setChassisNumber(e.target.value.toUpperCase())}
+                    onChange={(e) => setChassisNumber(e.target.value.replace(/\D/g, '').slice(0, 6))}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
 
-                {/* Optional Engine Number (last 6) */}
+                {/* Optional Engine Number (last 6 digits, opens numeric pad) */}
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1.5">
                     Engine Number <span className="text-slate-400 font-normal">(Last 6 digits, optional)</span>
                   </label>
                   <input
                     type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     maxLength={6}
-                    placeholder={getPlaceholder('e.g. 987654')}
+                    placeholder={getPlaceholder('6-Digit Number')}
                     value={engineNumber}
-                    onChange={(e) => setEngineNumber(e.target.value.toUpperCase())}
+                    onChange={(e) => setEngineNumber(e.target.value.replace(/\D/g, '').slice(0, 6))}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
@@ -907,7 +1036,7 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
               type="submit"
               className="inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl px-6 py-3 cursor-pointer shadow-md shadow-blue-600/20 hover:shadow-lg transition-all"
             >
-              <span>Submit for 1-Hour Callback</span>
+              <span>Submit</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>

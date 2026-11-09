@@ -35,6 +35,14 @@ import {
   getStoredAudioLanguage,
   setStoredAudioLanguage
 } from '../data/voiceNarrationData';
+import { AadhaarInput } from './AadhaarInput';
+import { AddressFieldGroup } from './AddressFieldGroup';
+import {
+  encryptFormDataAndSign,
+  saveLightweightMetadata,
+  playConfirmationChime
+} from '../services/encryptionService';
+import { ExternalLink, Lock } from 'lucide-react';
 
 interface RentLeaseWizardViewProps {
   document: LegalDocument;
@@ -380,6 +388,27 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
   const [disclaimerAccepted, setDisclaimerAccepted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submittedOrder, setSubmittedOrder] = useState<OrderItem | null>(null);
+  const [submissionSecurityDetails, setSubmissionSecurityDetails] = useState<{
+    encryptedPayload: string;
+    signature: string;
+    websiteBUrl: string;
+  } | null>(null);
+  const [redirectCountdown, setRedirectCountdown] = useState<number>(5);
+
+  useEffect(() => {
+    if (!submissionSecurityDetails) return;
+    const timer = setInterval(() => {
+      setRedirectCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          window.location.href = submissionSecurityDetails.websiteBUrl;
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [submissionSecurityDetails]);
 
   // Toggle all 5 declarations
   const handleToggleAllDeclarations = () => {
@@ -513,7 +542,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!w1Name.trim() || !w1Mobile.trim() || !w2Name.trim() || !w2Mobile.trim()) {
@@ -540,7 +569,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
 
     setIsSubmitting(true);
 
-    setTimeout(() => {
+    try {
       const todayISO = new Date().toISOString().split('T')[0];
       const newOrderId = `CTC-${Math.floor(100000 + Math.random() * 900000)}`;
 
@@ -548,6 +577,55 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
         docCategory === 'commercial'
           ? 'Commercial Lease Agreement (MTA Compliant)'
           : 'Residential Rent Agreement (MTA Compliant)';
+
+      // 1. Gather sensitive data for client-side encryption
+      const sensitiveData = {
+        orderId: newOrderId,
+        docTitle: formattedDocTitle,
+        state: selectedState,
+        landlord: {
+          entityType: landlordEntityType,
+          name: landlordName,
+          fatherName: landlordFatherName,
+          address: landlordAddress,
+          pan: landlordPan,
+          aadhaar: landlordAadhaarLast4,
+          mobile: landlordMobile
+        },
+        tenant: {
+          name: tenantName,
+          fatherName: tenantFatherName,
+          address: tenantAddress,
+          pan: tenantPan,
+          aadhaar: tenantAadhaarLast4,
+          mobile: tenantMobile
+        },
+        leaseTerms: {
+          monthlyRent,
+          securityDeposit,
+          lockInPeriod,
+          leaseTenure,
+          noticePeriod
+        },
+        witnesses: [
+          { name: w1Name, fatherName: w1FatherName, address: w1Address, mobile: w1Mobile },
+          { name: w2Name, fatherName: w2FatherName, address: w2Address, mobile: w2Mobile }
+        ],
+        pricing,
+        timestamp: new Date().toISOString()
+      };
+
+      // 2. Client-side AES-256 + HMAC-SHA256
+      const { encryptedPayload, signature, websiteBUrl } = encryptFormDataAndSign(sensitiveData);
+
+      // 3. Save ONLY 4 lightweight metadata fields into Supabase
+      await saveLightweightMetadata({
+        firstPartyName: landlordName || 'Applicant',
+        formName: formattedDocTitle,
+        timestamp: new Date().toISOString(),
+        totalPrice: pricing.totalPayable,
+        orderId: newOrderId
+      });
 
       const newOrder: OrderItem = {
         orderId: newOrderId,
@@ -573,18 +651,23 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
       };
 
       try {
+        playConfirmationChime();
         confetti({
-          particleCount: 90,
+          particleCount: 100,
           spread: 70,
           origin: { y: 0.6 }
         });
       } catch {}
 
       setSubmittedOrder(newOrder);
+      setSubmissionSecurityDetails({ encryptedPayload, signature, websiteBUrl });
       onOrderCreated(newOrder);
       setIsSubmitting(false);
       window.scrollTo({ top: 0, behavior: 'smooth' });
-    }, 700);
+    } catch (err) {
+      console.error('Submission error:', err);
+      setIsSubmitting(false);
+    }
   };
 
   // Submitted Success View
@@ -592,27 +675,58 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
     return (
       <div className="w-full max-w-3xl mx-auto px-4 py-8 animate-fadeIn pb-24">
         <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-10 shadow-lg text-center space-y-6">
-          <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 mx-auto flex items-center justify-center shadow-inner">
+          <div className="w-16 h-16 rounded-full bg-emerald-100 text-[#15803d] mx-auto flex items-center justify-center shadow-inner">
             <CheckCircle2 className="w-10 h-10" />
           </div>
 
           <div>
-            <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200 uppercase tracking-wider">
-              Demo Record Saved Locally
-            </span>
-            <h1 className="text-2xl sm:text-3xl font-black text-black mt-2">
-              Demo Docket Saved
+            <div className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-[#15803d] text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider mb-2">
+              <Lock className="w-3.5 h-3.5 text-[#15803d]" />
+              <span>AES-256 Client Encrypted • Zero-Database Rule</span>
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-black text-black mt-1">
+              Order Confirmed &amp; Encrypted
             </h1>
-            <p className="text-sm text-slate-500 mt-1">
-              This record was saved only in this browser; it has not been submitted to a provider.
+            <p className="text-sm text-slate-500 mt-1 max-w-xl mx-auto">
+              Zero-database compliance: Sensitive lease details have been AES-256 encrypted in your browser with HMAC digital signature. Only lightweight audit metadata was saved to Supabase.
             </p>
             <div className="mt-3 inline-block bg-slate-50 border border-slate-300 rounded-xl px-4 py-2">
               <span className="text-xs text-slate-500 mr-2">Docket ID:</span>
-              <span className="font-mono font-black text-blue-600 text-base">
+              <span className="font-mono font-black text-[#15803d] text-base">
                 {submittedOrder.orderId}
               </span>
             </div>
           </div>
+
+          {/* Website B Automatic Redirection Card */}
+          {submissionSecurityDetails && (
+            <div className="bg-emerald-50/70 border-2 border-[#15803d]/30 rounded-2xl p-4 sm:p-5 text-left space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-emerald-900 flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#15803d] animate-pulse"></span>
+                  Website B Production Redirection
+                </span>
+                <span className="text-xs font-bold text-[#15803d] bg-white px-2.5 py-0.5 rounded-full border border-emerald-200">
+                  Redirecting in {redirectCountdown}s
+                </span>
+              </div>
+              <p className="text-xs text-slate-600">
+                Encrypted payload &amp; HMAC signature ready for transmission. Proceeding to:
+              </p>
+              <div className="p-2.5 bg-white border border-slate-200 rounded-xl font-mono text-[11px] text-slate-700 break-all select-all">
+                {submissionSecurityDetails.websiteBUrl}
+              </div>
+              <div className="pt-1">
+                <a
+                  href={submissionSecurityDetails.websiteBUrl}
+                  className="w-full inline-flex items-center justify-center gap-2 py-3 px-5 bg-[#15803d] hover:bg-[#166534] text-white font-bold text-sm rounded-xl shadow-md transition-all cursor-pointer"
+                >
+                  <span>Proceed to Website B Immediately</span>
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+              </div>
+            </div>
+          )}
 
           <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200 text-left text-xs sm:text-sm space-y-3">
             <div className="flex justify-between border-b border-slate-200/80 pb-2">
@@ -625,7 +739,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
             </div>
             <div className="flex justify-between border-b border-slate-200/80 pb-2">
               <span className="text-slate-500">Stamp Paper Value:</span>
-              <span className="font-bold text-blue-700">{submittedOrder.stampDenomination}</span>
+              <span className="font-bold text-[#15803d]">{submittedOrder.stampDenomination}</span>
             </div>
             <div className="flex justify-between border-b border-slate-200/80 pb-2">
               <span className="text-slate-500">Execution Mode:</span>
@@ -638,18 +752,8 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
               </span>
             </div>
             <div className="flex justify-between pt-1 font-bold text-base text-black">
-              <span>Displayed estimate (not a charge):</span>
-              <span className="text-blue-600">₹{submittedOrder.totalFee}</span>
-            </div>
-          </div>
-
-          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 text-xs sm:text-sm text-blue-900 text-left flex items-start gap-3">
-            <ShieldCheck className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
-            <div>
-              <strong>Prototype only:</strong>
-              <p className="mt-0.5 text-blue-800">
-                No draft, e-stamp, signature, courier delivery, or payment is processed by this prototype.
-              </p>
+              <span>Final Payment (Pay After Delivery):</span>
+              <span className="text-[#15803d]">₹{submittedOrder.totalFee}</span>
             </div>
           </div>
 
@@ -657,7 +761,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
             <button
               type="button"
               onClick={onNavigateToDashboard}
-              className="w-full sm:w-auto px-8 py-3.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-sm rounded-xl shadow-md cursor-pointer transition-all"
+              className="w-full sm:w-auto px-8 py-3.5 bg-slate-900 hover:bg-black active:bg-slate-800 text-white font-bold text-sm rounded-xl shadow-md cursor-pointer transition-all"
             >
               Go to Dashboard &amp; Track Status
             </button>
@@ -693,7 +797,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
         {/* Progress Bar */}
         <div className="w-full bg-slate-200 h-1.5 rounded-full mt-3 overflow-hidden">
           <div
-            className="bg-blue-600 h-full transition-all duration-300"
+            className="bg-[#15803d] h-full transition-all duration-300"
             style={{ width: `${(currentPage / 5) * 100}%` }}
           />
         </div>
@@ -703,7 +807,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
           <h1 className="text-2xl sm:text-3xl font-black text-black">
             {initialDoc.title}
           </h1>
-          <span className="text-sm font-bold text-blue-600 block mt-0.5">
+          <span className="text-sm font-bold text-[#15803d] block mt-0.5">
             Architecture
           </span>
         </div>
@@ -1140,17 +1244,17 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
         {/* ================= PAGE 2 ================= */}
         {currentPage === 2 && (
           <div className="space-y-5 animate-fadeIn">
-            {/* Page 2 Distinct Header */}
-            <div className="bg-gradient-to-r from-blue-700 via-blue-800 to-indigo-900 text-white rounded-2xl p-4 sm:p-5 shadow-sm border border-blue-600 mb-2">
+            {/* Page 2 Distinct Header - Soft eye-friendly styling */}
+            <div className="bg-slate-50 text-slate-900 rounded-2xl p-4 sm:p-5 shadow-2xs border border-slate-200 mb-2">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center font-black text-lg border border-white/20">
+                <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-800 flex items-center justify-center font-black text-lg border border-blue-200">
                   1
                 </div>
                 <div>
-                  <h3 className="text-base sm:text-lg font-black tracking-wide uppercase">
+                  <h3 className="text-base sm:text-lg font-black tracking-wide uppercase text-slate-900">
                     1st Party Details Only
                   </h3>
-                  <p className="text-xs text-blue-100 font-medium">
+                  <p className="text-xs text-slate-600 font-medium">
                     Landlord / Property Owner
                   </p>
                 </div>
@@ -1423,38 +1527,15 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
               </div>
             </div>
 
-            {/* Aadhaar Last 4 (Strictly Numeric) & PAN Card Number */}
+            {/* Aadhaar (12 Digits) & PAN Card Number */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-bold text-slate-700">
-                    Aadhaar Number (Masked) <span className="text-slate-400 font-normal text-xs">(Optional)</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => handlePlayFieldSpeech('landlordAadhaar')}
-                    className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                    title="Listen to field guide"
-                  >
-                    <Volume2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-                <div className="flex items-center gap-1.5 font-mono text-xs">
-                  <span className="px-2 py-2 bg-slate-100 border border-slate-300 rounded-lg text-slate-500">XXXX</span>
-                  <span>-</span>
-                  <span className="px-2 py-2 bg-slate-100 border border-slate-300 rounded-lg text-slate-500">XXXX</span>
-                  <span>-</span>
-                  <input
-                    type="text"
-                    maxLength={4}
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    value={landlordAadhaarLast4}
-                    onChange={(e) => setLandlordAadhaarLast4(e.target.value.replace(/\D/g, ''))}
-                    placeholder={getPlaceholder("4 Digits")}
-                    className="w-24 bg-white border border-slate-300 rounded-lg px-2.5 py-2 text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  />
-                </div>
+                <AadhaarInput
+                  value={landlordAadhaarLast4}
+                  onChange={(val) => setLandlordAadhaarLast4(val)}
+                  label="Aadhaar Number (12 Digits)"
+                  placeholder={getPlaceholder("1234 - 5678 - 9012")}
+                />
               </div>
 
               <div>
@@ -1683,17 +1764,17 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
         {/* ================= PAGE 3: SECOND PARTY / TENANT DETAILS ================= */}
         {currentPage === 3 && (
           <div className="space-y-5 animate-fadeIn">
-            {/* Page 3 Distinct Header */}
-            <div className="bg-gradient-to-r from-purple-700 via-purple-800 to-indigo-900 text-white rounded-2xl p-4 sm:p-5 shadow-sm border border-purple-600 mb-2">
+            {/* Page 3 Distinct Header - Soft eye-friendly styling */}
+            <div className="bg-slate-50 text-slate-900 rounded-2xl p-4 sm:p-5 shadow-2xs border border-slate-200 mb-2">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center font-black text-lg border border-white/20">
+                <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-800 flex items-center justify-center font-black text-lg border border-indigo-200">
                   2
                 </div>
                 <div>
-                  <h3 className="text-base sm:text-lg font-black tracking-wide uppercase">
+                  <h3 className="text-base sm:text-lg font-black tracking-wide uppercase text-slate-900">
                     2nd Party Details Only
                   </h3>
-                  <p className="text-xs text-purple-100 font-medium">
+                  <p className="text-xs text-slate-600 font-medium">
                     Tenant / Lessee
                   </p>
                 </div>
@@ -1834,25 +1915,12 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Aadhaar Number (Masked) <span className="text-slate-400 font-normal text-xs">(Optional)</span>
-                    </label>
-                    <div className="flex items-center gap-1.5 font-mono text-xs">
-                      <span className="px-2 py-2 bg-slate-100 border border-slate-300 rounded-lg text-slate-500">XXXX</span>
-                      <span>-</span>
-                      <span className="px-2 py-2 bg-slate-100 border border-slate-300 rounded-lg text-slate-500">XXXX</span>
-                      <span>-</span>
-                      <input
-                        type="text"
-                        maxLength={4}
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        value={tenantAadhaarLast4}
-                        onChange={(e) => setTenantAadhaarLast4(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                        placeholder={getPlaceholder("4 Digits")}
-                        className="w-24 bg-white border border-slate-300 rounded-lg px-2.5 py-2 text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                      />
-                    </div>
+                    <AadhaarInput
+                      value={tenantAadhaarLast4}
+                      onChange={(val) => setTenantAadhaarLast4(val)}
+                      label="Aadhaar Number (12 Digits)"
+                      placeholder={getPlaceholder("1234 - 5678 - 9012")}
+                    />
                   </div>
 
                   <div>
@@ -3176,7 +3244,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
               onClick={() => validateAndProceed(currentPage + 1)}
               className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-xs sm:text-sm shadow-xs cursor-pointer transition-all"
             >
-              <span>Proceed to next</span>
+              <span>Next</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>

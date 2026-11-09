@@ -1,11 +1,12 @@
 import React, { lazy, Suspense, useState, useEffect } from 'react';
-import { ArrowRight, FileText, Building2, ShieldCheck, FileCheck2 } from 'lucide-react';
+import { ArrowRight, FileText, Building2, ShieldCheck, FileCheck2, BellRing, Globe2, Landmark, Headphones, Phone, MessageCircle, X, ListChecks } from 'lucide-react';
 import { Header } from './components/Header';
 import { HeroBanner } from './components/HeroBanner';
 import { SearchBar } from './components/SearchBar';
 import { DocumentRow } from './components/DocumentRow';
 import { PoliciesSection } from './components/PoliciesSection';
 import { PolicyPageView } from './components/PolicyPageView';
+import { CheckStepsView } from './components/CheckStepsView';
 import { BottomNav, TabType } from './components/BottomNav';
 import { DashboardView } from './components/DashboardView';
 import { AgreementsView } from './components/AgreementsView';
@@ -16,32 +17,42 @@ import { AuthModal } from './components/AuthModal';
 import { ServiceFormView } from './components/ServiceFormView';
 import { GstRegistrationWizard } from './components/GstRegistrationWizard';
 import { UdyamRegistrationWizard } from './components/UdyamRegistrationWizard';
-import { INITIAL_FRONT_DOCUMENTS } from './data/documentsData';
+import { FloatingActions } from './components/FloatingActions';
+import { INITIAL_FRONT_DOCUMENTS, FEATURED_11_AGREEMENTS_ORDER } from './data/documentsData';
 import { SERVICE_CATEGORIES, ServiceCategory } from './data/servicesData';
 import { POLICIES_DATA } from './data/policiesData';
 import { LegalDocument, OrderItem, PolicySection, UserProfile } from './types';
 import { useDisplayLanguage } from './hooks/useDisplayLanguage';
 import { playServiceVoice } from './services/googleVoiceGuidance';
+import { CategoryBanner } from './components/CategoryBanner';
 
 const DocumentWizardView = lazy(() => import('./components/DocumentWizardView').then((module) => ({ default: module.DocumentWizardView })));
 const RentLeaseWizardView = lazy(() => import('./components/RentLeaseWizardView').then((module) => ({ default: module.RentLeaseWizardView })));
 const CommercialNocWizardView = lazy(() => import('./components/CommercialNocWizardView').then((module) => ({ default: module.CommercialNocWizardView })));
 const GstNocWizardView = lazy(() => import('./components/GstNocWizardView').then((module) => ({ default: module.GstNocWizardView })));
 
-type HomeCategory = 'agreements' | 'registrations' | 'insurance' | 'filings';
+type HomeCategory = 'agreements' | 'registrations' | 'insurance' | 'filings' | 'notices' | 'website' | 'bank-loans' | 'support';
 
 const HOME_CATEGORIES: { id: HomeCategory; label: string; icon: typeof FileText }[] = [
   { id: 'agreements', label: 'Agreements', icon: FileText },
   { id: 'registrations', label: 'Registrations', icon: Building2 },
   { id: 'insurance', label: 'Insurance', icon: ShieldCheck },
-  { id: 'filings', label: 'Filings', icon: FileCheck2 }
+  { id: 'filings', label: 'Filings', icon: FileCheck2 },
+  { id: 'notices', label: 'Notices', icon: BellRing },
+  { id: 'website', label: 'Website', icon: Globe2 },
+  { id: 'bank-loans', label: 'Bank Loan', icon: Landmark },
+  { id: 'support', label: 'Call & Support', icon: Headphones }
 ];
 
 const CATEGORY_TITLES: Record<HomeCategory, string> = {
   agreements: 'Popular Agreements & Affidavits',
   registrations: 'Popular Registrations',
   insurance: 'Popular Insurance',
-  filings: 'Popular Filings'
+  filings: 'Popular Filings',
+  notices: 'Notice Handling & Compliance',
+  website: 'Website & Digital Branding',
+  'bank-loans': 'Bank Loan & Finance Files',
+  support: '24/7 Dedicated Contact Support'
 };
 
 export default function App() {
@@ -64,6 +75,8 @@ export default function App() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [showSupportModal, setShowSupportModal] = useState(false);
+  const [isCheckStepsOpen, setIsCheckStepsOpen] = useState(false);
 
   // User Profile
   const [profile, setProfile] = useState<UserProfile>(() => {
@@ -86,50 +99,18 @@ export default function App() {
     };
   });
 
-  // Orders / Records
+  // Orders / Records - Clean by default, only populated when user files an application
   const [orders, setOrders] = useState<OrderItem[]>(() => {
     try {
       const saved = localStorage.getItem('ctc_user_orders_v2');
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return [
-      {
-        orderId: 'CTC-849120',
-        docTitle: '11th Month Rent Agreement',
-        createdAt: '10:30 AM',
-        date: '2026-10-24',
-        deliveryHours: 24,
-        deliveryFee: 0,
-        baseFee: 299,
-        totalFee: 299,
-        paymentStatus: 'Paid',
-        status: 'Delivered',
-        pendingHours: 0,
-        applicantName: 'Admin',
-        applicantPhone: '2109141007',
-        state: 'Uttar Pradesh',
-        stampDenomination: '₹100',
-        isPhysicalCourier: false
-      },
-      {
-        orderId: 'CTC-520194',
-        docTitle: 'Landlord NOC for GST',
-        createdAt: '02:15 PM',
-        date: '2026-10-25',
-        deliveryHours: 12,
-        deliveryFee: 60,
-        baseFee: 199,
-        totalFee: 259,
-        paymentStatus: 'Unpaid',
-        status: 'Processing',
-        pendingHours: 3,
-        applicantName: 'Admin',
-        applicantPhone: '2109141007',
-        state: 'Uttar Pradesh',
-        stampDenomination: '₹50',
-        isPhysicalCourier: false
+      if (saved) {
+        const parsed: OrderItem[] = JSON.parse(saved);
+        // Exclude old mock demo order IDs
+        const filtered = parsed.filter(o => o.orderId !== 'CTC-849120' && o.orderId !== 'CTC-520194');
+        return filtered;
       }
-    ];
+    } catch {}
+    return [];
   });
 
   useEffect(() => {
@@ -172,7 +153,14 @@ export default function App() {
   // Filtered documents on Home
   const filteredHomeDocs = React.useMemo(() => {
     if (!searchQuery.trim()) {
-      return INITIAL_FRONT_DOCUMENTS;
+      // Strict 1 to 11 exact ordering specified by user
+      const mapByTitle = new Map(INITIAL_FRONT_DOCUMENTS.map((d) => [d.title.toLowerCase().trim(), d]));
+      const featured: LegalDocument[] = [];
+      for (const title of FEATURED_11_AGREEMENTS_ORDER) {
+        const found = mapByTitle.get(title.toLowerCase().trim());
+        if (found) featured.push(found);
+      }
+      return featured.length > 0 ? featured : INITIAL_FRONT_DOCUMENTS.slice(0, 11);
     }
     const q = searchQuery.toLowerCase().trim();
     return INITIAL_FRONT_DOCUMENTS.filter(
@@ -244,6 +232,17 @@ export default function App() {
             // 4. All Other Master Agreements & Affidavits
             return <DocumentWizardView {...commonProps} />;
           })()
+        ) : isCheckStepsOpen ? (
+          /* Check Steps (Cotrix Tcg) Dedicated View */
+          <CheckStepsView
+            onBack={() => setIsCheckStepsOpen(false)}
+            onSelectAgreements={() => {
+              setIsCheckStepsOpen(false);
+              setHomeCategory('agreements');
+              setActiveTab('home');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+          />
         ) : activePolicyPage ? (
           /* If dedicated full page policy is active */
           <PolicyPageView
@@ -296,8 +295,8 @@ export default function App() {
                 }}
               />
 
-              {/* Category Selection: As-is text with curved outline, blue outline when selected */}
-              <div className="flex flex-wrap items-center gap-2 sm:gap-3 my-4">
+              {/* Category Selection: Smooth horizontal scrollable slider */}
+              <div className="flex items-center gap-2 sm:gap-2.5 my-4 overflow-x-auto no-scrollbar scroll-smooth flex-nowrap py-1.5 px-0.5">
                 {HOME_CATEGORIES.map((tab) => {
                   const isSelected = homeCategory === tab.id;
                   const TabIcon = tab.icon;
@@ -305,24 +304,25 @@ export default function App() {
                     <button
                       key={tab.id}
                       type="button"
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
                         setHomeCategory(tab.id);
                         setActiveService(null);
                       }}
-                      className={`inline-flex items-center gap-2 py-2 px-4 rounded-full transition-all duration-150 cursor-pointer text-xs sm:text-sm select-none ${
+                      className={`inline-flex items-center gap-2 py-2 px-3.5 rounded-xl transition-all duration-150 cursor-pointer text-xs sm:text-sm select-none shrink-0 ${
                         isSelected
-                          ? 'border-2 border-blue-600 text-blue-600 font-bold bg-transparent'
-                          : 'border border-slate-300 text-slate-700 hover:border-slate-400 hover:text-slate-900 font-medium bg-transparent'
+                          ? 'bg-white text-black font-extrabold border-2 border-black shadow-xs'
+                          : 'bg-white border border-slate-200 text-slate-600 hover:text-slate-900 hover:border-slate-300 font-medium'
                       }`}
                     >
-                      <TabIcon className={`w-4 h-4 shrink-0 ${isSelected ? 'text-blue-600' : 'text-slate-500'}`} />
+                      <TabIcon className={`w-4 h-4 shrink-0 ${isSelected ? 'text-black' : 'text-slate-500'}`} />
                       <span>{tab.label}</span>
                     </button>
                   );
                 })}
               </div>
 
-              {/* Dynamic Clean Sub-header (Only Title: Popular Agreements & Affidavits / Registrations / Insurance / Filings) */}
+              {/* Dynamic Clean Sub-header */}
               <div className="mb-3 px-1">
                 <h2 className="text-base sm:text-lg font-bold text-black">
                   {CATEGORY_TITLES[homeCategory]}
@@ -347,16 +347,16 @@ export default function App() {
                     ))}
                   </div>
 
-                  {/* View All Button -> Switches to Agreements Tab */}
+                  {/* View All Button -> Matches Logo Royal Blue (#1e40af / hover #1e3a8a) */}
                   {!searchQuery.trim() && (
-                    <div className="mt-5 mb-8 flex justify-center">
+                    <div className="mt-5 mb-6 flex justify-center">
                       <button
                         type="button"
                         onClick={() => {
                           setActiveTab('agreements');
                           window.scrollTo({ top: 0, behavior: 'smooth' });
                         }}
-                        className="w-full sm:w-auto min-w-[280px] bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-sm sm:text-base py-3.5 px-8 rounded-xl shadow-md shadow-blue-600/20 hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer group"
+                        className="w-full sm:w-auto min-w-[280px] bg-[#1e40af] hover:bg-[#1e3a8a] active:bg-[#172554] text-white font-bold text-sm sm:text-base py-3.5 px-8 rounded-xl shadow-md shadow-blue-900/20 hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer group"
                       >
                         <span>View All Categories</span>
                         <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
@@ -364,9 +364,110 @@ export default function App() {
                     </div>
                   )}
                 </>
+              ) : homeCategory === 'support' ? (
+                /* Contact Support Section mirroring other categories */
+                <div className="space-y-3 mb-8">
+                  {/* 1. Contact Support Row */}
+                  <div
+                    onClick={() => setShowSupportModal(true)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setShowSupportModal(true);
+                      }
+                    }}
+                    className="group w-full bg-white hover:bg-blue-50/40 active:bg-blue-100/50 border border-slate-200/90 hover:border-blue-300 rounded-xl px-4 py-3.5 shadow-2xs hover:shadow-xs transition-all duration-200 flex items-center justify-between cursor-pointer select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                  >
+                    <div className="flex items-center gap-3.5 min-w-0 pr-3">
+                      <div className="shrink-0 w-10 h-10 rounded-lg bg-blue-50 group-hover:bg-blue-600 text-blue-600 group-hover:text-white flex items-center justify-center transition-colors duration-200">
+                        <Headphones className="w-5 h-5" />
+                      </div>
+
+                      <div className="flex flex-col text-left truncate">
+                        <span className="text-sm sm:text-base font-semibold text-black group-hover:text-blue-700 transition-colors truncate">
+                          24/7 Dedicated Support
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="shrink-0 flex items-center">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowSupportModal(true);
+                        }}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#15803d] group-hover:bg-[#166534] hover:bg-[#166534] text-white font-bold text-xs shadow-xs transition-all cursor-pointer"
+                      >
+                        <span>Make Call or Message</span>
+                        <span className="font-extrabold text-sm">→</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 2. Check Steps Row right below Contact Support per user request */}
+                  <div
+                    onClick={() => {
+                      setIsCheckStepsOpen(true);
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setIsCheckStepsOpen(true);
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }
+                    }}
+                    className="group w-full bg-white hover:bg-blue-50/40 active:bg-blue-100/50 border border-slate-200/90 hover:border-blue-300 rounded-xl px-4 py-3.5 shadow-2xs hover:shadow-xs transition-all duration-200 flex items-center justify-between cursor-pointer select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                  >
+                    <div className="flex items-center gap-3.5 min-w-0 pr-3">
+                      <div className="shrink-0 w-10 h-10 rounded-lg bg-blue-50 group-hover:bg-blue-600 text-blue-600 group-hover:text-white flex items-center justify-center transition-colors duration-200">
+                        <ListChecks className="w-5 h-5" />
+                      </div>
+
+                      <div className="flex flex-col text-left truncate">
+                        <span className="text-sm sm:text-base font-semibold text-black group-hover:text-blue-700 transition-colors truncate">
+                          Check Steps
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="shrink-0 flex items-center">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIsCheckStepsOpen(true);
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#15803d] group-hover:bg-[#166534] hover:bg-[#166534] text-white font-bold text-xs shadow-xs transition-all cursor-pointer"
+                      >
+                        <span>Check Steps</span>
+                        <span className="font-extrabold text-sm">→</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Below that: Green button labeled "Go" */}
+                  <div className="flex justify-center pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowSupportModal(true)}
+                      className="w-full sm:w-auto min-w-[200px] inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-[#15803d] hover:bg-[#166534] active:bg-[#14532d] text-white font-bold text-sm shadow-sm transition-all cursor-pointer"
+                    >
+                      <span>Go</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
               ) : (
                 (() => {
-                  const currentCat = SERVICE_CATEGORIES.find((c) => c.id === homeCategory)!;
+                  const currentCat = SERVICE_CATEGORIES.find((c) => c.id === homeCategory);
+                  if (!currentCat) return null;
                   const q = searchQuery.toLowerCase().trim();
                   const filteredServices = currentCat.services.filter(
                     (s) => !q || s.toLowerCase().includes(q)
@@ -424,7 +525,7 @@ export default function App() {
                                     setActiveService({ category: currentCat, title: serviceName });
                                     window.scrollTo({ top: 0, behavior: 'smooth' });
                                   }}
-                                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-blue-600 group-hover:bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs shadow-xs transition-all cursor-pointer"
+                                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#15803d] group-hover:bg-[#166534] hover:bg-[#166534] text-white font-bold text-xs shadow-xs transition-all cursor-pointer"
                                 >
                                   <span>{homeCategory === 'filings' ? 'File' : 'Apply'}</span>
                                   <span className="font-extrabold text-sm">→</span>
@@ -439,10 +540,21 @@ export default function App() {
                 })()
               )}
 
-              {/* Section with Divider line & "Terms & Policies" in center and blue bullet links */}
+              {/* Category-Specific Highlight Banner (Replaces video per user request) */}
+              <CategoryBanner category={homeCategory} />
+
+              {/* Section with Divider line & "Terms & Policies" in center and black bullet links */}
               <PoliciesSection
                 onSelectPolicy={(policy) => {
+                  if (policy.id === 'check-steps') {
+                    setActiveWizardDoc(null);
+                    setActivePolicyPage(null);
+                    setIsCheckStepsOpen(true);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                    return;
+                  }
                   setActiveWizardDoc(null);
+                  setIsCheckStepsOpen(false);
                   setActivePolicyPage(policy);
                   window.scrollTo({ top: 0, behavior: 'smooth' });
                 }}
@@ -452,6 +564,12 @@ export default function App() {
         )}
         </Suspense>
       </main>
+
+      {/* Floating Action Buttons: Direct Call & WhatsApp */}
+      <FloatingActions
+        isLoggedIn={!!profile.isLoggedIn}
+        onOpenAuth={() => setIsAuthOpen(true)}
+      />
 
       {/* 4 Bottom Navigation Bar: Home | Dashboard | Agreements | Menu */}
       <BottomNav
@@ -481,7 +599,14 @@ export default function App() {
           onClose={() => setIsSettingsOpen(false)}
           onOpenPolicies={() => {
             setActiveWizardDoc(null);
+            setIsCheckStepsOpen(false);
             setActivePolicyPage(POLICIES_DATA[0]);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          onOpenCheckSteps={() => {
+            setActiveWizardDoc(null);
+            setActivePolicyPage(null);
+            setIsCheckStepsOpen(true);
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
           onOpenAuth={() => setIsAuthOpen(true)}
@@ -495,6 +620,63 @@ export default function App() {
           onClose={() => setIsAuthOpen(false)}
           onLoginSuccess={handleLoginSuccess}
         />
+      )}
+
+      {/* Deciding Contact Support Modal */}
+      {showSupportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fadeIn">
+          <div
+            className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-slate-200 relative animate-scaleUp"
+            role="dialog"
+            aria-modal="true"
+          >
+            {/* Close button */}
+            <button
+              type="button"
+              onClick={() => setShowSupportModal(false)}
+              className="absolute top-4 right-4 p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+              aria-label="Close"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-3 pr-6">
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 text-[#15803d] flex items-center justify-center shrink-0">
+                <Headphones className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Deciding Contact Support</h3>
+                <p className="text-xs text-slate-500 font-medium">Call or WhatsApp</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed mb-5">
+              Connect directly with our senior executive for immediate assistance with agreements, registrations, notices, e-Stamp paper, and compliance filings.
+            </p>
+
+            <div className="grid grid-cols-1 gap-2.5">
+              <a
+                href="tel:+919286596391"
+                onClick={() => setShowSupportModal(false)}
+                className="inline-flex items-center justify-center gap-2 py-3 px-4 bg-[#15803d] hover:bg-[#166534] active:bg-[#14532d] text-white font-bold text-sm rounded-xl shadow-xs transition-all cursor-pointer"
+              >
+                <Phone className="w-4 h-4" />
+                <span>Direct Call</span>
+              </a>
+
+              <a
+                href="https://wa.me/919286596391?text=Hello%20Harshit,%20I%20need%20assistance%20regarding%20CTC%20Legal%20Services."
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setShowSupportModal(false)}
+                className="inline-flex items-center justify-center gap-2 py-3 px-4 bg-[#25D366] hover:bg-[#20bd5a] active:bg-[#1da851] text-white font-bold text-sm rounded-xl shadow-xs transition-all cursor-pointer"
+              >
+                <MessageCircle className="w-4 h-4 fill-current" />
+                <span>WhatsApp Message</span>
+              </a>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

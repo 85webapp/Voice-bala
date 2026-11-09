@@ -14,7 +14,9 @@ import {
   AlertTriangle,
   MapPin,
   Landmark,
-  ShieldCheck
+  ShieldCheck,
+  Lock,
+  ExternalLink
 } from 'lucide-react';
 import {
   speechController,
@@ -25,6 +27,8 @@ import {
 import { SERVICE_CATEGORIES } from '../data/servicesData';
 import { VoiceGuidanceButton } from './VoiceGuidanceButton';
 import { useExampleDetails } from '../hooks/useExampleDetails';
+import { AadhaarInput } from './AadhaarInput';
+import { encryptFormDataAndSign, saveLightweightMetadata, playConfirmationChime } from '../services/encryptionService';
 
 interface UdyamRegistrationWizardProps {
   onBack: () => void;
@@ -36,6 +40,27 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [udyamRegNumber, setUdyamRegNumber] = useState('');
+  const [submissionSecurityDetails, setSubmissionSecurityDetails] = useState<{
+    encryptedPayload: string;
+    signature: string;
+    websiteBUrl: string;
+  } | null>(null);
+  const [redirectCountdown, setRedirectCountdown] = useState<number>(5);
+
+  useEffect(() => {
+    if (!submissionSecurityDetails) return;
+    const timer = setInterval(() => {
+      setRedirectCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          window.location.href = submissionSecurityDetails.websiteBUrl;
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [submissionSecurityDetails]);
 
   // Audio language
   const [audioLang] = useState(getStoredAudioLanguage());
@@ -198,14 +223,41 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
     setRequestSubmitted(true);
   };
 
-  const handleFinalUdyamSubmit = (e: React.FormEvent) => {
+  const handleFinalUdyamSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const stateCode = 'UP';
     const distCode = '07';
     const randDigits = Math.floor(1000000 + Math.random() * 9000000);
     const urn = `UDYAM-${stateCode}-${distCode}-${randDigits}`;
     setUdyamRegNumber(urn);
+
+    // 1. Zero-Database Client-Side Encryption
+    const sensitiveData = {
+      orderId: urn,
+      service: 'MSME Udyam Registration',
+      step1,
+      step2,
+      step3,
+      step4,
+      step5,
+      timestamp: new Date().toISOString()
+    };
+    const { encryptedPayload, signature, websiteBUrl } = encryptFormDataAndSign(sensitiveData);
+
+    // 2. Save ONLY 4 lightweight metadata fields in Supabase
+    await saveLightweightMetadata({
+      firstPartyName: step1.entrepreneurName || 'MSME Applicant',
+      formName: 'MSME Udyam Registration',
+      timestamp: new Date().toISOString(),
+      totalPrice: '0',
+      orderId: urn
+    });
+
+    setSubmissionSecurityDetails({ encryptedPayload, signature, websiteBUrl });
     setIsSubmitted(true);
+    try {
+      playConfirmationChime();
+    } catch {}
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -213,18 +265,54 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
   if (isSubmitted) {
     return (
       <div className="w-full max-w-4xl mx-auto px-4 py-6 animate-fadeIn pb-24">
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 text-center shadow-sm">
-          <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
+        <div className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 text-center shadow-sm space-y-4">
+          <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
             <Award className="w-10 h-10" />
           </div>
-          <h2 className="text-2xl font-black text-slate-900 mb-2">
-            Udyam Registration Certificate Generated!
-          </h2>
-          <p className="text-sm text-slate-600 max-w-md mx-auto mb-6">
-            Congratulations! Your enterprise has been officially registered under the Ministry of Micro, Small and Medium Enterprises.
-          </p>
+          <div>
+            <div className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-[#15803d] text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider mb-2">
+              <Lock className="w-3.5 h-3.5 text-[#15803d]" />
+              <span>AES-256 Client Encrypted • Zero-Database Rule</span>
+            </div>
+            <h2 className="text-2xl font-black text-slate-900 mt-1">
+              Udyam Registration Certificate Generated!
+            </h2>
+            <p className="text-sm text-slate-600 max-w-md mx-auto mt-1">
+              Congratulations! Your enterprise has been officially registered under the Ministry of Micro, Small and Medium Enterprises.
+            </p>
+          </div>
 
-          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 max-w-md mx-auto mb-6 text-left">
+          {/* Website B Automatic Redirection Card */}
+          {submissionSecurityDetails && (
+            <div className="bg-emerald-50/70 border-2 border-[#15803d]/30 rounded-2xl p-4 sm:p-5 text-left space-y-3 max-w-md mx-auto">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-emerald-900 flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#15803d] animate-pulse"></span>
+                  Website B Production Redirection
+                </span>
+                <span className="text-xs font-bold text-[#15803d] bg-white px-2.5 py-0.5 rounded-full border border-emerald-200">
+                  Redirecting in {redirectCountdown}s
+                </span>
+              </div>
+              <p className="text-xs text-slate-600">
+                Encrypted payload &amp; HMAC signature ready for transmission. Proceeding to:
+              </p>
+              <div className="p-2.5 bg-white border border-slate-200 rounded-xl font-mono text-[11px] text-slate-700 break-all select-all">
+                {submissionSecurityDetails.websiteBUrl}
+              </div>
+              <div className="pt-1">
+                <a
+                  href={submissionSecurityDetails.websiteBUrl}
+                  className="w-full inline-flex items-center justify-center gap-2 py-3 px-5 bg-[#15803d] hover:bg-[#166534] text-white font-bold text-sm rounded-xl shadow-md transition-all cursor-pointer"
+                >
+                  <span>Proceed to Website B Immediately</span>
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+              </div>
+            </div>
+          )}
+
+          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 max-w-md mx-auto text-left">
             <div className="flex items-center justify-between border-b border-slate-200 pb-2 mb-2">
               <span className="text-xs uppercase tracking-wider font-bold text-slate-500">
                 Udyam Registration Number (URN)
@@ -429,16 +517,6 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
         <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm">
           {/* Progress Tracker */}
           <div className="mb-6 border-b border-slate-200 pb-4">
-            <div className="flex items-center justify-between text-xs font-semibold text-slate-500 mb-2">
-              <span className="text-blue-600 font-bold">Step {currentStep} of 5</span>
-              <span>
-                {currentStep === 1 && 'Aadhaar Authentication & PAN Gate'}
-                {currentStep === 2 && 'Constitution of Business & Social Category'}
-                {currentStep === 3 && 'Enterprise Name, Units & Bank Details'}
-                {currentStep === 4 && 'Activity, Investment & Auto-Classification'}
-                {currentStep === 5 && 'DIC Selection & Final Declaration'}
-              </span>
-            </div>
             <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden flex">
               <div
                 className="bg-blue-600 h-full transition-all duration-300"
@@ -447,27 +525,22 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
             </div>
           </div>
 
-          {/* STEP 1: Aadhaar Authentication & PAN Gate */}
+          {/* Aadhaar Authentication & PAN Gate */}
           {currentStep === 1 && (
             <div className="space-y-4">
               <h2 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-2 flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-blue-600" />
-                <span>STEP 1: Aadhaar Authentication &amp; PAN Verification Gate</span>
+                <span>Aadhaar Authentication &amp; PAN Verification</span>
               </h2>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Aadhaar Number (12 Digits) <span className="text-rose-600">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    maxLength={12}
-                    required
-                    placeholder={getPlaceholder('12-digit Aadhaar number')}
+                  <AadhaarInput
                     value={step1.aadhaarNumber}
-                    onChange={(e) => setStep1({ ...step1, aadhaarNumber: e.target.value.replace(/\D/g, '') })}
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 font-mono focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    onChange={(val) => setStep1({ ...step1, aadhaarNumber: val })}
+                    required
+                    label="Aadhaar Number (12 Digits)"
+                    placeholder={getPlaceholder('1234 - 5678 - 9012')}
                   />
                 </div>
 
@@ -590,7 +663,7 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
                   disabled={!step1.otpVerified || (step1.hasPan === 'Yes' && step1.panNumber.length !== 10)}
                   className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-bold text-sm px-6 py-2.5 rounded-xl cursor-pointer shadow-sm"
                 >
-                  <span>Proceed to Step 2</span>
+                  <span>Next</span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
@@ -608,14 +681,14 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Type of Organization (व्यवसाय का प्रकार) <span className="text-rose-600">*</span>
+                    Type of Organization <span className="text-rose-600">*</span>
                   </label>
                   <select
                     value={step2.organizationType}
                     onChange={(e) => setStep2({ ...step2, organizationType: e.target.value })}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   >
-                    <option value="PROPRIETORY">Proprietorship (एकल स्वामित्व)</option>
+                    <option value="PROPRIETORY">Proprietorship</option>
                     <option value="HUF">Hindu Undivided Family (HUF)</option>
                     <option value="PARTNERSHIP">Partnership Firm</option>
                     <option value="CO_OPERATIVE">Co-operative / Society / Trust</option>
@@ -708,7 +781,7 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
                   onClick={() => setCurrentStep(3)}
                   className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm px-6 py-2.5 rounded-xl cursor-pointer shadow-sm"
                 >
-                  <span>Proceed to Step 3</span>
+                  <span>Next</span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
@@ -929,7 +1002,7 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
                   onClick={() => setCurrentStep(4)}
                   className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm px-6 py-2.5 rounded-xl cursor-pointer shadow-sm"
                 >
-                  <span>Proceed to Step 4</span>
+                  <span>Next</span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
@@ -1076,7 +1149,7 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
                   onClick={() => setCurrentStep(5)}
                   className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm px-6 py-2.5 rounded-xl cursor-pointer shadow-sm"
                 >
-                  <span>Proceed to Final Step 5</span>
+                  <span>Next</span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
@@ -1153,7 +1226,7 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
                   className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-bold text-sm px-8 py-3 rounded-xl cursor-pointer shadow-md transition-all"
                 >
                   <Award className="w-4 h-4" />
-                  <span>Final Submit &amp; Generate Udyam Certificate</span>
+                  <span>Submit</span>
                 </button>
               </div>
             </form>

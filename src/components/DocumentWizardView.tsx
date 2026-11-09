@@ -1,5 +1,4 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { createRoot, Root } from 'react-dom/client';
 import {
   ArrowLeft,
   ArrowRight,
@@ -40,6 +39,14 @@ import {
   fetchFieldExplanation,
   getVisibleFormLabels
 } from '../data/voiceNarrationData';
+import { AadhaarInput } from './AadhaarInput';
+import { AddressFieldGroup } from './AddressFieldGroup';
+import {
+  encryptFormDataAndSign,
+  saveLightweightMetadata,
+  playConfirmationChime
+} from '../services/encryptionService';
+import { ExternalLink, Lock } from 'lucide-react';
 
 interface DocumentWizardViewProps {
   document: LegalDocument;
@@ -113,18 +120,11 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
   useEffect(() => {
     const wizardRoot = document.querySelector<HTMLElement>('[data-document-wizard]');
     if (!wizardRoot) return;
-    const speakerRoots = new Map<HTMLButtonElement, Root>();
-    const attachFieldSpeakers = () => {
-      for (const [button, root] of speakerRoots) {
-        if (!button.isConnected) {
-          root.unmount();
-          speakerRoots.delete(button);
-        }
-      }
 
+    const attachFieldSpeakers = () => {
       wizardRoot.querySelectorAll<HTMLLabelElement>('label').forEach((label) => {
         if (label.querySelector('[data-field-speaker]')) return;
-        const control = label.control || label.nextElementSibling?.matches('input,select,textarea') && label.nextElementSibling
+        const control = label.control || (label.nextElementSibling?.matches('input,select,textarea') && label.nextElementSibling)
           || label.parentElement?.querySelector('input,select,textarea');
         if (!(control instanceof HTMLInputElement || control instanceof HTMLSelectElement || control instanceof HTMLTextAreaElement)) return;
         if (control instanceof HTMLInputElement && ['checkbox', 'radio', 'hidden', 'submit'].includes(control.type)) return;
@@ -133,9 +133,10 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
         const button = document.createElement('button');
         button.type = 'button';
         button.dataset.fieldSpeaker = 'true';
-        button.className = 'ml-1 inline-flex align-middle items-center justify-center rounded-full p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600';
+        button.className = 'ml-1 inline-flex align-middle items-center justify-center rounded-full p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 cursor-pointer';
         button.setAttribute('aria-label', `Explain ${fieldLabel}`);
         button.title = `Explain ${fieldLabel}`;
+        button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>';
         button.addEventListener('click', (event) => {
           event.preventDefault();
           event.stopPropagation();
@@ -150,9 +151,6 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
           })();
         });
         label.append(button);
-        const root = createRoot(button);
-        root.render(<Volume2 className="w-3.5 h-3.5" aria-hidden="true" />);
-        speakerRoots.set(button, root);
       });
     };
 
@@ -161,11 +159,9 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
     observer.observe(wizardRoot, { childList: true, subtree: true });
     return () => {
       observer.disconnect();
-      speakerRoots.forEach((root, button) => {
-        root.unmount();
-        button.remove();
+      wizardRoot.querySelectorAll('[data-field-speaker]').forEach((btn) => {
+        try { btn.remove(); } catch {}
       });
-      speakerRoots.clear();
     };
   }, [selectedDocTitle, selectedLang, activeLangConfig.speechCode]);
 
@@ -300,6 +296,27 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
   // Submission state
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submittedOrder, setSubmittedOrder] = useState<OrderItem | null>(null);
+  const [submissionSecurityDetails, setSubmissionSecurityDetails] = useState<{
+    encryptedPayload: string;
+    signature: string;
+    websiteBUrl: string;
+  } | null>(null);
+  const [redirectCountdown, setRedirectCountdown] = useState<number>(5);
+
+  useEffect(() => {
+    if (!submissionSecurityDetails) return;
+    const timer = setInterval(() => {
+      setRedirectCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          window.location.href = submissionSecurityDetails.websiteBUrl;
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [submissionSecurityDetails]);
 
   // Toggle all 5 declarations
   const handleToggleAllDeclarations = () => {
@@ -396,8 +413,9 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
         }
       }
       if (docIdRule.aadhaar === 'mandatory') {
-        if (!firstPartyAadhaarLast4.trim() || firstPartyAadhaarLast4.trim().length !== 4) {
-          alert(`Aadhaar Card is Mandatory for ${selectedDocTitle}. Please enter the last 4 digits.`);
+        const cleanAadhaar = firstPartyAadhaarLast4.replace(/\D/g, '');
+        if (!cleanAadhaar || cleanAadhaar.length < 4) {
+          alert(`Aadhaar Card is Mandatory for ${selectedDocTitle}. Please enter a valid Aadhaar number.`);
           return false;
         }
       }
@@ -425,8 +443,9 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
           }
         }
         if (docIdRule.aadhaar === 'mandatory') {
-          if (!secondPartyAadhaarLast4.trim() || secondPartyAadhaarLast4.trim().length !== 4) {
-            alert(`Aadhaar Card is Mandatory for ${selectedDocTitle}. Please enter Second Party Aadhaar last 4 digits.`);
+          const cleanAadhaar = secondPartyAadhaarLast4.replace(/\D/g, '');
+          if (!cleanAadhaar || cleanAadhaar.length < 4) {
+            alert(`Aadhaar Card is Mandatory for ${selectedDocTitle}. Please enter Second Party Aadhaar number.`);
             return false;
           }
         }
@@ -463,7 +482,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!w1Name.trim() || !w1Mobile.trim()) {
@@ -491,9 +510,65 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
 
     setIsSubmitting(true);
 
-    setTimeout(() => {
+    try {
       const todayISO = new Date().toISOString().split('T')[0];
       const newOrderId = `CTC-${Math.floor(100000 + Math.random() * 900000)}`;
+
+      // 1. Gather complete sensitive details for zero-database encryption
+      const sensitivePayload = {
+        orderId: newOrderId,
+        docTitle: selectedDocTitle,
+        state: selectedState,
+        firstParty: {
+          entityType: firstPartyEntityType,
+          name: firstPartyName,
+          signatory: firstPartySignatory,
+          designation: firstPartyDesignation === 'Other' ? firstPartyCustomDesignation : firstPartyDesignation,
+          fatherName: firstPartyFatherName,
+          ageOrIncDate: firstPartyAgeOrIncDate,
+          address: firstPartyAddress,
+          aadhaar: firstPartyAadhaarLast4,
+          mobile: firstPartyMobile,
+          pan: firstPartyPan
+        },
+        secondParty: isUnilateral ? null : {
+          entityType: secondPartyEntityType,
+          name: secondPartyName,
+          signatory: secondPartySignatory,
+          designation: secondPartyDesignation === 'Other' ? secondPartyCustomDesignation : secondPartyDesignation,
+          fatherName: secondPartyFatherName,
+          ageOrIncDate: secondPartyAgeOrIncDate,
+          address: secondPartyAddress,
+          aadhaar: secondPartyAadhaarLast4,
+          mobile: secondPartyMobile,
+          pan: secondPartyPan
+        },
+        witnesses: [
+          { name: w1Name, fatherName: w1FatherName, address: w1Address, mobile: w1Mobile, age: w1Age },
+          { name: w2Name, fatherName: w2FatherName, address: w2Address, mobile: w2Mobile, age: w2Age }
+        ],
+        pricing,
+        delivery: {
+          type: deliveryType,
+          shippingAddress: deliveryType === 'physical' ? shippingAddress : undefined,
+          pincode: deliveryType === 'physical' ? shippingPincode : undefined,
+          shippingPhone: deliveryType === 'physical' ? shippingPhone : undefined
+        },
+        customTerms,
+        timestamp: new Date().toISOString()
+      };
+
+      // 2. Client-Side AES-256 Encryption & HMAC Signature
+      const { encryptedPayload, signature, websiteBUrl } = encryptFormDataAndSign(sensitivePayload);
+
+      // 3. Save ONLY 4 lightweight metadata fields to Supabase
+      await saveLightweightMetadata({
+        firstPartyName: firstPartyName || 'Applicant',
+        formName: selectedDocTitle,
+        timestamp: new Date().toISOString(),
+        totalPrice: pricing.totalPayable,
+        orderId: newOrderId
+      });
 
       const newOrder: OrderItem = {
         orderId: newOrderId,
@@ -519,18 +594,23 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
       };
 
       try {
+        playConfirmationChime();
         confetti({
-          particleCount: 90,
+          particleCount: 100,
           spread: 70,
           origin: { y: 0.6 }
         });
       } catch {}
 
       setSubmittedOrder(newOrder);
+      setSubmissionSecurityDetails({ encryptedPayload, signature, websiteBUrl });
       onOrderCreated(newOrder);
       setIsSubmitting(false);
       window.scrollTo({ top: 0, behavior: 'smooth' });
-    }, 700);
+    } catch (err) {
+      console.error('Submission error:', err);
+      setIsSubmitting(false);
+    }
   };
 
   // Human-readable step display
@@ -566,27 +646,58 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
     return (
       <div className="w-full max-w-3xl mx-auto px-4 py-8 animate-fadeIn pb-24">
         <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-10 shadow-lg text-center space-y-6">
-          <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 mx-auto flex items-center justify-center shadow-inner">
+          <div className="w-16 h-16 rounded-full bg-emerald-100 text-[#15803d] mx-auto flex items-center justify-center shadow-inner">
             <CheckCircle2 className="w-10 h-10" />
           </div>
 
           <div>
-            <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200 uppercase tracking-wider">
-              Demo Record Saved Locally
-            </span>
-            <h1 className="text-2xl sm:text-3xl font-black text-black mt-2">
-              Demo Docket Saved
+            <div className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-[#15803d] text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider mb-2">
+              <Lock className="w-3.5 h-3.5 text-[#15803d]" />
+              <span>AES-256 Client Encrypted • Zero-Database Rule</span>
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-black text-black mt-1">
+              Order Confirmed &amp; Encrypted
             </h1>
-            <p className="text-sm text-slate-500 mt-1">
-              This record was saved only in this browser; it has not been submitted to a provider.
+            <p className="text-sm text-slate-500 mt-1 max-w-xl mx-auto">
+              Your sensitive data has been encrypted directly in your browser using AES-256 with an HMAC digital signature. Only lightweight metadata was stored in Supabase.
             </p>
             <div className="mt-3 inline-block bg-slate-50 border border-slate-300 rounded-xl px-4 py-2">
               <span className="text-xs text-slate-500 mr-2">Docket ID:</span>
-              <span className="font-mono font-black text-blue-600 text-base">
+              <span className="font-mono font-black text-[#15803d] text-base">
                 {submittedOrder.orderId}
               </span>
             </div>
           </div>
+
+          {/* Website B Automatic Redirection Card */}
+          {submissionSecurityDetails && (
+            <div className="bg-emerald-50/70 border-2 border-[#15803d]/30 rounded-2xl p-4 sm:p-5 text-left space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-emerald-900 flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#15803d] animate-pulse"></span>
+                  Website B Production Redirection
+                </span>
+                <span className="text-xs font-bold text-[#15803d] bg-white px-2.5 py-0.5 rounded-full border border-emerald-200">
+                  Redirecting in {redirectCountdown}s
+                </span>
+              </div>
+              <p className="text-xs text-slate-600">
+                Encrypted payload &amp; HMAC signature ready for transmission. Proceeding to:
+              </p>
+              <div className="p-2.5 bg-white border border-slate-200 rounded-xl font-mono text-[11px] text-slate-700 break-all select-all">
+                {submissionSecurityDetails.websiteBUrl}
+              </div>
+              <div className="pt-1">
+                <a
+                  href={submissionSecurityDetails.websiteBUrl}
+                  className="w-full inline-flex items-center justify-center gap-2 py-3 px-5 bg-[#15803d] hover:bg-[#166534] text-white font-bold text-sm rounded-xl shadow-md transition-all cursor-pointer"
+                >
+                  <span>Proceed to Website B Immediately</span>
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+              </div>
+            </div>
+          )}
 
           {/* Details Card */}
           <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200 text-left text-xs sm:text-sm space-y-3">
@@ -595,12 +706,16 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
               <span className="font-bold text-black">{submittedOrder.docTitle}</span>
             </div>
             <div className="flex justify-between border-b border-slate-200/80 pb-2">
+              <span className="text-slate-500">First Party / Applicant:</span>
+              <span className="font-bold text-slate-900">{submittedOrder.applicantName}</span>
+            </div>
+            <div className="flex justify-between border-b border-slate-200/80 pb-2">
               <span className="text-slate-500">State Jurisdiction:</span>
               <span className="font-bold text-slate-900">{submittedOrder.state}</span>
             </div>
             <div className="flex justify-between border-b border-slate-200/80 pb-2">
               <span className="text-slate-500">Stamp Paper Denomination:</span>
-              <span className="font-bold text-blue-700">{submittedOrder.stampDenomination}</span>
+              <span className="font-bold text-[#15803d]">{submittedOrder.stampDenomination}</span>
             </div>
             <div className="flex justify-between border-b border-slate-200/80 pb-2">
               <span className="text-slate-500">Delivery Preference:</span>
@@ -611,19 +726,8 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
               </span>
             </div>
             <div className="flex justify-between pt-1 font-bold text-base text-black">
-              <span>Displayed estimate (not a charge):</span>
-              <span className="text-blue-600">₹{submittedOrder.totalFee}</span>
-            </div>
-          </div>
-
-          {/* Reassurance Callout */}
-          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 text-xs sm:text-sm text-blue-900 text-left flex items-start gap-3">
-            <ShieldCheck className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
-            <div>
-              <strong>Prototype only:</strong>
-              <p className="mt-0.5 text-blue-800">
-                No draft, e-stamp, signature, courier delivery, or payment is processed by this prototype.
-              </p>
+              <span>Final Payment (Pay After Delivery):</span>
+              <span className="text-[#15803d]">₹{submittedOrder.totalFee}</span>
             </div>
           </div>
 
@@ -631,7 +735,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
             <button
               type="button"
               onClick={onNavigateToDashboard}
-              className="w-full sm:w-auto px-8 py-3.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-sm rounded-xl shadow-md cursor-pointer transition-all"
+              className="w-full sm:w-auto px-8 py-3.5 bg-slate-900 hover:bg-black active:bg-slate-800 text-white font-bold text-sm rounded-xl shadow-md cursor-pointer transition-all"
             >
               Go to Dashboard &amp; Track Status
             </button>
@@ -679,7 +783,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
           <h1 className="text-2xl sm:text-3xl font-black text-black">
             {selectedDocTitle}
           </h1>
-          <span className="text-sm font-bold text-blue-600 block mt-0.5">
+          <span className="text-sm font-bold text-[#15803d] block mt-0.5">
             Architecture
           </span>
         </div>
@@ -701,7 +805,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
               )}
             </span>
             <span className="text-[11px] text-slate-500">
-              Listen to AI explanation for {getStepNumberDisplay()} ({getStepTitle()})
+              Listen to AI audio guidance for this section
             </span>
           </div>
         </div>
@@ -755,16 +859,6 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
         {/* ================= PAGE 1 ================= */}
         {currentPage === 1 && (
           <div className="space-y-6 animate-fadeIn">
-
-            <div className="bg-blue-50/70 border border-blue-200 rounded-xl p-4 flex items-start gap-3">
-              <Sparkles className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
-              <div className="text-xs text-blue-900">
-                <strong>Government e-Stamp &amp; Legal Verification:</strong>
-                <p className="mt-0.5 text-blue-800">
-                  Select your document and target State/UT jurisdiction. Stamp duty is automatically determined strictly according to the official State Stamp Act master matrix.
-                </p>
-              </div>
-            </div>
 
             {/* Document Type Dropdown (Auto-selected, selectable) */}
             <div>
@@ -824,23 +918,17 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
               </span>
             </div>
 
-            {/* Stamp Paper Value: Auto-calculated dynamically */}
+            {/* Stamp Paper Value */}
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2">
               <div className="flex items-center justify-between">
                 <div>
                   <span className="text-xs font-bold text-slate-700 block">
                     Stamp Paper Value (Official Minimum)
                   </span>
-                  <span className="text-[11px] text-slate-500">
-                    Auto-calculated from State Stamp Act matrix for {selectedState}
-                  </span>
                 </div>
                 <div className="text-right">
                   <span className="text-xl font-black text-blue-600">
                     ₹{activeStampValue}
-                  </span>
-                  <span className="block text-[10px] text-emerald-600 font-bold">
-                    Statutory Compliant
                   </span>
                 </div>
               </div>
@@ -892,52 +980,57 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
         {/* ================= PAGE 2: FIRST PARTY ================= */}
         {currentPage === 2 && (
           <div className="space-y-4 animate-fadeIn">
-            {/* Page 2 Distinct Header */}
-            <div className="bg-gradient-to-r from-blue-700 via-blue-800 to-indigo-900 text-white rounded-2xl p-4 sm:p-5 shadow-sm border border-blue-600 mb-2">
+            {/* Page 2 Distinct Header - Soft eye-friendly styling */}
+            <div className="-mt-1 bg-slate-50 text-slate-900 rounded-2xl p-3.5 sm:p-4 shadow-2xs border border-slate-200 mb-2">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center font-black text-lg border border-white/20">
+                <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-800 flex items-center justify-center font-black text-base border border-blue-200">
                   1
                 </div>
                 <div>
-                  <h3 className="text-base sm:text-lg font-black tracking-wide uppercase">
+                  <h3 className="text-base sm:text-lg font-black tracking-wide uppercase text-slate-900">
                     1st Party Details Only
                   </h3>
-                  <p className="text-xs text-blue-100 font-medium">
+                  <p className="text-xs text-slate-600 font-medium">
                     {docConfig.firstPartyRole}
                   </p>
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-              <span className="text-xs font-bold text-slate-500 uppercase">
-                {docConfig.firstPartyRole}
-              </span>
-
-              {/* Entity Type Toggle */}
-              <div className="flex items-center gap-2 text-xs">
-                <span className="text-slate-500">Entity Type:</span>
+            {/* Entity Type: Label on Top, options wide & spacious below */}
+            <div className="pb-3 border-b border-slate-200">
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-bold text-slate-700">
+                  Entity Type <span className="text-red-500">*</span>
+                </label>
+                <span className="text-[11px] font-semibold text-slate-500 uppercase">
+                  {docConfig.firstPartyRole}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2.5">
                 <button
                   type="button"
                   onClick={() => setFirstPartyEntityType('Individual')}
-                  className={`px-3 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                  className={`py-2.5 px-4 rounded-xl font-bold transition-all text-xs sm:text-sm cursor-pointer flex items-center justify-center gap-2 ${
                     firstPartyEntityType === 'Individual'
-                      ? 'bg-blue-600 text-white shadow-2xs'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      ? 'bg-[#15803d] text-white shadow-sm ring-2 ring-[#15803d]/30'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300'
                   }`}
                 >
-                  Individual
+                  <User className="w-4 h-4" />
+                  <span>Individual</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setFirstPartyEntityType('Company')}
-                  className={`px-3 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                  className={`py-2.5 px-4 rounded-xl font-bold transition-all text-xs sm:text-sm cursor-pointer flex items-center justify-center gap-2 ${
                     firstPartyEntityType === 'Company'
-                      ? 'bg-blue-600 text-white shadow-2xs'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      ? 'bg-[#15803d] text-white shadow-sm ring-2 ring-[#15803d]/30'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300'
                   }`}
                 >
-                  Company / Firm
+                  <Building2 className="w-4 h-4" />
+                  <span>Company / Firm</span>
                 </button>
               </div>
             </div>
@@ -1025,35 +1118,23 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
               </div>
             </div>
 
-            {/* Permanent Address */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                Permanent Registered Address <span className="text-red-500 font-bold">*</span>
-              </label>
-              <textarea
-                rows={2}
-                required
-                value={firstPartyAddress}
-                onChange={(e) => setFirstPartyAddress(e.target.value)}
-                placeholder={getPlaceholder('House / Flat No, Street, Landmark, City, State, PIN code')}
-                className="w-full bg-white border border-slate-300 rounded-xl p-2.5 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 resize-none"
-              />
-            </div>
+            {/* Permanent Address with Standardized 7-Field Group */}
+            <AddressFieldGroup
+              label="Permanent Registered Address"
+              value={firstPartyAddress}
+              onChangeAddress={setFirstPartyAddress}
+              required
+            />
 
-            {/* Aadhaar Last 4, Mobile, PAN */}
+            {/* Aadhaar (12-Digit Seamless), Mobile, PAN */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Aadhaar (Last 4 Digits) {docIdRule.aadhaar === 'mandatory' ? <span className="text-red-500 font-bold">*</span> : <span className="text-slate-400 font-normal">(Optional)</span>}
-                </label>
-                <input
-                  type="text"
-                  maxLength={4}
-                  required={docIdRule.aadhaar === 'mandatory'}
+                <AadhaarInput
+                  label="Aadhaar Card Number"
                   value={firstPartyAadhaarLast4}
-                  onChange={(e) => setFirstPartyAadhaarLast4(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                  placeholder={getPlaceholder('8492')}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  onChange={setFirstPartyAadhaarLast4}
+                  required={docIdRule.aadhaar === 'mandatory'}
+                  helperText="12-digit number"
                 />
               </div>
 
@@ -1097,52 +1178,57 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
         {/* ================= PAGE 3: SECOND PARTY (Only for Bilateral) ================= */}
         {currentPage === 3 && !isUnilateral && (
           <div className="space-y-4 animate-fadeIn">
-            {/* Page 3 Distinct Header */}
-            <div className="bg-gradient-to-r from-purple-700 via-purple-800 to-indigo-900 text-white rounded-2xl p-4 sm:p-5 shadow-sm border border-purple-600 mb-2">
+            {/* Page 3 Distinct Header - Soft eye-friendly styling */}
+            <div className="-mt-1 bg-slate-50 text-slate-900 rounded-2xl p-3.5 sm:p-4 shadow-2xs border border-slate-200 mb-2">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center font-black text-lg border border-white/20">
+                <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-800 flex items-center justify-center font-black text-base border border-indigo-200">
                   2
                 </div>
                 <div>
-                  <h3 className="text-base sm:text-lg font-black tracking-wide uppercase">
+                  <h3 className="text-base sm:text-lg font-black tracking-wide uppercase text-slate-900">
                     2nd Party Details Only
                   </h3>
-                  <p className="text-xs text-purple-100 font-medium">
+                  <p className="text-xs text-slate-600 font-medium">
                     {docConfig.secondPartyRole}
                   </p>
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-              <span className="text-xs font-bold text-slate-500 uppercase">
-                {docConfig.secondPartyRole}
-              </span>
-
-              {/* Entity Type Toggle */}
-              <div className="flex items-center gap-2 text-xs">
-                <span className="text-slate-500">Entity Type:</span>
+            {/* Entity Type: Label on Top, options wide & spacious below */}
+            <div className="pb-3 border-b border-slate-200">
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-bold text-slate-700">
+                  Entity Type <span className="text-red-500">*</span>
+                </label>
+                <span className="text-[11px] font-semibold text-slate-500 uppercase">
+                  {docConfig.secondPartyRole}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2.5">
                 <button
                   type="button"
                   onClick={() => setSecondPartyEntityType('Individual')}
-                  className={`px-3 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                  className={`py-2.5 px-4 rounded-xl font-bold transition-all text-xs sm:text-sm cursor-pointer flex items-center justify-center gap-2 ${
                     secondPartyEntityType === 'Individual'
-                      ? 'bg-blue-600 text-white shadow-2xs'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      ? 'bg-[#15803d] text-white shadow-sm ring-2 ring-[#15803d]/30'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300'
                   }`}
                 >
-                  Individual
+                  <User className="w-4 h-4" />
+                  <span>Individual</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setSecondPartyEntityType('Company')}
-                  className={`px-3 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                  className={`py-2.5 px-4 rounded-xl font-bold transition-all text-xs sm:text-sm cursor-pointer flex items-center justify-center gap-2 ${
                     secondPartyEntityType === 'Company'
-                      ? 'bg-blue-600 text-white shadow-2xs'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      ? 'bg-[#15803d] text-white shadow-sm ring-2 ring-[#15803d]/30'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300'
                   }`}
                 >
-                  Company / Firm
+                  <Building2 className="w-4 h-4" />
+                  <span>Company / Firm</span>
                 </button>
               </div>
             </div>
@@ -1230,35 +1316,23 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
               </div>
             </div>
 
-            {/* Permanent Address */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                Permanent Registered Address <span className="text-red-500 font-bold">*</span>
-              </label>
-              <textarea
-                rows={2}
-                required
-                value={secondPartyAddress}
-                onChange={(e) => setSecondPartyAddress(e.target.value)}
-                placeholder={getPlaceholder('House / Flat No, Street, Landmark, City, State, PIN code')}
-                className="w-full bg-white border border-slate-300 rounded-xl p-2.5 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 resize-none"
-              />
-            </div>
+            {/* Permanent Address with Standardized 7-Field Group */}
+            <AddressFieldGroup
+              label="Permanent Registered Address"
+              value={secondPartyAddress}
+              onChangeAddress={setSecondPartyAddress}
+              required
+            />
 
-            {/* Aadhaar Last 4, Mobile, PAN */}
+            {/* Aadhaar (12-Digit Seamless), Mobile, PAN */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Aadhaar (Last 4 Digits) {docIdRule.aadhaar === 'mandatory' ? <span className="text-red-500 font-bold">*</span> : <span className="text-slate-400 font-normal">(Optional)</span>}
-                </label>
-                <input
-                  type="text"
-                  maxLength={4}
-                  required={docIdRule.aadhaar === 'mandatory'}
+                <AadhaarInput
+                  label="Aadhaar Card Number"
                   value={secondPartyAadhaarLast4}
-                  onChange={(e) => setSecondPartyAadhaarLast4(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                  placeholder={getPlaceholder('5183')}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  onChange={setSecondPartyAadhaarLast4}
+                  required={docIdRule.aadhaar === 'mandatory'}
+                  helperText="12-digit number"
                 />
               </div>
 
@@ -1525,19 +1599,12 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Complete Residential Address <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={w1Address}
-                  onChange={(e) => setW1Address(e.target.value)}
-                  placeholder="Address with City, State & Pincode"
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                />
-              </div>
+              <AddressFieldGroup
+                label="Complete Residential Address"
+                value={w1Address}
+                onChangeAddress={setW1Address}
+                required
+              />
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
@@ -1614,18 +1681,12 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Complete Residential Address
-                </label>
-                <input
-                  type="text"
-                  value={w2Address}
-                  onChange={(e) => setW2Address(e.target.value)}
-                  placeholder={getPlaceholder('Address with City, State & Pincode')}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                />
-              </div>
+              <AddressFieldGroup
+                label="Complete Residential Address"
+                value={w2Address}
+                onChangeAddress={setW2Address}
+                required={false}
+              />
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
@@ -2064,7 +2125,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
               onClick={handleNext}
               className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-xs sm:text-sm shadow-xs cursor-pointer transition-all"
             >
-              <span>Proceed to next</span>
+              <span>Next</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>

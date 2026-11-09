@@ -13,7 +13,9 @@ import {
   VolumeX,
   Phone,
   MessageCircle,
-  FileText
+  FileText,
+  Lock,
+  ExternalLink
 } from 'lucide-react';
 import {
   speechController,
@@ -23,7 +25,9 @@ import {
 } from '../data/voiceNarrationData';
 import { SERVICE_CATEGORIES } from '../data/servicesData';
 import { VoiceGuidanceButton } from './VoiceGuidanceButton';
+import { AadhaarInput } from './AadhaarInput';
 import { useExampleDetails } from '../hooks/useExampleDetails';
+import { encryptFormDataAndSign, saveLightweightMetadata, playConfirmationChime } from '../services/encryptionService';
 
 interface GstRegistrationWizardProps {
   onBack: () => void;
@@ -49,6 +53,27 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [arnNumber, setArnNumber] = useState('');
+  const [submissionSecurityDetails, setSubmissionSecurityDetails] = useState<{
+    encryptedPayload: string;
+    signature: string;
+    websiteBUrl: string;
+  } | null>(null);
+  const [redirectCountdown, setRedirectCountdown] = useState<number>(5);
+
+  useEffect(() => {
+    if (!submissionSecurityDetails) return;
+    const timer = setInterval(() => {
+      setRedirectCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          window.location.href = submissionSecurityDetails.websiteBUrl;
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [submissionSecurityDetails]);
 
   // Audio language
   const [audioLang] = useState(getStoredAudioLanguage());
@@ -135,11 +160,37 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
     setRequestSubmitted(true);
   };
 
-  const handleFinalSubmit = (e: React.FormEvent) => {
+  const handleFinalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const randomArn = `AA${Math.floor(100000000000 + Math.random() * 900000000000)}Z`;
     setArnNumber(randomArn);
+
+    // 1. Zero-Database Client-Side Encryption
+    const sensitiveData = {
+      orderId: randomArn,
+      service: 'GST Registration',
+      step1,
+      step2: partners,
+      step3,
+      step4,
+      timestamp: new Date().toISOString()
+    };
+    const { encryptedPayload, signature, websiteBUrl } = encryptFormDataAndSign(sensitiveData);
+
+    // 2. Save ONLY 4 lightweight metadata fields in Supabase
+    await saveLightweightMetadata({
+      firstPartyName: step1.legalName || 'GST Applicant',
+      formName: 'GST Registration',
+      timestamp: new Date().toISOString(),
+      totalPrice: '0',
+      orderId: randomArn
+    });
+
+    setSubmissionSecurityDetails({ encryptedPayload, signature, websiteBUrl });
     setIsSubmitted(true);
+    try {
+      playConfirmationChime();
+    } catch {}
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -181,18 +232,54 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
   if (isSubmitted) {
     return (
       <div className="w-full max-w-4xl mx-auto px-4 py-6 animate-fadeIn pb-24">
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 text-center shadow-sm">
-          <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
+        <div className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 text-center shadow-sm space-y-4">
+          <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
             <CheckCircle2 className="w-10 h-10" />
           </div>
-          <h2 className="text-2xl font-black text-slate-900 mb-2">
-            GST REG-01 Application Submitted!
-          </h2>
-          <p className="text-sm text-slate-600 max-w-md mx-auto mb-6">
-            Your official Part-A and Part-B GST registration application has been submitted to the GST portal.
-          </p>
+          <div>
+            <div className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-[#15803d] text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider mb-2">
+              <Lock className="w-3.5 h-3.5 text-[#15803d]" />
+              <span>AES-256 Client Encrypted • Zero-Database Rule</span>
+            </div>
+            <h2 className="text-2xl font-black text-slate-900 mt-1">
+              GST REG-01 Application Submitted!
+            </h2>
+            <p className="text-sm text-slate-600 max-w-md mx-auto mt-1">
+              Your official Part-A and Part-B GST registration application has been submitted to the GST portal.
+            </p>
+          </div>
 
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 max-w-sm mx-auto mb-6">
+          {/* Website B Automatic Redirection Card */}
+          {submissionSecurityDetails && (
+            <div className="bg-emerald-50/70 border-2 border-[#15803d]/30 rounded-2xl p-4 sm:p-5 text-left space-y-3 max-w-md mx-auto">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-emerald-900 flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#15803d] animate-pulse"></span>
+                  Website B Production Redirection
+                </span>
+                <span className="text-xs font-bold text-[#15803d] bg-white px-2.5 py-0.5 rounded-full border border-emerald-200">
+                  Redirecting in {redirectCountdown}s
+                </span>
+              </div>
+              <p className="text-xs text-slate-600">
+                Encrypted payload &amp; HMAC signature ready for transmission. Proceeding to:
+              </p>
+              <div className="p-2.5 bg-white border border-slate-200 rounded-xl font-mono text-[11px] text-slate-700 break-all select-all">
+                {submissionSecurityDetails.websiteBUrl}
+              </div>
+              <div className="pt-1">
+                <a
+                  href={submissionSecurityDetails.websiteBUrl}
+                  className="w-full inline-flex items-center justify-center gap-2 py-3 px-5 bg-[#15803d] hover:bg-[#166534] text-white font-bold text-sm rounded-xl shadow-md transition-all cursor-pointer"
+                >
+                  <span>Proceed to Website B Immediately</span>
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+              </div>
+            </div>
+          )}
+
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 max-w-sm mx-auto">
             <div className="text-xs uppercase tracking-wider font-semibold text-slate-500">
               Application Reference Number (ARN)
             </div>
@@ -381,15 +468,6 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
         <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm">
           {/* Step Progress Tracker */}
           <div className="mb-6 border-b border-slate-200 pb-4">
-            <div className="flex items-center justify-between text-xs font-semibold text-slate-500 mb-2">
-              <span className="text-blue-600 font-bold">Step {currentStep} of 4</span>
-              <span>
-                {currentStep === 1 && 'Part-A: Basic Authentication & Constitution'}
-                {currentStep === 2 && 'Promoters / Partners / Directors'}
-                {currentStep === 3 && 'Principal & Additional Place of Business'}
-                {currentStep === 4 && 'Category, Bank Details & Verification'}
-              </span>
-            </div>
             <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden flex">
               <div
                 className="bg-blue-600 h-full transition-all duration-300"
@@ -398,18 +476,18 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
             </div>
           </div>
 
-          {/* STEP 1: Basic Authentication & Constitution Selection */}
+          {/* Basic Details */}
           {currentStep === 1 && (
             <div className="space-y-4">
               <h2 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-2 flex items-center gap-2">
                 <Building2 className="w-4 h-4 text-blue-600" />
-                <span>STEP 1: Basic Authentication &amp; Constitution Selection (Part-A)</span>
+                <span>Basic Details</span>
               </h2>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    State (राज्य) <span className="text-rose-600">*</span>
+                    State <span className="text-rose-600">*</span>
                   </label>
                   <select
                     value={step1.state}
@@ -426,7 +504,7 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    District (जिला) <span className="text-rose-600">*</span>
+                    District <span className="text-rose-600">*</span>
                   </label>
                   <select
                     value={step1.district}
@@ -518,10 +596,10 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
                     }
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-sm text-slate-900 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-600"
                   >
-                    <option value="Sole Proprietorship">Sole Proprietorship (एकल स्वामित्व)</option>
-                    <option value="Partnership">Partnership (साझेदारी फर्म)</option>
-                    <option value="Private Limited Company">Private Limited Company (प्राइवेट लिमिटेड)</option>
-                    <option value="LLP">LLP (लिमिटेड लायबिलिटी पार्टनरशिप)</option>
+                    <option value="Sole Proprietorship">Sole Proprietorship</option>
+                    <option value="Partnership">Partnership</option>
+                    <option value="Private Limited Company">Private Limited Company</option>
+                    <option value="LLP">LLP</option>
                     <option value="HUF / Society / Trust / Others">HUF / Society / Trust / Others</option>
                   </select>
                   <p className="text-[11px] text-slate-500 mt-1">
@@ -536,20 +614,20 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
                   onClick={() => setCurrentStep(2)}
                   className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm px-6 py-2.5 rounded-xl cursor-pointer shadow-sm"
                 >
-                  <span>Proceed to Step 2</span>
+                  <span>Next</span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
             </div>
           )}
 
-          {/* STEP 2: Promoters / Partners / Directors */}
+          {/* Promoters / Partners / Directors */}
           {currentStep === 2 && (
             <div className="space-y-4">
               <h2 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-2 flex items-center gap-2">
                 <User className="w-4 h-4 text-blue-600" />
                 <span>
-                  STEP 2: {isSoleProp ? 'Proprietor Personal & KYC Details' : 'Details of Partners / Directors / Promoters'}
+                  {isSoleProp ? 'Proprietor Personal & KYC Details' : 'Details of Partners / Directors / Promoters'}
                 </span>
               </h2>
 
@@ -608,16 +686,12 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Aadhaar Number <span className="text-rose-600">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      maxLength={12}
-                      placeholder={getPlaceholder('12-digit Aadhaar')}
+                    <AadhaarInput
                       value={proprietor.aadhaar}
-                      onChange={(e) => setProprietor({ ...proprietor, aadhaar: e.target.value })}
-                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 font-mono focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      onChange={(val) => setProprietor({ ...proprietor, aadhaar: val })}
+                      required
+                      label="Aadhaar Number"
+                      placeholder={getPlaceholder('1234 - 5678 - 9012')}
                     />
                   </div>
 
@@ -785,19 +859,19 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
                   onClick={() => setCurrentStep(3)}
                   className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm px-6 py-2.5 rounded-xl cursor-pointer shadow-sm"
                 >
-                  <span>Proceed to Step 3</span>
+                  <span>Next</span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
             </div>
           )}
 
-          {/* STEP 3: Principal & Additional Place of Business */}
+          {/* Principal & Additional Place of Business */}
           {currentStep === 3 && (
             <div className="space-y-4">
               <h2 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-2 flex items-center gap-2">
                 <MapPin className="w-4 h-4 text-blue-600" />
-                <span>STEP 3: Principal &amp; Additional Place of Business</span>
+                <span>Principal &amp; Additional Place of Business</span>
               </h2>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -859,16 +933,16 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
 
                 <div className="sm:col-span-2">
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Nature of Possession of Premises (जगह की प्रकृति) <span className="text-rose-600">*</span>
+                    Nature of Possession of Premises <span className="text-rose-600">*</span>
                   </label>
                   <select
                     value={step3.natureOfPossession}
                     onChange={(e) => setStep3({ ...step3, natureOfPossession: e.target.value })}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-sm text-slate-900 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-600"
                   >
-                    <option value="Own">Own (खुद की) → Electricity Bill + Registry Copy</option>
-                    <option value="Rented / Leased">Rented / Leased (किराए की) → Rent Agreement + Electricity Bill + NOC</option>
-                    <option value="Consent / Shared">Consent / Shared (रिश्तेदार/अन्य) → Consent Letter + Owner ID + Electricity Bill</option>
+                    <option value="Own">Own → Electricity Bill + Registry Copy</option>
+                    <option value="Rented / Leased">Rented / Leased → Rent Agreement + Electricity Bill + NOC</option>
+                    <option value="Consent / Shared">Consent / Shared → Consent Letter + Owner ID + Electricity Bill</option>
                     <option value="Other">Other → Other documents</option>
                   </select>
                 </div>
@@ -949,19 +1023,19 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
                   onClick={() => setCurrentStep(4)}
                   className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm px-6 py-2.5 rounded-xl cursor-pointer shadow-sm"
                 >
-                  <span>Proceed to Final Step 4</span>
+                  <span>Next</span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
             </div>
           )}
 
-          {/* STEP 4: Business Category, Bank Details & Final Verification */}
+          {/* Business Category, Bank Details & Final Verification */}
           {currentStep === 4 && (
             <form onSubmit={handleFinalSubmit} className="space-y-4">
               <h2 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-2 flex items-center gap-2">
                 <Landmark className="w-4 h-4 text-blue-600" />
-                <span>STEP 4: Business Category, Bank Details &amp; Final Verification</span>
+                <span>Business Category, Bank Details &amp; Final Verification</span>
               </h2>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1077,7 +1151,7 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
                   className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm px-8 py-3 rounded-xl cursor-pointer shadow-md transition-all"
                 >
                   <FileText className="w-4 h-4" />
-                  <span>Submit &amp; Generate ARN</span>
+                  <span>Submit</span>
                 </button>
               </div>
             </form>

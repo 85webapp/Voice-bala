@@ -19,6 +19,7 @@ import {
   MapPin
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { AadhaarInput } from './AadhaarInput';
 import { LegalDocument, OrderItem } from '../types';
 import { STATE_CATEGORIES, getSafeStampDuty } from '../data/stampDutyMatrix';
 import { lookupGstJurisdiction } from '../data/gstJurisdictionData';
@@ -34,6 +35,12 @@ import {
   getStoredAudioLanguage,
   setStoredAudioLanguage
 } from '../data/voiceNarrationData';
+import {
+  encryptFormDataAndSign,
+  saveLightweightMetadata,
+  playConfirmationChime
+} from '../services/encryptionService';
+import { Lock, ExternalLink } from 'lucide-react';
 
 interface GstNocWizardViewProps {
   document: LegalDocument;
@@ -235,6 +242,27 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submittedOrder, setSubmittedOrder] = useState<OrderItem | null>(null);
+  const [submissionSecurityDetails, setSubmissionSecurityDetails] = useState<{
+    encryptedPayload: string;
+    signature: string;
+    websiteBUrl: string;
+  } | null>(null);
+  const [redirectCountdown, setRedirectCountdown] = useState<number>(5);
+
+  useEffect(() => {
+    if (!submissionSecurityDetails) return;
+    const timer = setInterval(() => {
+      setRedirectCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          window.location.href = submissionSecurityDetails.websiteBUrl;
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [submissionSecurityDetails]);
 
   // Name Matching Check
   const nameMismatchDetected = useMemo(() => {
@@ -320,7 +348,7 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (deliveryPreference !== 'digital') {
@@ -332,9 +360,57 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
 
     setIsSubmitting(true);
 
-    setTimeout(() => {
+    try {
       const todayISO = new Date().toISOString().split('T')[0];
       const newOrderId = `CTC-${Math.floor(100000 + Math.random() * 900000)}`;
+
+      // 1. Gather sensitive data for zero-database encryption
+      const sensitiveData = {
+        orderId: newOrderId,
+        docTitle: 'Landlord NOC for GST Registration',
+        state: selectedState,
+        pincode,
+        gstJurisdiction: {
+          commissionerate: gstCommissionerate,
+          division: gstDivision,
+          range: gstRange
+        },
+        landlord: {
+          name: landlordName,
+          fatherName: landlordFatherName,
+          ownershipStatus,
+          pan: landlordPan,
+          aadhaar: landlordAadhaarLast4,
+          mobile: landlordMobile
+        },
+        premises: {
+          address: premisesAddress,
+          pincode,
+          wardNumber,
+          propertyTaxAssessmentNo
+        },
+        trade: {
+          proposedTradeName,
+          legalBusinessName,
+          constitutionOfBusiness,
+          granteePan,
+          applicantName
+        },
+        pricing,
+        timestamp: new Date().toISOString()
+      };
+
+      // 2. Client-Side AES-256 + HMAC-SHA256
+      const { encryptedPayload, signature, websiteBUrl } = encryptFormDataAndSign(sensitiveData);
+
+      // 3. Save ONLY 4 lightweight metadata fields to Supabase
+      await saveLightweightMetadata({
+        firstPartyName: applicantName || landlordName || 'Applicant',
+        formName: 'Landlord NOC for GST Registration',
+        timestamp: new Date().toISOString(),
+        totalPrice: pricing.totalPayable,
+        orderId: newOrderId
+      });
 
       const newOrder: OrderItem = {
         orderId: newOrderId,
@@ -360,45 +436,81 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
       };
 
       try {
+        playConfirmationChime();
         confetti({
-          particleCount: 90,
+          particleCount: 100,
           spread: 70,
           origin: { y: 0.6 }
         });
       } catch {}
 
       setSubmittedOrder(newOrder);
+      setSubmissionSecurityDetails({ encryptedPayload, signature, websiteBUrl });
       onOrderCreated(newOrder);
       setIsSubmitting(false);
       window.scrollTo({ top: 0, behavior: 'smooth' });
-    }, 700);
+    } catch (err) {
+      console.error('Submission error:', err);
+      setIsSubmitting(false);
+    }
   };
 
   if (submittedOrder) {
     return (
       <div className="w-full max-w-3xl mx-auto px-4 py-8 animate-fadeIn pb-24">
         <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-10 shadow-lg text-center space-y-6">
-          <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 mx-auto flex items-center justify-center shadow-inner">
+          <div className="w-16 h-16 rounded-full bg-emerald-100 text-[#15803d] mx-auto flex items-center justify-center shadow-inner">
             <CheckCircle2 className="w-10 h-10" />
           </div>
 
           <div>
-            <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200 uppercase tracking-wider">
-              Demo Record Saved Locally
-            </span>
-            <h1 className="text-2xl sm:text-3xl font-black text-black mt-2">
-              Demo Docket Saved
+            <div className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-[#15803d] text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider mb-2">
+              <Lock className="w-3.5 h-3.5 text-[#15803d]" />
+              <span>AES-256 Client Encrypted • Zero-Database Rule</span>
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-black text-black mt-1">
+              Order Confirmed &amp; Encrypted
             </h1>
-            <p className="text-sm text-slate-500 mt-1">
-              This record was saved only in this browser; it has not been submitted to a provider.
+            <p className="text-sm text-slate-500 mt-1 max-w-xl mx-auto">
+              Zero-database compliance: Sensitive GST NOC details have been encrypted in browser using AES-256. Only lightweight audit metadata was saved to Supabase.
             </p>
             <div className="mt-3 inline-block bg-slate-50 border border-slate-300 rounded-xl px-4 py-2">
               <span className="text-xs text-slate-500 mr-2">Docket ID:</span>
-              <span className="font-mono font-black text-blue-600 text-base">
+              <span className="font-mono font-black text-[#15803d] text-base">
                 {submittedOrder.orderId}
               </span>
             </div>
           </div>
+
+          {/* Website B Automatic Redirection Card */}
+          {submissionSecurityDetails && (
+            <div className="bg-emerald-50/70 border-2 border-[#15803d]/30 rounded-2xl p-4 sm:p-5 text-left space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-emerald-900 flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#15803d] animate-pulse"></span>
+                  Website B Production Redirection
+                </span>
+                <span className="text-xs font-bold text-[#15803d] bg-white px-2.5 py-0.5 rounded-full border border-emerald-200">
+                  Redirecting in {redirectCountdown}s
+                </span>
+              </div>
+              <p className="text-xs text-slate-600">
+                Encrypted payload &amp; HMAC signature ready for transmission. Proceeding to:
+              </p>
+              <div className="p-2.5 bg-white border border-slate-200 rounded-xl font-mono text-[11px] text-slate-700 break-all select-all">
+                {submissionSecurityDetails.websiteBUrl}
+              </div>
+              <div className="pt-1">
+                <a
+                  href={submissionSecurityDetails.websiteBUrl}
+                  className="w-full inline-flex items-center justify-center gap-2 py-3 px-5 bg-[#15803d] hover:bg-[#166534] text-white font-bold text-sm rounded-xl shadow-md transition-all cursor-pointer"
+                >
+                  <span>Proceed to Website B Immediately</span>
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+              </div>
+            </div>
+          )}
 
           <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200 text-left text-xs sm:text-sm space-y-3">
             <div className="flex justify-between border-b border-slate-200/80 pb-2">
@@ -414,18 +526,16 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
               <span className="font-bold text-slate-900">{gstCommissionerate} · {gstDivision}</span>
             </div>
             <div className="flex justify-between pt-1 font-bold text-base text-black">
-              <span>Displayed estimate (not a charge):</span>
-              <span className="text-blue-600">₹{submittedOrder.totalFee}</span>
+              <span>Final Payment (Pay After Delivery):</span>
+              <span className="text-[#15803d]">₹{submittedOrder.totalFee}</span>
             </div>
           </div>
-
-          <p className="text-xs text-slate-600">No document, e-stamp, signature, or payment is processed by this prototype.</p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
             <button
               type="button"
               onClick={onNavigateToDashboard}
-              className="w-full sm:w-auto px-8 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl shadow-md cursor-pointer transition-all"
+              className="w-full sm:w-auto px-8 py-3.5 bg-slate-900 hover:bg-black text-white font-bold text-sm rounded-xl shadow-md cursor-pointer transition-all"
             >
               Go to Dashboard &amp; Track Status
             </button>
@@ -468,7 +578,7 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
 
         <div className="w-full bg-slate-200 h-1.5 rounded-full mt-3 overflow-hidden">
           <div
-            className="bg-blue-600 h-full transition-all duration-300"
+            className="bg-[#15803d] h-full transition-all duration-300"
             style={{ width: `${progressPercent}%` }}
           />
         </div>
@@ -478,7 +588,7 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
           <h1 className="text-2xl sm:text-3xl font-black text-black">
             {initialDoc.title}
           </h1>
-          <span className="text-sm font-bold text-blue-600 block mt-0.5">
+          <span className="text-sm font-bold text-[#15803d] block mt-0.5">
             Architecture
           </span>
         </div>
@@ -727,7 +837,7 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
                     onChange={() => setStampMode('auto')}
                     className="sr-only"
                   />
-                  <span className="text-xs font-bold text-black block">Auto-Select Recommended Stamp Paper Value</span>
+                  <span className="text-xs font-bold text-black block">Recommended Stamp Paper Value</span>
                   <span className="text-[11px] text-blue-700 font-semibold mt-0.5 block">
                     Locked at ₹{recommendedStamp} for {selectedState}
                   </span>
@@ -812,17 +922,17 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
         {/* ================= PAGE 2: LANDLORD TAX IDENTITY ================= */}
         {currentPage === '2' && (
           <div className="space-y-4 animate-fadeIn">
-            {/* Page 2 Distinct Header */}
-            <div className="bg-gradient-to-r from-blue-700 via-blue-800 to-indigo-900 text-white rounded-2xl p-4 sm:p-5 shadow-sm border border-blue-600 mb-2">
+            {/* Page 2 Distinct Header - Soft eye-friendly styling */}
+            <div className="bg-slate-50 text-slate-900 rounded-2xl p-4 sm:p-5 shadow-2xs border border-slate-200 mb-2">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center font-black text-lg border border-white/20">
+                <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-800 flex items-center justify-center font-black text-lg border border-blue-200">
                   1
                 </div>
                 <div>
-                  <h3 className="text-base sm:text-lg font-black tracking-wide uppercase">
+                  <h3 className="text-base sm:text-lg font-black tracking-wide uppercase text-slate-900">
                     1st Party Details Only
                   </h3>
-                  <p className="text-xs text-blue-100 font-medium">
+                  <p className="text-xs text-slate-600 font-medium">
                     Landlord / Property Owner
                   </p>
                 </div>
@@ -929,6 +1039,15 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
               </div>
 
               <div>
+                <AadhaarInput
+                  value={landlordAadhaarLast4}
+                  onChange={(val) => setLandlordAadhaarLast4(val)}
+                  label="Aadhaar Number (12 Digits)"
+                  placeholder={showExample ? "1234 - 5678 - 9012" : "12-digit Aadhaar number"}
+                />
+              </div>
+
+              <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="block text-xs font-bold text-slate-700">
                     Active Mobile Number <span className="text-red-500">*</span>
@@ -1017,17 +1136,17 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
         {/* ================= PAGE 3: THE GRANTEE - PROPOSED GST ENTITY ================= */}
         {currentPage === '3' && (
           <div className="space-y-4 animate-fadeIn">
-            {/* Page 3 Distinct Header */}
-            <div className="bg-gradient-to-r from-purple-700 via-purple-800 to-indigo-900 text-white rounded-2xl p-4 sm:p-5 shadow-sm border border-purple-600 mb-2">
+            {/* Page 3 Distinct Header - Soft eye-friendly styling */}
+            <div className="bg-slate-50 text-slate-900 rounded-2xl p-4 sm:p-5 shadow-2xs border border-slate-200 mb-2">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center font-black text-lg border border-white/20">
+                <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-800 flex items-center justify-center font-black text-lg border border-indigo-200">
                   2
                 </div>
                 <div>
-                  <h3 className="text-base sm:text-lg font-black tracking-wide uppercase">
+                  <h3 className="text-base sm:text-lg font-black tracking-wide uppercase text-slate-900">
                     2nd Party Details Only
                   </h3>
-                  <p className="text-xs text-purple-100 font-medium">
+                  <p className="text-xs text-slate-600 font-medium">
                     Business Owner / Grantee
                   </p>
                 </div>
@@ -1632,7 +1751,7 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
               }}
               className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md cursor-pointer transition-all inline-flex items-center gap-1.5"
             >
-              <span>Proceed to Next</span>
+              <span>Next</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           ) : (

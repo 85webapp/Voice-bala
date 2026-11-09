@@ -46,7 +46,7 @@ export const INITIAL_FRONT_DOCUMENTS: LegalDocument[] = [
   // 2. Creators and Freelancers (6)
   {
     id: 'brand-sponsorship-promo',
-    title: 'Brand Sponsorship & Promotion Agreement',
+    title: 'Brand Sponsorship and Promotion Influencer Collaboration Agreement',
     category: 'Creators and Freelancers',
     description: 'Deliverables contract defining compensation, deliverables, media rights, and exclusivity.',
     standardHours: 24,
@@ -128,7 +128,7 @@ export const INITIAL_FRONT_DOCUMENTS: LegalDocument[] = [
   },
   {
     id: 'founder-co-founder-agreement',
-    title: 'Founder & Co-Founder Agreement',
+    title: 'Founder and Co-Founder Agreement',
     category: 'Business and Partnerships',
     description: 'Vesting schedule, equity split, IP assignment, roles, and exit covenants for startup founders.',
     standardHours: 24,
@@ -212,7 +212,7 @@ export const INITIAL_FRONT_DOCUMENTS: LegalDocument[] = [
   },
   {
     id: 'dob-correction-affidavit',
-    title: 'Date of Birth & Age Correction Affidavit',
+    title: 'Date of Birth Correction Affidavit',
     category: 'Personal Affidavits',
     description: 'Affidavit for resolving birth date discrepancies across educational marksheet, Aadhaar, and PAN.',
     standardHours: 24,
@@ -254,7 +254,7 @@ export const INITIAL_FRONT_DOCUMENTS: LegalDocument[] = [
   },
   {
     id: 'first-child-single-child-affidavit',
-    title: 'First Child / Single Child Affidavit',
+    title: 'First Child / Single Girl Child Affidavit',
     category: 'Education, Job & Government',
     description: 'Statutory affidavit for school admission quota, government maternity subsidies, and Single Girl Child benefits.',
     standardHours: 24,
@@ -286,7 +286,7 @@ export const INITIAL_FRONT_DOCUMENTS: LegalDocument[] = [
   },
   {
     id: 'old-vehicle-sales-agreement',
-    title: 'Vehicle Sales & Purchase Agreement',
+    title: 'Old Vehicle Sales and Purchase Agreement',
     category: 'Finance, HR & Vehicle',
     description: 'Legally binding RTO Form 29/30 transfer agreement shifting road accident liability on token receipt.',
     standardHours: 24,
@@ -294,6 +294,21 @@ export const INITIAL_FRONT_DOCUMENTS: LegalDocument[] = [
     requiredFields: ['Seller Name', 'Buyer Name', 'Vehicle Reg. No.', 'Chassis No.'],
     stampDutyRecommended: '₹100'
   }
+];
+
+// Master 11 Featured Documents in the exact specified order
+export const FEATURED_11_AGREEMENTS_ORDER = [
+  '11th Month Rent Agreement',
+  'Landlord NOC for Business',
+  'Brand Sponsorship and Promotion Influencer Collaboration Agreement',
+  'Founder and Co-Founder Agreement',
+  'Name Change Affidavit',
+  'Address Proof Correction Affidavit',
+  'Date of Birth Correction Affidavit',
+  'Loss of Document Affidavit',
+  'Old Vehicle Sales and Purchase Agreement',
+  'Income and Unemployment Affidavit',
+  'First Child / Single Girl Child Affidavit'
 ];
 
 export const MASTER_CATEGORIES: DocumentCategory[] = [
