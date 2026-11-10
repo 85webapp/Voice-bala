@@ -146,9 +146,11 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               </label>
               <input
                 type="tel"
+                inputMode="numeric"
+                maxLength={10}
                 required
                 value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                onChange={(e) => setFormData({ ...formData, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
                 placeholder="+91 98765 43210"
                 className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
               />

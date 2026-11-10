@@ -302,22 +302,6 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
     signature: string;
     websiteBUrl: string;
   } | null>(null);
-  const [redirectCountdown, setRedirectCountdown] = useState<number>(5);
-
-  useEffect(() => {
-    if (!submissionSecurityDetails) return;
-    const timer = setInterval(() => {
-      setRedirectCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          window.location.href = submissionSecurityDetails.websiteBUrl;
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [submissionSecurityDetails]);
 
   // Toggle all 5 declarations
   const handleToggleAllDeclarations = () => {
@@ -675,35 +659,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
             </div>
           </div>
 
-          {/* Website B Automatic Redirection Card */}
-          {submissionSecurityDetails && (
-            <div className="bg-emerald-50/70 border-2 border-[#15803d]/30 rounded-2xl p-4 sm:p-5 text-left space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider text-emerald-900 flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#15803d] animate-pulse"></span>
-                  Website B Production Redirection
-                </span>
-                <span className="text-xs font-bold text-[#15803d] bg-white px-2.5 py-0.5 rounded-full border border-emerald-200">
-                  Redirecting in {redirectCountdown}s
-                </span>
-              </div>
-              <p className="text-xs text-slate-600">
-                Encrypted payload &amp; HMAC signature ready for transmission. Proceeding to:
-              </p>
-              <div className="p-2.5 bg-white border border-slate-200 rounded-xl font-mono text-[11px] text-slate-700 break-all select-all">
-                {submissionSecurityDetails.websiteBUrl}
-              </div>
-              <div className="pt-1">
-                <a
-                  href={submissionSecurityDetails.websiteBUrl}
-                  className="w-full inline-flex items-center justify-center gap-2 py-3 px-5 bg-[#15803d] hover:bg-[#166534] text-white font-bold text-sm rounded-xl shadow-md transition-all cursor-pointer"
-                >
-                  <span>Proceed to Website B Immediately</span>
-                  <ExternalLink className="w-4 h-4" />
-                </a>
-              </div>
-            </div>
-          )}
+
 
           {/* Details Card */}
           <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200 text-left text-xs sm:text-sm space-y-3">
@@ -1150,9 +1106,11 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                 </label>
                 <input
                   type="tel"
+                  inputMode="numeric"
+                  maxLength={10}
                   required
                   value={firstPartyMobile}
-                  onChange={(e) => setFirstPartyMobile(e.target.value)}
+                  onChange={(e) => setFirstPartyMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
                   placeholder={getPlaceholder('+91 98765 43210')}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
@@ -1348,9 +1306,11 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                 </label>
                 <input
                   type="tel"
+                  inputMode="numeric"
+                  maxLength={10}
                   required
                   value={secondPartyMobile}
-                  onChange={(e) => setSecondPartyMobile(e.target.value)}
+                  onChange={(e) => setSecondPartyMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
                   placeholder={getPlaceholder('+91 98111 22334')}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
@@ -1619,9 +1579,11 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                   </label>
                   <input
                     type="tel"
+                    inputMode="numeric"
+                    maxLength={10}
                     required
                     value={w1Mobile}
-                    onChange={(e) => setW1Mobile(e.target.value)}
+                    onChange={(e) => setW1Mobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
                     placeholder={getPlaceholder('+91 98999 11223')}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
@@ -1701,8 +1663,10 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                   </label>
                   <input
                     type="tel"
+                    inputMode="numeric"
+                    maxLength={10}
                     value={w2Mobile}
-                    onChange={(e) => setW2Mobile(e.target.value)}
+                    onChange={(e) => setW2Mobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
                     placeholder={getPlaceholder('+91 97111 88990')}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
@@ -1835,9 +1799,11 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                         </label>
                         <input
                           type="tel"
+                          inputMode="numeric"
+                          maxLength={10}
                           required={deliveryType === 'physical'}
                           value={shippingPhone}
-                          onChange={(e) => setShippingPhone(e.target.value)}
+                          onChange={(e) => setShippingPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
                           placeholder={getPlaceholder('+91 98765 43210')}
                           className="w-full bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-600"
                         />
