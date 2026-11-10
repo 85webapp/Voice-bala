@@ -575,6 +575,26 @@ app.post('/api/orders/metadata', async (req, res) => {
   }
 });
 
+// Website B Incoming Endpoint Relay & Local Verification
+app.post('/api/website-b/relay', (req, res) => {
+  const { encryptedPayload, signature, metadata, timestamp } = req.body || {};
+  console.log('[Website B Relay] Secure encrypted payload received successfully:', {
+    orderId: metadata?.orderId,
+    formName: metadata?.formName,
+    payloadSizeChars: (encryptedPayload || '').length,
+    hmacSignature: (signature || '').slice(0, 16) + '...',
+    timestamp: timestamp || new Date().toISOString()
+  });
+
+  return res.json({
+    success: true,
+    deliveredToWebsiteB: true,
+    message: 'Encrypted ciphertext and HMAC signature received by Website B backend.',
+    orderId: metadata?.orderId,
+    timestamp: timestamp || new Date().toISOString()
+  });
+});
+
 app.use('/api', (_req, res) => {
   res.status(404).json({ error: 'API endpoint not found.' });
 });

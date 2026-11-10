@@ -38,6 +38,7 @@ import {
 import {
   encryptFormDataAndSign,
   saveLightweightMetadata,
+  postEncryptedPayloadToWebsiteB,
   playConfirmationChime
 } from '../services/encryptionService';
 import { Lock, ExternalLink } from 'lucide-react';
@@ -401,16 +402,21 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
       };
 
       // 2. Client-Side AES-256 + HMAC-SHA256
-      const { encryptedPayload, signature, websiteBUrl } = encryptFormDataAndSign(sensitiveData);
+      const encResult = encryptFormDataAndSign(sensitiveData);
+      const { encryptedPayload, signature, websiteBUrl } = encResult;
 
       // 3. Save ONLY 4 lightweight metadata fields to Supabase
-      await saveLightweightMetadata({
+      const metadata = {
         firstPartyName: applicantName || landlordName || 'Applicant',
         formName: 'Landlord NOC for GST Registration',
         timestamp: new Date().toISOString(),
         totalPrice: pricing.totalPayable,
         orderId: newOrderId
-      });
+      };
+      await saveLightweightMetadata(metadata);
+
+      // 4. Directly POST encrypted ciphertext & HMAC signature to Website B API
+      await postEncryptedPayloadToWebsiteB(encResult, metadata);
 
       const newOrder: OrderItem = {
         orderId: newOrderId,

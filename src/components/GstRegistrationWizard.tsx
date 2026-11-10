@@ -27,7 +27,12 @@ import { SERVICE_CATEGORIES } from '../data/servicesData';
 import { VoiceGuidanceButton } from './VoiceGuidanceButton';
 import { AadhaarInput } from './AadhaarInput';
 import { useExampleDetails } from '../hooks/useExampleDetails';
-import { encryptFormDataAndSign, saveLightweightMetadata, playConfirmationChime } from '../services/encryptionService';
+import {
+  encryptFormDataAndSign,
+  saveLightweightMetadata,
+  postEncryptedPayloadToWebsiteB,
+  playConfirmationChime
+} from '../services/encryptionService';
 
 interface GstRegistrationWizardProps {
   onBack: () => void;
@@ -175,16 +180,21 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
       step4,
       timestamp: new Date().toISOString()
     };
-    const { encryptedPayload, signature, websiteBUrl } = encryptFormDataAndSign(sensitiveData);
+    const encResult = encryptFormDataAndSign(sensitiveData);
+    const { encryptedPayload, signature, websiteBUrl } = encResult;
 
     // 2. Save ONLY 4 lightweight metadata fields in Supabase
-    await saveLightweightMetadata({
+    const metadata = {
       firstPartyName: step1.legalName || 'GST Applicant',
       formName: 'GST Registration',
       timestamp: new Date().toISOString(),
       totalPrice: '0',
       orderId: randomArn
-    });
+    };
+    await saveLightweightMetadata(metadata);
+
+    // 3. Directly POST encrypted ciphertext & HMAC signature to Website B API
+    await postEncryptedPayloadToWebsiteB(encResult, metadata);
 
     setSubmissionSecurityDetails({ encryptedPayload, signature, websiteBUrl });
     setIsSubmitted(true);

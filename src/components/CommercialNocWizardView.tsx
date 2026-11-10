@@ -36,6 +36,7 @@ import {
 import {
   encryptFormDataAndSign,
   saveLightweightMetadata,
+  postEncryptedPayloadToWebsiteB,
   playConfirmationChime
 } from '../services/encryptionService';
 import { Lock, ExternalLink } from 'lucide-react';
@@ -444,16 +445,21 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
       };
 
       // 2. Client-Side AES-256 + HMAC-SHA256
-      const { encryptedPayload, signature, websiteBUrl } = encryptFormDataAndSign(sensitiveData);
+      const encResult = encryptFormDataAndSign(sensitiveData);
+      const { encryptedPayload, signature, websiteBUrl } = encResult;
 
       // 3. Save ONLY 4 lightweight metadata fields to Supabase
-      await saveLightweightMetadata({
+      const metadata = {
         firstPartyName: landlordName || 'Applicant',
         formName: 'Commercial No-Objection Certificate (NOC)',
         timestamp: new Date().toISOString(),
         totalPrice: pricing.totalPayable,
         orderId: newOrderId
-      });
+      };
+      await saveLightweightMetadata(metadata);
+
+      // 4. Directly POST encrypted ciphertext & HMAC signature to Website B API
+      await postEncryptedPayloadToWebsiteB(encResult, metadata);
 
       const newOrder: OrderItem = {
         orderId: newOrderId,

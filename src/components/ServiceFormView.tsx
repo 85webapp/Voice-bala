@@ -21,7 +21,12 @@ import { VoiceGuidanceButton } from './VoiceGuidanceButton';
 import { ttsService } from '../services/textToSpeechService';
 import { stopServiceVoice } from '../services/googleVoiceGuidance';
 import { useExampleDetails } from '../hooks/useExampleDetails';
-import { encryptFormDataAndSign, saveLightweightMetadata, playConfirmationChime } from '../services/encryptionService';
+import {
+  encryptFormDataAndSign,
+  saveLightweightMetadata,
+  postEncryptedPayloadToWebsiteB,
+  playConfirmationChime
+} from '../services/encryptionService';
 
 interface ServiceFormViewProps {
   category: ServiceCategory;
@@ -166,16 +171,21 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
       generalDetails,
       timestamp: new Date().toISOString()
     };
-    const { encryptedPayload, signature, websiteBUrl } = encryptFormDataAndSign(sensitiveData);
+    const encResult = encryptFormDataAndSign(sensitiveData);
+    const { encryptedPayload, signature, websiteBUrl } = encResult;
 
     // 2. Save ONLY 4 lightweight metadata fields in Supabase
-    await saveLightweightMetadata({
+    const metadata = {
       firstPartyName: name || 'Service Applicant',
       formName: selectedTitle,
       timestamp: new Date().toISOString(),
       totalPrice: '0',
       orderId: ref
-    });
+    };
+    await saveLightweightMetadata(metadata);
+
+    // 3. Directly POST encrypted ciphertext & HMAC signature to Website B API
+    await postEncryptedPayloadToWebsiteB(encResult, metadata);
 
     setSubmissionSecurityDetails({ encryptedPayload, signature, websiteBUrl });
     setIsSubmitted(true);

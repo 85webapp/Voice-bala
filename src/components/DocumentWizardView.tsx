@@ -44,6 +44,7 @@ import { AddressFieldGroup } from './AddressFieldGroup';
 import {
   encryptFormDataAndSign,
   saveLightweightMetadata,
+  postEncryptedPayloadToWebsiteB,
   playConfirmationChime
 } from '../services/encryptionService';
 import { ExternalLink, Lock } from 'lucide-react';
@@ -559,16 +560,21 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
       };
 
       // 2. Client-Side AES-256 Encryption & HMAC Signature
-      const { encryptedPayload, signature, websiteBUrl } = encryptFormDataAndSign(sensitivePayload);
+      const encResult = encryptFormDataAndSign(sensitivePayload);
+      const { encryptedPayload, signature, websiteBUrl } = encResult;
 
       // 3. Save ONLY 4 lightweight metadata fields to Supabase
-      await saveLightweightMetadata({
+      const metadata = {
         firstPartyName: firstPartyName || 'Applicant',
         formName: selectedDocTitle,
         timestamp: new Date().toISOString(),
         totalPrice: pricing.totalPayable,
         orderId: newOrderId
-      });
+      };
+      await saveLightweightMetadata(metadata);
+
+      // 4. Directly POST encrypted ciphertext & HMAC signature to Website B API
+      await postEncryptedPayloadToWebsiteB(encResult, metadata);
 
       const newOrder: OrderItem = {
         orderId: newOrderId,

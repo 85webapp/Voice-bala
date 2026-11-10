@@ -28,7 +28,12 @@ import { SERVICE_CATEGORIES } from '../data/servicesData';
 import { VoiceGuidanceButton } from './VoiceGuidanceButton';
 import { useExampleDetails } from '../hooks/useExampleDetails';
 import { AadhaarInput } from './AadhaarInput';
-import { encryptFormDataAndSign, saveLightweightMetadata, playConfirmationChime } from '../services/encryptionService';
+import {
+  encryptFormDataAndSign,
+  saveLightweightMetadata,
+  postEncryptedPayloadToWebsiteB,
+  playConfirmationChime
+} from '../services/encryptionService';
 
 interface UdyamRegistrationWizardProps {
   onBack: () => void;
@@ -242,16 +247,21 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
       step5,
       timestamp: new Date().toISOString()
     };
-    const { encryptedPayload, signature, websiteBUrl } = encryptFormDataAndSign(sensitiveData);
+    const encResult = encryptFormDataAndSign(sensitiveData);
+    const { encryptedPayload, signature, websiteBUrl } = encResult;
 
     // 2. Save ONLY 4 lightweight metadata fields in Supabase
-    await saveLightweightMetadata({
+    const metadata = {
       firstPartyName: step1.entrepreneurName || 'MSME Applicant',
       formName: 'MSME Udyam Registration',
       timestamp: new Date().toISOString(),
       totalPrice: '0',
       orderId: urn
-    });
+    };
+    await saveLightweightMetadata(metadata);
+
+    // 3. Directly POST encrypted ciphertext & HMAC signature to Website B API
+    await postEncryptedPayloadToWebsiteB(encResult, metadata);
 
     setSubmissionSecurityDetails({ encryptedPayload, signature, websiteBUrl });
     setIsSubmitted(true);
