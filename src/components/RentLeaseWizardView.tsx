@@ -41,9 +41,11 @@ import {
   encryptFormDataAndSign,
   saveLightweightMetadata,
   postEncryptedPayloadToWebsiteB,
-  playConfirmationChime
+  playConfirmationChime,
+  generateSequentialOrderId
 } from '../services/encryptionService';
 import { ExternalLink, Lock } from 'lucide-react';
+import { showToast } from '../services/toastService';
 
 interface RentLeaseWizardViewProps {
   document: LegalDocument;
@@ -456,11 +458,11 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
   const validateAndProceed = (targetNext: number) => {
     if (currentPage === 1) {
       if (tenancyPurpose === 'mixed' && !mixedUseArea.trim()) {
-        alert('Please specify the dedicated commercial area for mixed-use tenancy.');
+        showToast('Please specify the dedicated commercial area for mixed-use tenancy.', 'warning');
         return;
       }
       if (stampProcurementMode === 'physical_upload' && !physicalStampUploaded) {
-        alert('Please attach or upload your pre-purchased physical stamp paper document.');
+        showToast('Please attach or upload your pre-purchased physical stamp paper document.', 'warning');
         return;
       }
     }
@@ -469,27 +471,28 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
       const isCorp = landlordEntityType !== 'Individual' && landlordEntityType !== 'Joint Owners';
       if (!isCorp) {
         if (!landlordName.trim() || !landlordAddress.trim() || !landlordMobile.trim()) {
-          alert('Please fill mandatory Landlord Name, Address, and Mobile Number.');
+          showToast('Please fill mandatory Landlord Name, Address, and Mobile Number.', 'warning');
           return;
         }
       } else {
         if (!landlordName.trim() || !corporateAddress.trim() || !authSignatoryName.trim()) {
-          alert('Please fill Entity Name, Registered Address, and Authorized Signatory details.');
+          showToast('Please fill Entity Name, Registered Address, and Authorized Signatory details.', 'warning');
           return;
         }
       }
 
       if (isPanMandatoryUnder194IB && !landlordPan.trim()) {
-        alert(
+        showToast(
           docCategory === 'commercial'
             ? 'Commercial lease agreements require a mandatory Landlord PAN for tax audit compliance.'
-            : 'Under Section 194-IB of the Income Tax Act, Monthly Rent is ₹50,000 or above, making Landlord PAN mandatory.'
+            : 'Under Section 194-IB of the Income Tax Act, Monthly Rent is ₹50,000 or above, making Landlord PAN mandatory.',
+          'warning'
         );
         return;
       }
 
       if (hasPoa && (!poaName.trim() || !poaAddress.trim())) {
-        alert('Please provide Power of Attorney holder name and address.');
+        showToast('Please provide Power of Attorney holder name and address.', 'warning');
         return;
       }
     }
@@ -497,16 +500,16 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
     if (currentPage === 3) {
       if (docCategory === 'residential') {
         if (!tenantName.trim() || !tenantAddress.trim() || !tenantMobile.trim()) {
-          alert('Please fill mandatory Tenant Name, Address, and Mobile Number.');
+          showToast('Please fill mandatory Tenant Name, Address, and Mobile Number.', 'warning');
           return;
         }
       } else {
         if (!commercialCompanyName.trim() || !commercialOfficeAddress.trim() || !commercialRepName.trim()) {
-          alert('Please fill Commercial Firm Name, Office Address, and Representative details.');
+          showToast('Please fill Commercial Firm Name, Office Address, and Representative details.', 'warning');
           return;
         }
         if (!commercialCompanyPan.trim()) {
-          alert('Commercial Tenancy strictly requires the Company/Firm PAN Card number.');
+          showToast('Commercial Tenancy strictly requires the Company/Firm PAN Card number.', 'warning');
           return;
         }
       }
@@ -514,11 +517,11 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
 
     if (currentPage === 4) {
       if (!monthlyRent || numericRent <= 0) {
-        alert('Please enter Monthly Rent Amount.');
+        showToast('Please enter Monthly Rent Amount.', 'warning');
         return;
       }
       if (!securityDeposit || numericDeposit < 0) {
-        alert('Please enter Security Deposit Amount.');
+        showToast('Please enter Security Deposit Amount.', 'warning');
         return;
       }
     }
@@ -531,24 +534,24 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
     e.preventDefault();
 
     if (!w1Name.trim() || !w1Mobile.trim() || !w2Name.trim() || !w2Mobile.trim()) {
-      alert('Please fill complete details for both Witness 1 and Witness 2 (mandatory by law).');
+      showToast('Please fill complete details for both Witness 1 and Witness 2 (mandatory by law).', 'warning');
       return;
     }
 
     if (executionMode !== 'digital') {
       if (!shippingAddress.trim() || !shippingPincode.trim() || !shippingPhone.trim()) {
-        alert('Please provide complete physical shipping address, pincode, and contact number.');
+        showToast('Please provide complete physical shipping address, pincode, and contact number.', 'warning');
         return;
       }
     }
 
     if (declarations.some((val) => !val)) {
-      alert('कृपया आगे बढ़ने के लिए सभी 5 कानूनी घोषणाओं (Declarations) को स्वीकार करें।');
+      showToast('कृपया आगे बढ़ने के लिए सभी 5 कानूनी घोषणाओं (Declarations) को स्वीकार करें।', 'warning');
       return;
     }
 
     if (!disclaimerAccepted) {
-      alert('Please accept the statutory declaration checkbox to proceed.');
+      showToast('Please accept the statutory declaration checkbox to proceed.', 'warning');
       return;
     }
 
@@ -556,7 +559,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
 
     try {
       const todayISO = new Date().toISOString().split('T')[0];
-      const newOrderId = `CTC-${Math.floor(100000 + Math.random() * 900000)}`;
+      const newOrderId = generateSequentialOrderId();
 
       const formattedDocTitle =
         docCategory === 'commercial'
@@ -688,7 +691,21 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
             </div>
           </div>
 
-
+          {/* Zero-Knowledge Background Delivery Status Box (No Redirection) */}
+          <div className="bg-emerald-50/90 border border-emerald-300 rounded-2xl p-4 sm:p-5 text-left space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-emerald-950 flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#15803d]"></span>
+                Silent Background Delivery Complete
+              </span>
+              <span className="text-xs font-bold text-[#15803d] bg-white px-2.5 py-0.5 rounded-full border border-emerald-200">
+                Website A Verified
+              </span>
+            </div>
+            <p className="text-xs text-slate-700 leading-relaxed">
+              Your rental agreement data was encrypted on this device using AES-256 and transmitted directly to Website B via background API with HMAC authentication. No sensitive data was saved to our database.
+            </p>
+          </div>
 
           <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200 text-left text-xs sm:text-sm space-y-3">
             <div className="flex justify-between border-b border-slate-200/80 pb-2">
@@ -1459,7 +1476,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                   inputMode="numeric"
                   pattern="[0-9]*"
                   value={landlordMobile}
-                  onChange={(e) => setLandlordMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                  onChange={(e) => setLandlordMobile(e.target.value.replace(/\D/g, ''))}
                   placeholder={getPlaceholder("Enter 10-Digit Mobile Number")}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
@@ -1574,7 +1591,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                         maxLength={10}
                         inputMode="numeric"
                         value={co.mobile}
-                        onChange={(e) => updateCoOwner(co.id, 'mobile', e.target.value.replace(/\D/g, '').slice(0, 10))}
+                        onChange={(e) => updateCoOwner(co.id, 'mobile', e.target.value.replace(/\D/g, ''))}
                         placeholder={getPlaceholder("Mobile Number")}
                         className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs"
                       />
@@ -1855,7 +1872,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                       inputMode="numeric"
                       pattern="[0-9]*"
                       value={tenantMobile}
-                      onChange={(e) => setTenantMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                      onChange={(e) => setTenantMobile(e.target.value.replace(/\D/g, ''))}
                       placeholder={getPlaceholder("Enter 10-Digit Mobile Number")}
                       className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                     />
@@ -2725,7 +2742,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                     inputMode="numeric"
                     pattern="[0-9]*"
                     value={w1Mobile}
-                    onChange={(e) => setW1Mobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    onChange={(e) => setW1Mobile(e.target.value.replace(/\D/g, ''))}
                     placeholder={getPlaceholder("10-Digit Mobile Number")}
                     className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
                   />
@@ -2783,7 +2800,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                     inputMode="numeric"
                     pattern="[0-9]*"
                     value={w2Mobile}
-                    onChange={(e) => setW2Mobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    onChange={(e) => setW2Mobile(e.target.value.replace(/\D/g, ''))}
                     placeholder={getPlaceholder("10-Digit Mobile Number")}
                     className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
                   />
@@ -2944,7 +2961,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                         inputMode="numeric"
                         pattern="[0-9]*"
                         value={shippingPhone}
-                        onChange={(e) => setShippingPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                        onChange={(e) => setShippingPhone(e.target.value.replace(/\D/g, ''))}
                         placeholder={getPlaceholder("Recipient 10-Digit Mobile")}
                         className="w-full bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
                       />

@@ -32,7 +32,8 @@ import {
   encryptFormDataAndSign,
   saveLightweightMetadata,
   postEncryptedPayloadToWebsiteB,
-  playConfirmationChime
+  playConfirmationChime,
+  generateSequentialOrderId
 } from '../services/encryptionService';
 
 interface UdyamRegistrationWizardProps {
@@ -216,13 +217,14 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
     e.preventDefault();
     const stateCode = 'UP';
     const distCode = '07';
-    const randDigits = Math.floor(1000000 + Math.random() * 9000000);
-    const urn = `UDYAM-${stateCode}-${distCode}-${randDigits}`;
+    const orderId = generateSequentialOrderId();
+    const urn = `UDYAM-${stateCode}-${distCode}-${orderId}`;
     setUdyamRegNumber(urn);
 
     // 1. Zero-Database Client-Side Encryption
     const sensitiveData = {
-      orderId: urn,
+      orderId,
+      urn,
       service: 'MSME Udyam Registration',
       step1,
       step2,
@@ -276,7 +278,21 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
             </p>
           </div>
 
-
+          {/* Zero-Knowledge Background Delivery Status Box (No Redirection) */}
+          <div className="bg-emerald-50/90 border border-emerald-300 rounded-2xl p-4 sm:p-5 text-left space-y-2.5 max-w-md mx-auto">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-emerald-950 flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#15803d]"></span>
+                Silent Background Delivery Complete
+              </span>
+              <span className="text-xs font-bold text-[#15803d] bg-white px-2.5 py-0.5 rounded-full border border-emerald-200">
+                Website A Verified
+              </span>
+            </div>
+            <p className="text-xs text-slate-700 leading-relaxed">
+              Your MSME Udyam registration application was encrypted on this device using AES-256 and transmitted directly to Website B via background API with HMAC authentication. No sensitive data was saved to our database.
+            </p>
+          </div>
 
           <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 max-w-md mx-auto text-left">
             <div className="flex items-center justify-between border-b border-slate-200 pb-2 mb-2">
@@ -427,12 +443,10 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
                 </label>
                 <input
                   type="tel"
-                  inputMode="numeric"
-                  maxLength={10}
                   required
                   placeholder={getPlaceholder('10-digit mobile number')}
                   value={requestData.phone}
-                  onChange={(e) => setRequestData({ ...requestData, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+                  onChange={(e) => setRequestData({ ...requestData, phone: e.target.value })}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
               </div>
@@ -785,12 +799,11 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
                   </label>
                   <input
                     type="tel"
-                    inputMode="numeric"
                     required
                     maxLength={10}
                     placeholder={getPlaceholder('10-digit mobile')}
                     value={step3.officialMobile}
-                    onChange={(e) => setStep3({ ...step3, officialMobile: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+                    onChange={(e) => setStep3({ ...step3, officialMobile: e.target.value })}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>

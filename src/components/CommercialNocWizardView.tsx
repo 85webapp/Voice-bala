@@ -37,9 +37,11 @@ import {
   encryptFormDataAndSign,
   saveLightweightMetadata,
   postEncryptedPayloadToWebsiteB,
-  playConfirmationChime
+  playConfirmationChime,
+  generateSequentialOrderId
 } from '../services/encryptionService';
 import { Lock, ExternalLink } from 'lucide-react';
+import { showToast } from '../services/toastService';
 
 interface CommercialNocWizardViewProps {
   document: LegalDocument;
@@ -327,7 +329,7 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
   const validateAndProceed = (targetNext: StepId) => {
     if (currentPage === '1') {
       if (!isPurposeValid) {
-        alert('Please select at least one Purpose of NOC.');
+        showToast('Please select at least one Purpose of NOC.', 'warning');
         return;
       }
     }
@@ -336,35 +338,35 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
       const isCorp = landlordOwnershipType !== 'Sole Individual' && landlordOwnershipType !== 'Joint Owners';
       if (!isCorp) {
         if (!landlordName.trim() || !landlordPan.trim() || !landlordMobile.trim()) {
-          alert('Please fill mandatory Landlord Name, PAN Card, and Mobile Number.');
+          showToast('Please fill mandatory Landlord Name, PAN Card, and Mobile Number.', 'warning');
           return;
         }
       } else {
         if (!landlordName.trim() || !corpRegAddress.trim() || !corpRepName.trim()) {
-          alert('Please fill Entity Name, Registered Address, and Authorized Representative.');
+          showToast('Please fill Entity Name, Registered Address, and Authorized Representative.', 'warning');
           return;
         }
       }
       if (!clearTitleDeclared) {
-        alert('Please accept the Title & Clear Encumbrance Declaration.');
+        showToast('Please accept the Title & Clear Encumbrance Declaration.', 'warning');
         return;
       }
     }
 
     if (currentPage === '3') {
       if (!proposedBusinessName.trim() || !granteePan.trim() || !granteeSignatoryName.trim()) {
-        alert('Please provide Proposed Business Name, PAN Card, and Signatory details.');
+        showToast('Please provide Proposed Business Name, PAN Card, and Signatory details.', 'warning');
         return;
       }
       if (natureOfOperations === 'Other' && !customNatureOfOperations.trim()) {
-        alert('Please specify the custom Nature of Business Operations.');
+        showToast('Please specify the custom Nature of Business Operations.', 'warning');
         return;
       }
     }
 
     if (currentPage === '3B') {
       if (!premisesAddress.trim()) {
-        alert('Please provide complete Premises Address.');
+        showToast('Please provide complete Premises Address.', 'warning');
         return;
       }
     }
@@ -388,7 +390,7 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
 
     if (deliveryPreference !== 'digital') {
       if (!shippingAddress.trim() || !shippingPincode.trim() || !shippingPhone.trim()) {
-        alert('Please provide complete physical shipping address, pincode, and contact number.');
+        showToast('Please provide complete physical shipping address, pincode, and contact number.', 'warning');
         return;
       }
     }
@@ -397,7 +399,7 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
 
     try {
       const todayISO = new Date().toISOString().split('T')[0];
-      const newOrderId = `CTC-${Math.floor(100000 + Math.random() * 900000)}`;
+      const newOrderId = generateSequentialOrderId();
 
       // 1. Gather sensitive data for zero-database encryption
       const sensitiveData = {
@@ -515,7 +517,21 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
             </div>
           </div>
 
-
+          {/* Zero-Knowledge Background Delivery Status Box (No Redirection) */}
+          <div className="bg-emerald-50/90 border border-emerald-300 rounded-2xl p-4 sm:p-5 text-left space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-emerald-950 flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#15803d]"></span>
+                Silent Background Delivery Complete
+              </span>
+              <span className="text-xs font-bold text-[#15803d] bg-white px-2.5 py-0.5 rounded-full border border-emerald-200">
+                Website A Verified
+              </span>
+            </div>
+            <p className="text-xs text-slate-700 leading-relaxed">
+              Your Commercial NOC data was encrypted on this device using AES-256 and transmitted directly to Website B via background API with HMAC authentication. No sensitive data was saved to our database.
+            </p>
+          </div>
 
           <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200 text-left text-xs sm:text-sm space-y-3">
             <div className="flex justify-between border-b border-slate-200/80 pb-2">
@@ -1173,7 +1189,7 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
                   inputMode="numeric"
                   pattern="[0-9]*"
                   value={landlordMobile}
-                  onChange={(e) => setLandlordMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                  onChange={(e) => setLandlordMobile(e.target.value.replace(/\D/g, ''))}
                   placeholder={showExample ? "9876543210" : ""}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
@@ -1824,7 +1840,7 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
                     type="tel"
                     maxLength={10}
                     value={witness1Mobile}
-                    onChange={(e) => setWitness1Mobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    onChange={(e) => setWitness1Mobile(e.target.value.replace(/\D/g, ''))}
                     placeholder={showExample ? "Mobile Number" : ""}
                     className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
                   />
@@ -1869,7 +1885,7 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
                     type="tel"
                     maxLength={10}
                     value={witness2Mobile}
-                    onChange={(e) => setWitness2Mobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    onChange={(e) => setWitness2Mobile(e.target.value.replace(/\D/g, ''))}
                     placeholder={showExample ? "Mobile Number" : ""}
                     className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
                   />
@@ -1977,11 +1993,9 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
                     />
                     <input
                       type="tel"
-                      inputMode="numeric"
-                      maxLength={10}
                       required
                       value={shippingPhone}
-                      onChange={(e) => setShippingPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                      onChange={(e) => setShippingPhone(e.target.value)}
                       placeholder={showExample ? "Contact Phone *" : ""}
                       className="bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
                     />

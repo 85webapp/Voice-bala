@@ -31,7 +31,8 @@ import {
   encryptFormDataAndSign,
   saveLightweightMetadata,
   postEncryptedPayloadToWebsiteB,
-  playConfirmationChime
+  playConfirmationChime,
+  generateSequentialOrderId
 } from '../services/encryptionService';
 
 interface GstRegistrationWizardProps {
@@ -151,12 +152,12 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
 
   const handleFinalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const randomArn = `AA${Math.floor(100000000000 + Math.random() * 900000000000)}Z`;
-    setArnNumber(randomArn);
+    const orderId = generateSequentialOrderId();
+    setArnNumber(orderId);
 
     // 1. Zero-Database Client-Side Encryption
     const sensitiveData = {
-      orderId: randomArn,
+      orderId,
       service: 'GST Registration',
       step1,
       step2: partners,
@@ -173,7 +174,7 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
       formName: 'GST Registration',
       timestamp: new Date().toISOString(),
       totalPrice: '0',
-      orderId: randomArn
+      orderId
     };
     await saveLightweightMetadata(metadata);
 
@@ -243,7 +244,21 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
             </p>
           </div>
 
-
+          {/* Zero-Knowledge Background Delivery Status Box (No Redirection) */}
+          <div className="bg-emerald-50/90 border border-emerald-300 rounded-2xl p-4 sm:p-5 text-left space-y-2.5 max-w-md mx-auto">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-emerald-950 flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#15803d]"></span>
+                Silent Background Delivery Complete
+              </span>
+              <span className="text-xs font-bold text-[#15803d] bg-white px-2.5 py-0.5 rounded-full border border-emerald-200">
+                Website A Verified
+              </span>
+            </div>
+            <p className="text-xs text-slate-700 leading-relaxed">
+              Your GST registration application was encrypted on this device using AES-256 and transmitted directly to Website B via background API with HMAC authentication. No sensitive data was saved to our database.
+            </p>
+          </div>
 
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 max-w-sm mx-auto">
             <div className="text-xs uppercase tracking-wider font-semibold text-slate-500">
@@ -378,12 +393,10 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
                 </label>
                 <input
                   type="tel"
-                  inputMode="numeric"
-                  maxLength={10}
                   required
                   placeholder={getPlaceholder('10-digit mobile number')}
                   value={requestData.phone}
-                  onChange={(e) => setRequestData({ ...requestData, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+                  onChange={(e) => setRequestData({ ...requestData, phone: e.target.value })}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
               </div>
@@ -541,12 +554,11 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
                   </label>
                   <input
                     type="tel"
-                    inputMode="numeric"
                     required
                     maxLength={10}
                     placeholder={getPlaceholder('10-digit mobile')}
                     value={step1.phone}
-                    onChange={(e) => setStep1({ ...step1, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+                    onChange={(e) => setStep1({ ...step1, phone: e.target.value })}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
@@ -789,13 +801,12 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
                           <label className="block text-[11px] font-bold text-slate-700 mb-1">Mobile</label>
                           <input
                             type="tel"
-                            inputMode="numeric"
                             maxLength={10}
                             placeholder={getPlaceholder('Mobile')}
                             value={partner.mobile}
                             onChange={(e) => {
                               const updated = [...partners];
-                              updated[index].mobile = e.target.value.replace(/\D/g, '').slice(0, 10);
+                              updated[index].mobile = e.target.value;
                               setPartners(updated);
                             }}
                             className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"

@@ -1,22 +1,58 @@
 import CryptoJS from 'crypto-js';
 
-// 1. Public Encryption Key (Configured via .env / Netlify / Vercel with fallback)
+// 1. Public Encryption Key (Configured via Vercel / Netlify / Vite with fallback)
 export const PUBLIC_ENCRYPTION_KEY =
   (typeof import.meta !== 'undefined' &&
-    (import.meta.env?.VITE_PUBLIC_ENCRYPTION_KEY || import.meta.env?.VITE_ENCRYPTION_SECRET)) ||
+    (import.meta.env?.PUBLIC_KEY ||
+      import.meta.env?.VITE_PUBLIC_ENCRYPTION_KEY ||
+      import.meta.env?.VITE_ENCRYPTION_SECRET)) ||
+  (typeof process !== 'undefined' && process.env && (process.env.PUBLIC_KEY || process.env.VITE_PUBLIC_ENCRYPTION_KEY)) ||
   'ctc-legal-zero-db-aes-256-public-key-2026';
 
-// 2. HMAC Secret for digital signature & authenticity
+// 2. HMAC Secret for digital signature & authenticity (WEBSITE_SECRET_KEY)
 export const SUBMISSION_HMAC_SECRET =
   (typeof import.meta !== 'undefined' &&
-    (import.meta.env?.VITE_SUBMISSION_HMAC_SECRET || import.meta.env?.VITE_HMAC_SECRET)) ||
+    (import.meta.env?.WEBSITE_SECRET_KEY ||
+      import.meta.env?.VITE_SUBMISSION_HMAC_SECRET ||
+      import.meta.env?.VITE_HMAC_SECRET)) ||
+  (typeof process !== 'undefined' && process.env && (process.env.WEBSITE_SECRET_KEY || process.env.VITE_SUBMISSION_HMAC_SECRET)) ||
   'ctc-legal-hmac-sha256-authenticity-key-2026';
 
-// 3. Website B Backend API Endpoint
+// 3. Website B Backend API Endpoint (NEXT_PUBLIC_WEBSITE_B_URL)
 export const WEBSITE_B_API_ENDPOINT =
   (typeof import.meta !== 'undefined' &&
-    (import.meta.env?.VITE_WEBSITE_B_URL || import.meta.env?.VITE_WEBSITE_B_API_URL)) ||
+    (import.meta.env?.NEXT_PUBLIC_WEBSITE_B_URL ||
+      import.meta.env?.VITE_WEBSITE_B_URL ||
+      import.meta.env?.VITE_WEBSITE_B_API_URL)) ||
+  (typeof process !== 'undefined' && process.env && (process.env.NEXT_PUBLIC_WEBSITE_B_URL || process.env.VITE_WEBSITE_B_URL)) ||
   'https://your-backend.vercel.app/api/orders/receive';
+
+/**
+ * Sequential Order ID Generator:
+ * Generates cot_har_1, cot_har_2, cot_har_3... strictly incrementing and persisted.
+ */
+export function generateSequentialOrderId(): string {
+  try {
+    const STORAGE_KEY = 'cot_har_order_seq';
+    let currentSeq = 0;
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const stored = window.localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const parsed = parseInt(stored, 10);
+        if (!isNaN(parsed) && parsed >= 0) {
+          currentSeq = parsed;
+        }
+      }
+      currentSeq += 1;
+      window.localStorage.setItem(STORAGE_KEY, currentSeq.toString());
+    } else {
+      currentSeq = 1;
+    }
+    return `cot_har_${currentSeq}`;
+  } catch {
+    return `cot_har_${Date.now() % 10000}`;
+  }
+}
 
 export interface LightweightMetadata {
   firstPartyName: string;
@@ -35,7 +71,7 @@ export interface EncryptedSubmissionResult {
 
 /**
  * Encrypts all sensitive form data on the client side using AES-256 before any server request.
- * Uses VITE_PUBLIC_ENCRYPTION_KEY for locking and VITE_SUBMISSION_HMAC_SECRET for authenticity.
+ * Uses PUBLIC_KEY for locking and WEBSITE_SECRET_KEY for authenticity.
  */
 export function encryptFormDataAndSign(formData: Record<string, any>): EncryptedSubmissionResult {
   const jsonString = JSON.stringify(formData);
@@ -48,7 +84,7 @@ export function encryptFormDataAndSign(formData: Record<string, any>): Encrypted
 
   const timestamp = new Date().toISOString();
 
-  // 3. Target Website B URL with payload and signature parameters
+  // Reference URL for backend verification (browser stays on Website A!)
   const baseUrl = WEBSITE_B_API_ENDPOINT.includes('/api/')
     ? WEBSITE_B_API_ENDPOINT.split('/api/')[0]
     : WEBSITE_B_API_ENDPOINT;
@@ -132,7 +168,9 @@ export async function postEncryptedPayloadToWebsiteB(
       headers: {
         'Content-Type': 'application/json',
         'X-Digital-Signature': result.signature,
-        'X-Encrypted-Timestamp': result.timestamp
+        'X-Encrypted-Timestamp': result.timestamp,
+        'x-website-secret-key': SUBMISSION_HMAC_SECRET,
+        'x-order-id': metadata.orderId || ''
       },
       body: postBody,
       mode: 'cors'
@@ -151,7 +189,9 @@ export async function postEncryptedPayloadToWebsiteB(
       headers: {
         'Content-Type': 'application/json',
         'X-Digital-Signature': result.signature,
-        'X-Encrypted-Timestamp': result.timestamp
+        'X-Encrypted-Timestamp': result.timestamp,
+        'x-website-secret-key': SUBMISSION_HMAC_SECRET,
+        'x-order-id': metadata.orderId || ''
       },
       body: postBody
     });

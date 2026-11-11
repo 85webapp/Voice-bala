@@ -45,9 +45,11 @@ import {
   encryptFormDataAndSign,
   saveLightweightMetadata,
   postEncryptedPayloadToWebsiteB,
-  playConfirmationChime
+  playConfirmationChime,
+  generateSequentialOrderId
 } from '../services/encryptionService';
 import { ExternalLink, Lock } from 'lucide-react';
+import { showToast } from '../services/toastService';
 
 interface DocumentWizardViewProps {
   document: LegalDocument;
@@ -372,7 +374,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
   const validatePage = (pageNumber: number): boolean => {
     if (pageNumber === 1) {
       if (!selectedDocTitle.trim() || !selectedState.trim()) {
-        alert('Please confirm document type and state.');
+        showToast('Please confirm document type and state.', 'warning');
         return false;
       }
       return true;
@@ -380,27 +382,27 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
 
     if (pageNumber === 2) {
       if (!firstPartyName.trim()) {
-        alert('Please enter Full Legal Name for First Party.');
+        showToast('Please enter Full Legal Name for First Party.', 'warning');
         return false;
       }
       if (!firstPartyAddress.trim()) {
-        alert('Please enter Address for First Party.');
+        showToast('Please enter Address for First Party.', 'warning');
         return false;
       }
       if (!firstPartyMobile.trim()) {
-        alert('Please enter Mobile Number (Aadhaar linked) for First Party.');
+        showToast('Please enter Mobile Number (Aadhaar linked) for First Party.', 'warning');
         return false;
       }
       if (docIdRule.pan === 'mandatory') {
         if (!firstPartyPan.trim() || firstPartyPan.trim().length !== 10) {
-          alert(`PAN Card is Mandatory for ${selectedDocTitle}. Please enter a valid 10-character PAN.`);
+          showToast(`PAN Card is Mandatory for ${selectedDocTitle}. Please enter a valid 10-character PAN.`, 'warning');
           return false;
         }
       }
       if (docIdRule.aadhaar === 'mandatory') {
         const cleanAadhaar = firstPartyAadhaarLast4.replace(/\D/g, '');
         if (!cleanAadhaar || cleanAadhaar.length < 4) {
-          alert(`Aadhaar Card is Mandatory for ${selectedDocTitle}. Please enter a valid Aadhaar number.`);
+          showToast(`Aadhaar Card is Mandatory for ${selectedDocTitle}. Please enter a valid Aadhaar number.`, 'warning');
           return false;
         }
       }
@@ -410,27 +412,27 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
     if (pageNumber === 3) {
       if (!isUnilateral) {
         if (!secondPartyName.trim()) {
-          alert('Please enter Full Legal Name for Second Party.');
+          showToast('Please enter Full Legal Name for Second Party.', 'warning');
           return false;
         }
         if (!secondPartyAddress.trim()) {
-          alert('Please enter Address for Second Party.');
+          showToast('Please enter Address for Second Party.', 'warning');
           return false;
         }
         if (!secondPartyMobile.trim()) {
-          alert('Please enter Mobile Number for Second Party.');
+          showToast('Please enter Mobile Number for Second Party.', 'warning');
           return false;
         }
         if (docIdRule.pan === 'mandatory') {
           if (!secondPartyPan.trim() || secondPartyPan.trim().length !== 10) {
-            alert(`PAN Card is Mandatory for ${selectedDocTitle}. Please enter Second Party 10-character PAN.`);
+            showToast(`PAN Card is Mandatory for ${selectedDocTitle}. Please enter Second Party 10-character PAN.`, 'warning');
             return false;
           }
         }
         if (docIdRule.aadhaar === 'mandatory') {
           const cleanAadhaar = secondPartyAadhaarLast4.replace(/\D/g, '');
           if (!cleanAadhaar || cleanAadhaar.length < 4) {
-            alert(`Aadhaar Card is Mandatory for ${selectedDocTitle}. Please enter Second Party Aadhaar number.`);
+            showToast(`Aadhaar Card is Mandatory for ${selectedDocTitle}. Please enter Second Party Aadhaar number.`, 'warning');
             return false;
           }
         }
@@ -471,25 +473,25 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
     e.preventDefault();
 
     if (!w1Name.trim() || !w1Mobile.trim()) {
-      alert('Please fill at least Witness 1 Name and Mobile Number.');
+      showToast('Please fill at least Witness 1 Name and Mobile Number.', 'warning');
       return;
     }
 
     if (deliveryType === 'physical') {
       if (!shippingAddress.trim() || !shippingPincode.trim() || !shippingPhone.trim()) {
-        alert('Please enter complete Physical Courier Shipping Address, Pincode, and Contact Number.');
+        showToast('Please enter complete Physical Courier Shipping Address, Pincode, and Contact Number.', 'warning');
         return;
       }
     }
 
     // Verify all 5 declarations
     if (declarations.some((val) => !val)) {
-      alert('कृपया आगे बढ़ने के लिए सभी 5 कानूनी घोषणाओं (Declarations) को स्वीकार करें।');
+      showToast('कृपया आगे बढ़ने के लिए सभी 5 कानूनी घोषणाओं (Declarations) को स्वीकार करें।', 'warning');
       return;
     }
 
     if (!intermediaryDisclaimerAccepted) {
-      alert('Please accept the Cotex Compliance intermediary verification checkbox before proceeding.');
+      showToast('Please accept the Cotex Compliance intermediary verification checkbox before proceeding.', 'warning');
       return;
     }
 
@@ -497,7 +499,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
 
     try {
       const todayISO = new Date().toISOString().split('T')[0];
-      const newOrderId = `CTC-${Math.floor(100000 + Math.random() * 900000)}`;
+      const newOrderId = generateSequentialOrderId();
 
       // 1. Gather complete sensitive details for zero-database encryption
       const sensitivePayload = {
@@ -659,7 +661,21 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
             </div>
           </div>
 
-
+          {/* Zero-Knowledge Background Delivery Status Box (No Redirection) */}
+          <div className="bg-emerald-50/90 border border-emerald-300 rounded-2xl p-4 sm:p-5 text-left space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-emerald-950 flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#15803d]"></span>
+                Silent Background Delivery Complete
+              </span>
+              <span className="text-xs font-bold text-[#15803d] bg-white px-2.5 py-0.5 rounded-full border border-emerald-200">
+                Website A Verified
+              </span>
+            </div>
+            <p className="text-xs text-slate-700 leading-relaxed">
+              Your document data was encrypted on this device using AES-256 and transmitted directly to Website B via background API with HMAC authentication. No sensitive data was saved to our database.
+            </p>
+          </div>
 
           {/* Details Card */}
           <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200 text-left text-xs sm:text-sm space-y-3">
@@ -1106,11 +1122,9 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                 </label>
                 <input
                   type="tel"
-                  inputMode="numeric"
-                  maxLength={10}
                   required
                   value={firstPartyMobile}
-                  onChange={(e) => setFirstPartyMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                  onChange={(e) => setFirstPartyMobile(e.target.value)}
                   placeholder={getPlaceholder('+91 98765 43210')}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
@@ -1306,11 +1320,9 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                 </label>
                 <input
                   type="tel"
-                  inputMode="numeric"
-                  maxLength={10}
                   required
                   value={secondPartyMobile}
-                  onChange={(e) => setSecondPartyMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                  onChange={(e) => setSecondPartyMobile(e.target.value)}
                   placeholder={getPlaceholder('+91 98111 22334')}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
@@ -1579,11 +1591,9 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                   </label>
                   <input
                     type="tel"
-                    inputMode="numeric"
-                    maxLength={10}
                     required
                     value={w1Mobile}
-                    onChange={(e) => setW1Mobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    onChange={(e) => setW1Mobile(e.target.value)}
                     placeholder={getPlaceholder('+91 98999 11223')}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
@@ -1663,10 +1673,8 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                   </label>
                   <input
                     type="tel"
-                    inputMode="numeric"
-                    maxLength={10}
                     value={w2Mobile}
-                    onChange={(e) => setW2Mobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    onChange={(e) => setW2Mobile(e.target.value)}
                     placeholder={getPlaceholder('+91 97111 88990')}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
@@ -1799,11 +1807,9 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                         </label>
                         <input
                           type="tel"
-                          inputMode="numeric"
-                          maxLength={10}
                           required={deliveryType === 'physical'}
                           value={shippingPhone}
-                          onChange={(e) => setShippingPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                          onChange={(e) => setShippingPhone(e.target.value)}
                           placeholder={getPlaceholder('+91 98765 43210')}
                           className="w-full bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-600"
                         />

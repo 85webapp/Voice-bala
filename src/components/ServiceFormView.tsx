@@ -25,7 +25,8 @@ import {
   encryptFormDataAndSign,
   saveLightweightMetadata,
   postEncryptedPayloadToWebsiteB,
-  playConfirmationChime
+  playConfirmationChime,
+  generateSequentialOrderId
 } from '../services/encryptionService';
 
 interface ServiceFormViewProps {
@@ -135,7 +136,7 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const ref = `CTC-${Math.floor(100000 + Math.random() * 900000)}`;
+    const ref = generateSequentialOrderId();
     setReferenceId(ref);
 
     // 1. Zero-Database Client-Side Encryption
@@ -289,8 +290,21 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
             </div>
           </div>
 
-          {/* Website B Automatic Redirection Card */}
-
+          {/* Zero-Knowledge Background Delivery Status Box (No Redirection) */}
+          <div className="bg-emerald-50/90 border border-emerald-300 rounded-2xl p-4 sm:p-5 text-left space-y-2.5 max-w-lg mx-auto">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-emerald-950 flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#15803d]"></span>
+                Silent Background Delivery Complete
+              </span>
+              <span className="text-xs font-bold text-[#15803d] bg-white px-2.5 py-0.5 rounded-full border border-emerald-200">
+                Website A Verified
+              </span>
+            </div>
+            <p className="text-xs text-slate-700 leading-relaxed">
+              Your service application was encrypted on this device using AES-256 and transmitted directly to Website B via background API with HMAC authentication. No sensitive data was saved to our database.
+            </p>
+          </div>
 
           <p className="text-sm text-slate-600 max-w-md mx-auto">
             Our compliance executive is reviewing your request for <strong className="text-slate-900">{selectedTitle}</strong> and will call you on <strong className="text-slate-900">+91 {phone}</strong> within 1 hour.
@@ -383,7 +397,7 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
                       pattern="[6-9][0-9]{9}"
                       placeholder={getPlaceholder('9876543210')}
                       value={phone}
-                      onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                      onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
                       className="w-full bg-white border border-slate-300 rounded-xl pl-12 pr-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                     />
                   </div>
@@ -565,7 +579,7 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
                       pattern="[6-9][0-9]{9}"
                       placeholder={getPlaceholder('9876543210')}
                       value={phone}
-                      onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                      onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
                       className="w-full bg-white border border-slate-300 rounded-xl pl-12 pr-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                     />
                   </div>
@@ -861,7 +875,7 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
                       pattern="[6-9][0-9]{9}"
                       placeholder={getPlaceholder('9876543210')}
                       value={phone}
-                      onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                      onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
                       className="w-full bg-white border border-slate-300 rounded-xl pl-12 pr-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                     />
                   </div>
@@ -958,7 +972,7 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
                       pattern="[6-9][0-9]{9}"
                       placeholder={getPlaceholder('9876543210')}
                       value={phone}
-                      onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                      onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
                       className="w-full bg-white border border-slate-300 rounded-xl pl-12 pr-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                     />
                   </div>

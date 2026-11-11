@@ -13,6 +13,7 @@ import { LegalDocument, OrderItem } from '../types';
 import { STAMP_PAPER_VALUES } from '../data/documentsData';
 import { INDIAN_STATES_LIST } from '../data/indianCities';
 import { useExampleDetails } from '../hooks/useExampleDetails';
+import { generateSequentialOrderId } from '../services/encryptionService';
 
 interface DocumentOrderModalProps {
   document: LegalDocument;
@@ -54,7 +55,7 @@ export const DocumentOrderModal: React.FC<DocumentOrderModalProps> = ({
 
     setTimeout(() => {
       const todayISO = new Date().toISOString().split('T')[0];
-      const newOrderId = `CTC-${Math.floor(100000 + Math.random() * 900000)}`;
+      const newOrderId = generateSequentialOrderId();
       const newOrder: OrderItem = {
         orderId: newOrderId,
         docTitle: document.title,

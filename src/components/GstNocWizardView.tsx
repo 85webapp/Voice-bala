@@ -39,7 +39,8 @@ import {
   encryptFormDataAndSign,
   saveLightweightMetadata,
   postEncryptedPayloadToWebsiteB,
-  playConfirmationChime
+  playConfirmationChime,
+  generateSequentialOrderId
 } from '../services/encryptionService';
 import { Lock, ExternalLink } from 'lucide-react';
 
@@ -347,7 +348,7 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
 
     try {
       const todayISO = new Date().toISOString().split('T')[0];
-      const newOrderId = `CTC-${Math.floor(100000 + Math.random() * 900000)}`;
+      const newOrderId = generateSequentialOrderId();
 
       // 1. Gather sensitive data for zero-database encryption
       const sensitiveData = {
@@ -472,7 +473,21 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
             </div>
           </div>
 
-
+          {/* Zero-Knowledge Background Delivery Status Box (No Redirection) */}
+          <div className="bg-emerald-50/90 border border-emerald-300 rounded-2xl p-4 sm:p-5 text-left space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-emerald-950 flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#15803d]"></span>
+                Silent Background Delivery Complete
+              </span>
+              <span className="text-xs font-bold text-[#15803d] bg-white px-2.5 py-0.5 rounded-full border border-emerald-200">
+                Website A Verified
+              </span>
+            </div>
+            <p className="text-xs text-slate-700 leading-relaxed">
+              Your GST NOC details were encrypted on this device using AES-256 and transmitted directly to Website B via background API with HMAC authentication. No sensitive data was saved to our database.
+            </p>
+          </div>
 
           <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200 text-left text-xs sm:text-sm space-y-3">
             <div className="flex justify-between border-b border-slate-200/80 pb-2">
@@ -1024,11 +1039,10 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
                 </div>
                 <input
                   type="tel"
-                  inputMode="numeric"
                   required
                   maxLength={10}
                   value={landlordMobile}
-                  onChange={(e) => setLandlordMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                  onChange={(e) => setLandlordMobile(e.target.value.replace(/\D/g, ''))}
                   placeholder={showExample ? "9876543210" : ""}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
@@ -1640,11 +1654,10 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
                   />
                   <input
                     type="tel"
-                    inputMode="numeric"
                     maxLength={10}
                     required
                     value={shippingPhone}
-                    onChange={(e) => setShippingPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    onChange={(e) => setShippingPhone(e.target.value.replace(/\D/g, ''))}
                     placeholder={showExample ? "Courier Contact Mobile Number" : ""}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono"
                   />

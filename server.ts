@@ -386,39 +386,40 @@ app.post('/api/gemini/translate-ui', async (req, res) => {
 // In-memory cache for audio buffers to avoid re-fetching from Google
 const ttsAudioCache = new Map<string, Buffer>();
 
-function splitTtsText(str: string, maxLength = 140): string[] {
-  const normalized = str.replace(/\s+/g, ' ').trim();
+function splitTtsText(str: string, maxLength = 200): string[] {
+  const normalized = str
+    .replace(/['"“”‘’]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
   if (normalized.length <= maxLength) return [normalized];
 
   const chunks: string[] = [];
-  const parts = normalized.split(/([।!?.,;:—]+)/);
+  // Split on sentence terminators: Hindi purna viram (।), period, exclamation, question mark
+  const sentences = normalized.split(/(?<=[।!?.\n])\s+/);
   let cur = '';
 
-  for (let i = 0; i < parts.length; i += 2) {
-    const textPart = parts[i] || '';
-    const punctPart = parts[i + 1] || '';
-    const segment = textPart + punctPart;
+  for (const sentence of sentences) {
+    if (!sentence.trim()) continue;
 
-    if (!segment.trim()) continue;
-
-    if ((cur + segment).length <= maxLength) {
-      cur += segment;
+    if ((cur + ' ' + sentence).trim().length <= maxLength) {
+      cur = cur ? `${cur} ${sentence}` : sentence;
     } else {
       if (cur.trim()) chunks.push(cur.trim());
-      if (segment.length > maxLength) {
-        const words = segment.split(' ');
-        let wordBuf = '';
-        for (const w of words) {
-          if ((wordBuf + ' ' + w).length <= maxLength) {
-            wordBuf = wordBuf ? `${wordBuf} ${w}` : w;
+      if (sentence.length > maxLength) {
+        // Fallback split by commas or words if single sentence exceeds 200 chars
+        const subParts = sentence.split(/(?<=[,;])\s+/);
+        let subCur = '';
+        for (const part of subParts) {
+          if ((subCur + ' ' + part).trim().length <= maxLength) {
+            subCur = subCur ? `${subCur} ${part}` : part;
           } else {
-            if (wordBuf.trim()) chunks.push(wordBuf.trim());
-            wordBuf = w;
+            if (subCur.trim()) chunks.push(subCur.trim());
+            subCur = part;
           }
         }
-        cur = wordBuf;
+        cur = subCur;
       } else {
-        cur = segment;
+        cur = sentence;
       }
     }
   }
@@ -451,28 +452,27 @@ app.get('/api/tts-audio', async (req, res) => {
       return res.end(cachedBuffer);
     }
 
-    const chunks = splitTtsText(trimmedText, 140);
-    const audioBuffers: Buffer[] = [];
+    const chunks = splitTtsText(trimmedText, 200);
 
-    for (const chunk of chunks) {
-      const googleTTSUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(chunk)}&tl=${encodeURIComponent(tl)}&client=tw-ob`;
-      const upstream = await fetch(googleTTSUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Referer': 'https://translate.google.com/'
+    // Fetch all chunks concurrently in parallel for zero buffering latency
+    const audioResponses = await Promise.all(
+      chunks.map(async (chunk) => {
+        const googleTTSUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(chunk)}&tl=${encodeURIComponent(tl)}&client=tw-ob`;
+        const upstream = await fetch(googleTTSUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Referer': 'https://translate.google.com/'
+          }
+        });
+        if (!upstream.ok) {
+          throw new Error(`Upstream TTS failed: ${upstream.status}`);
         }
-      });
+        const ab = await upstream.arrayBuffer();
+        return Buffer.from(ab);
+      })
+    );
 
-      if (!upstream.ok) {
-        console.error(`[TTS Proxy] Upstream returned status ${upstream.status} for chunk: "${chunk}"`);
-        return res.status(upstream.status).send(`TTS upstream error (${upstream.status})`);
-      }
-
-      const ab = await upstream.arrayBuffer();
-      audioBuffers.push(Buffer.from(ab));
-    }
-
-    const finalBuffer = Buffer.concat(audioBuffers);
+    const finalBuffer = Buffer.concat(audioResponses);
 
     if (ttsAudioCache.size > 200) {
       const firstKey = ttsAudioCache.keys().next().value;

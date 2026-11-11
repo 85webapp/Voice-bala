@@ -25,6 +25,7 @@ import { LegalDocument, OrderItem, PolicySection, UserProfile } from './types';
 import { useDisplayLanguage } from './hooks/useDisplayLanguage';
 import { playServiceVoice } from './services/googleVoiceGuidance';
 import { CategoryBanner } from './components/CategoryBanner';
+import { ToastContainer } from './components/ToastContainer';
 
 const DocumentWizardView = lazy(() => import('./components/DocumentWizardView').then((module) => ({ default: module.DocumentWizardView })));
 const RentLeaseWizardView = lazy(() => import('./components/RentLeaseWizardView').then((module) => ({ default: module.RentLeaseWizardView })));
@@ -173,6 +174,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-900 flex flex-col font-['Plus_Jakarta_Sans',sans-serif] selection:bg-blue-600 selection:text-white pb-16">
+      <ToastContainer />
       {/* 1. Pure White Header */}
       <Header
         onOpenProfile={() => setIsProfileOpen(true)}

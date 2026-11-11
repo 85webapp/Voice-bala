@@ -547,12 +547,70 @@ export function playServiceVoice(serviceKey: string) {
 
   // Sanitize text for crisp, fluid speech without awkward pauses
   const textToSpeak = rawText
-    .replace(/["'“”]/g, '')
+    .replace(/['"“”‘’]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 
+  if (typeof window === 'undefined') return;
+
+  // Try HTML5 Audio stream via /api/tts-audio first for rich, natural Google Voice at 1.3x speed
+  try {
+    const audioUrl = `/api/tts-audio?tl=${encodeURIComponent(userLang)}&q=${encodeURIComponent(textToSpeak)}`;
+    const audio = new Audio(audioUrl);
+    currentAudioPlayer = audio;
+    audio.defaultPlaybackRate = 1.3;
+    audio.playbackRate = 1.3;
+    (audio as any).preservesPitch = true;
+
+    audio.onloadedmetadata = () => {
+      audio.playbackRate = 1.3;
+    };
+
+    audio.onplay = () => {
+      if (thisSession !== currentPlaySessionId) {
+        audio.pause();
+        return;
+      }
+      audio.playbackRate = 1.3;
+      currentPlayingServiceKey = canonicalKey;
+      notifyListeners();
+      console.log('🔊 [VoiceGuidance] HTML5 TTS Stream Playing at 1.3x for:', canonicalKey, '| Lang:', userLang);
+    };
+
+    audio.onended = () => {
+      if (thisSession !== currentPlaySessionId) return;
+      console.log('✅ [VoiceGuidance] HTML5 TTS Stream Ended naturally for:', canonicalKey);
+      stopServiceVoice();
+    };
+
+    audio.onerror = () => {
+      console.warn('[VoiceGuidance] HTML5 Audio streaming failed, trying SpeechSynthesis fallback...');
+      fallbackToSpeechSynthesis(textToSpeak, userLang, canonicalKey, thisSession);
+    };
+
+    const playPromise = audio.play();
+    if (playPromise !== undefined) {
+      playPromise
+        .then(() => {
+          audio.playbackRate = 1.3;
+          currentPlayingServiceKey = canonicalKey;
+          notifyListeners();
+        })
+        .catch((playErr) => {
+          console.warn('[VoiceGuidance] Audio play interrupted/blocked, falling back to speech synthesis:', playErr);
+          fallbackToSpeechSynthesis(textToSpeak, userLang, canonicalKey, thisSession);
+        });
+    }
+  } catch (audioInitErr) {
+    fallbackToSpeechSynthesis(textToSpeak, userLang, canonicalKey, thisSession);
+  }
+}
+
+/**
+ * Fallback to browser SpeechSynthesis when Audio element is unavailable
+ */
+function fallbackToSpeechSynthesis(textToSpeak: string, userLang: VoiceLanguageCode, canonicalKey: string, thisSession: number) {
   if (typeof window === 'undefined' || !('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined') {
-    console.warn('[VoiceGuidance] window.speechSynthesis not supported on this browser.');
     return;
   }
 
@@ -562,8 +620,6 @@ export function playServiceVoice(serviceKey: string) {
     }
 
     const { voice, lang } = resolveVoiceAndLanguage(userLang);
-
-    // 1. GARBAGE COLLECTION FIX: Attach to window.currentUtterance so the browser GC never destroys it
     const utterance = new SpeechSynthesisUtterance(textToSpeak);
     currentUtterance = utterance;
     if (typeof window !== 'undefined') {
@@ -571,57 +627,28 @@ export function playServiceVoice(serviceKey: string) {
     }
 
     utterance.lang = lang;
-    utterance.rate = 1.5;
-    utterance.pitch = 1.02;
+    utterance.rate = 1.3;
+    utterance.pitch = 1.0;
 
     if (voice) {
       utterance.voice = voice;
-      console.log('[VoiceGuidance] Assigned Voice:', voice.name, `(${voice.lang})`);
-    } else {
-      console.log('[VoiceGuidance] Using default browser voice for lang:', lang);
     }
 
-    // 3. EVENT LISTENERS with detailed console logs
     utterance.onstart = () => {
       if (thisSession !== currentPlaySessionId) {
-        if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-          try { window.speechSynthesis.cancel(); } catch {}
-        }
+        try { window.speechSynthesis.cancel(); } catch {}
         return;
       }
-      console.log('🔊 [VoiceGuidance] SPEECH ONSTART: Started speaking successfully for:', canonicalKey, '| Lang:', utterance.lang, '| Rate:', utterance.rate);
       currentPlayingServiceKey = canonicalKey;
       notifyListeners();
-
-      // Chrome/Safari speech timeout workaround (prevents mid-sentence cutoff)
-      if (speechHeartbeatTimer) clearInterval(speechHeartbeatTimer);
-      speechHeartbeatTimer = setInterval(() => {
-        if (thisSession !== currentPlaySessionId) {
-          if (speechHeartbeatTimer) {
-            clearInterval(speechHeartbeatTimer);
-            speechHeartbeatTimer = null;
-          }
-          return;
-        }
-        if (typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis.speaking) {
-          window.speechSynthesis.resume();
-        } else {
-          if (speechHeartbeatTimer) {
-            clearInterval(speechHeartbeatTimer);
-            speechHeartbeatTimer = null;
-          }
-        }
-      }, 3000);
     };
 
     utterance.onend = () => {
       if (thisSession !== currentPlaySessionId) return;
-      console.log('✅ [VoiceGuidance] SPEECH ONEND: Finished speaking naturally for:', canonicalKey);
       stopServiceVoice();
     };
 
     utterance.onerror = (e) => {
-      // Standard browser interruption/cancellation when audio is stopped, pre-empted or page changes
       if (e.error === 'interrupted' || e.error === 'canceled') {
         if (thisSession === currentPlaySessionId) {
           currentPlayingServiceKey = null;
@@ -629,27 +656,13 @@ export function playServiceVoice(serviceKey: string) {
         }
         return;
       }
-      if (thisSession !== currentPlaySessionId) return;
       stopServiceVoice();
     };
 
-    // 2. IMMEDIATE USER GESTURE EXECUTION: Speak instantly upon click without setTimeout delay
-    try {
-      if (window.speechSynthesis.paused) {
-        window.speechSynthesis.resume();
-      }
-      window.speechSynthesis.speak(utterance);
-      currentPlayingServiceKey = canonicalKey;
-      notifyListeners();
-
-      // Ensure speech engine does not remain in paused state
-      if (window.speechSynthesis.paused) {
-        window.speechSynthesis.resume();
-      }
-    } catch (speakErr) {
-      stopServiceVoice();
-    }
-  } catch (err) {
+    window.speechSynthesis.speak(utterance);
+    currentPlayingServiceKey = canonicalKey;
+    notifyListeners();
+  } catch {
     stopServiceVoice();
   }
 }
