@@ -40,9 +40,12 @@ import {
   saveLightweightMetadata,
   postEncryptedPayloadToWebsiteB,
   playConfirmationChime,
-  generateSequentialOrderId
+  generateSequentialOrderId,
+  ServerBSyncResult
 } from '../services/encryptionService';
 import { Lock, ExternalLink } from 'lucide-react';
+import { showToast } from '../services/toastService';
+import { ServerBSyncStatusCard } from './ServerBSyncStatusCard';
 
 interface GstNocWizardViewProps {
   document: LegalDocument;
@@ -249,6 +252,20 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
     signature: string;
     websiteBUrl: string;
   } | null>(null);
+  const [serverBSyncResult, setServerBSyncResult] = useState<ServerBSyncResult | null>(null);
+  const [isRetryingSync, setIsRetryingSync] = useState(false);
+  const [cachedEncPayload, setCachedEncPayload] = useState<{ result: any; metadata: any } | null>(null);
+
+  const handleRetryServerBSync = async () => {
+    if (!cachedEncPayload) return;
+    setIsRetryingSync(true);
+    try {
+      const retryRes = await postEncryptedPayloadToWebsiteB(cachedEncPayload.result, cachedEncPayload.metadata);
+      setServerBSyncResult(retryRes);
+    } finally {
+      setIsRetryingSync(false);
+    }
+  };
 
   // Name Matching Check
   const nameMismatchDetected = useMemo(() => {
@@ -288,19 +305,19 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
   const validateAndProceed = (targetNext: StepId) => {
     if (currentPage === '1') {
       if (!pincode.trim() || pincode.length !== 6) {
-        alert('Please enter a valid 6-digit PIN code.');
+        showToast('Please enter a valid 6-digit PIN code.', 'warning');
         return;
       }
     }
 
     if (currentPage === '2') {
       if (!landlordName.trim() || !landlordPan.trim() || !landlordMobile.trim()) {
-        alert('Please provide Landlord Name, PAN, and Mobile number.');
+        showToast('Please provide Landlord Name, PAN, and Mobile number.', 'warning');
         return;
       }
       if (ownershipStatus === 'Authorized Director / Partner / Trustee') {
         if (!corpCompanyName.trim() || !corpCin.trim()) {
-          alert('Please enter Company Name and CIN.');
+          showToast('Please enter Company Name and CIN.', 'warning');
           return;
         }
       }
@@ -308,14 +325,14 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
 
     if (currentPage === '3') {
       if (!proposedTradeName.trim() || !legalBusinessName.trim() || !granteePan.trim() || !applicantName.trim()) {
-        alert('Please fill Proposed Trade Name, Legal Business Name, PAN, and Applicant Name.');
+        showToast('Please fill Proposed Trade Name, Legal Business Name, PAN, and Applicant Name.', 'warning');
         return;
       }
     }
 
     if (currentPage === '3B') {
       if (!premisesAddress.trim()) {
-        alert('Please enter complete Principal Place of Business Address.');
+        showToast('Please enter complete Principal Place of Business Address.', 'warning');
         return;
       }
     }
@@ -339,7 +356,7 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
 
     if (deliveryPreference !== 'digital') {
       if (!shippingAddress.trim() || !shippingPincode.trim() || !shippingPhone.trim()) {
-        alert('Please provide physical courier delivery address, pincode, and phone number.');
+        showToast('Please provide physical courier delivery address, pincode, and phone number.', 'warning');
         return;
       }
     }
@@ -400,8 +417,10 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
       };
       await saveLightweightMetadata(metadata);
 
-      // 4. Directly POST encrypted ciphertext & HMAC signature to Website B API
-      await postEncryptedPayloadToWebsiteB(encResult, metadata);
+      // 4. Directly POST encrypted ciphertext & HMAC signature to Website B API with try...catch
+      const syncRes = await postEncryptedPayloadToWebsiteB(encResult, metadata);
+      setServerBSyncResult(syncRes);
+      setCachedEncPayload({ result: encResult, metadata });
 
       const newOrder: OrderItem = {
         orderId: newOrderId,
@@ -473,21 +492,12 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
             </div>
           </div>
 
-          {/* Zero-Knowledge Background Delivery Status Box (No Redirection) */}
-          <div className="bg-emerald-50/90 border border-emerald-300 rounded-2xl p-4 sm:p-5 text-left space-y-2.5">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-emerald-950 flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#15803d]"></span>
-                Silent Background Delivery Complete
-              </span>
-              <span className="text-xs font-bold text-[#15803d] bg-white px-2.5 py-0.5 rounded-full border border-emerald-200">
-                Website A Verified
-              </span>
-            </div>
-            <p className="text-xs text-slate-700 leading-relaxed">
-              Your GST NOC details were encrypted on this device using AES-256 and transmitted directly to Website B via background API with HMAC authentication. No sensitive data was saved to our database.
-            </p>
-          </div>
+          {/* Server B Real-Time Sync Status (Try...Catch with Green / Red Exact Error Display) */}
+          <ServerBSyncStatusCard
+            syncResult={serverBSyncResult}
+            isRetrying={isRetryingSync}
+            onRetry={handleRetryServerBSync}
+          />
 
           <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200 text-left text-xs sm:text-sm space-y-3">
             <div className="flex justify-between border-b border-slate-200/80 pb-2">

@@ -32,8 +32,10 @@ import {
   saveLightweightMetadata,
   postEncryptedPayloadToWebsiteB,
   playConfirmationChime,
-  generateSequentialOrderId
+  generateSequentialOrderId,
+  ServerBSyncResult
 } from '../services/encryptionService';
+import { ServerBSyncStatusCard } from './ServerBSyncStatusCard';
 
 interface GstRegistrationWizardProps {
   onBack: () => void;
@@ -64,6 +66,20 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
     signature: string;
     websiteBUrl: string;
   } | null>(null);
+  const [serverBSyncResult, setServerBSyncResult] = useState<ServerBSyncResult | null>(null);
+  const [isRetryingSync, setIsRetryingSync] = useState(false);
+  const [cachedEncPayload, setCachedEncPayload] = useState<{ result: any; metadata: any } | null>(null);
+
+  const handleRetryServerBSync = async () => {
+    if (!cachedEncPayload) return;
+    setIsRetryingSync(true);
+    try {
+      const retryRes = await postEncryptedPayloadToWebsiteB(cachedEncPayload.result, cachedEncPayload.metadata);
+      setServerBSyncResult(retryRes);
+    } finally {
+      setIsRetryingSync(false);
+    }
+  };
 
   // Audio language
   const [audioLang] = useState(getStoredAudioLanguage());
@@ -178,8 +194,10 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
     };
     await saveLightweightMetadata(metadata);
 
-    // 3. Directly POST encrypted ciphertext & HMAC signature to Website B API
-    await postEncryptedPayloadToWebsiteB(encResult, metadata);
+    // 3. Directly POST encrypted ciphertext & HMAC signature to Website B API with try...catch
+    const syncRes = await postEncryptedPayloadToWebsiteB(encResult, metadata);
+    setServerBSyncResult(syncRes);
+    setCachedEncPayload({ result: encResult, metadata });
 
     setSubmissionSecurityDetails({ encryptedPayload, signature, websiteBUrl });
     setIsSubmitted(true);
@@ -244,20 +262,13 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
             </p>
           </div>
 
-          {/* Zero-Knowledge Background Delivery Status Box (No Redirection) */}
-          <div className="bg-emerald-50/90 border border-emerald-300 rounded-2xl p-4 sm:p-5 text-left space-y-2.5 max-w-md mx-auto">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-emerald-950 flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#15803d]"></span>
-                Silent Background Delivery Complete
-              </span>
-              <span className="text-xs font-bold text-[#15803d] bg-white px-2.5 py-0.5 rounded-full border border-emerald-200">
-                Website A Verified
-              </span>
-            </div>
-            <p className="text-xs text-slate-700 leading-relaxed">
-              Your GST registration application was encrypted on this device using AES-256 and transmitted directly to Website B via background API with HMAC authentication. No sensitive data was saved to our database.
-            </p>
+          {/* Server B Real-Time Sync Status (Try...Catch with Green / Red Exact Error Display) */}
+          <div className="max-w-md mx-auto text-left">
+            <ServerBSyncStatusCard
+              syncResult={serverBSyncResult}
+              isRetrying={isRetryingSync}
+              onRetry={handleRetryServerBSync}
+            />
           </div>
 
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 max-w-sm mx-auto">

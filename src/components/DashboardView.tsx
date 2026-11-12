@@ -15,6 +15,7 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import { OrderItem } from '../types';
+import { showToast } from '../services/toastService';
 
 interface DashboardViewProps {
   orders: OrderItem[];
@@ -102,7 +103,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ orders, onUpdateOr
     if (!orderForPhysical) return;
 
     if (!courierAddress.trim() || !courierPincode.trim() || !courierPhone.trim()) {
-      alert('Please fill full delivery address, pincode, and contact number.');
+      showToast('Please fill full delivery address, pincode, and contact number.', 'warning');
       return;
     }
 

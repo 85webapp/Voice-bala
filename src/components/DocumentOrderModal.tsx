@@ -14,6 +14,7 @@ import { STAMP_PAPER_VALUES } from '../data/documentsData';
 import { INDIAN_STATES_LIST } from '../data/indianCities';
 import { useExampleDetails } from '../hooks/useExampleDetails';
 import { generateSequentialOrderId } from '../services/encryptionService';
+import { showToast } from '../services/toastService';
 
 interface DocumentOrderModalProps {
   document: LegalDocument;
@@ -47,7 +48,7 @@ export const DocumentOrderModal: React.FC<DocumentOrderModalProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!party1Name.trim() || !phone.trim()) {
-      alert('Please enter Primary Party Name & Mobile Number.');
+      showToast('Please enter Primary Party Name & Mobile Number.', 'warning');
       return;
     }
 

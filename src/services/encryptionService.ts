@@ -138,15 +138,28 @@ export async function saveLightweightMetadata(metadata: LightweightMetadata): Pr
 
 
 
+import { showToast } from './toastService';
+
+export interface ServerBSyncResult {
+  success: boolean;
+  deliveredDirect: boolean;
+  status: 'synced' | 'failed';
+  message: string;
+  error?: string;
+  endpoint: string;
+}
+
 /**
  * Sends the encrypted ciphertext and digital HMAC signature directly via a POST request
- * to Website B's private API endpoint. If the external URL is blocked by CORS or offline,
- * it transparently relays through the secure /api/website-b/relay endpoint so nothing is lost.
+ * to Website B's private API endpoint with a strict try...catch block.
+ * - If successful: Displays green toast 'Data synced to Server B successfully!'
+ * - If failure: Displays red toast 'Sync Failed: [Exact Error Name]' and returns exact error.
+ * - Always transparently relays to /api/website-b/relay so local audit records are preserved.
  */
 export async function postEncryptedPayloadToWebsiteB(
   result: EncryptedSubmissionResult,
   metadata: LightweightMetadata
-): Promise<{ success: boolean; deliveredDirect: boolean; error?: string }> {
+): Promise<ServerBSyncResult> {
   const postBody = JSON.stringify({
     encryptedPayload: result.encryptedPayload,
     signature: result.signature,
@@ -160,8 +173,11 @@ export async function postEncryptedPayloadToWebsiteB(
   });
 
   let deliveredDirect = false;
+  let syncStatus: 'synced' | 'failed' = 'failed';
+  let syncMessage = '';
+  let syncError: string | undefined = undefined;
 
-  // 1. Attempt direct POST to Website B API endpoint
+  // 1. Direct fetch() to Server B with try...catch error handling
   try {
     const directRes = await fetch(WEBSITE_B_API_ENDPOINT, {
       method: 'POST',
@@ -175,11 +191,35 @@ export async function postEncryptedPayloadToWebsiteB(
       body: postBody,
       mode: 'cors'
     });
+
     if (directRes.ok) {
       deliveredDirect = true;
+      syncStatus = 'synced';
+      syncMessage = 'Data synced to Server B successfully!';
+      showToast('Data synced to Server B successfully!', 'success', 5000);
+    } else {
+      let serverErrorBody = '';
+      try {
+        const text = await directRes.text();
+        serverErrorBody = text.slice(0, 100);
+      } catch {}
+      const errName = `HTTP ${directRes.status} ${directRes.statusText || 'Error'}${
+        serverErrorBody ? ' - ' + serverErrorBody : ''
+      }`;
+      syncStatus = 'failed';
+      syncError = errName;
+      syncMessage = `Sync Failed: [${errName}]`;
+      showToast(`Sync Failed: [${errName}]`, 'error', 7000);
     }
-  } catch {
-    console.info('[Zero-Knowledge] Direct POST to Website B attempted. Relaying via fallback relay...');
+  } catch (networkErr: any) {
+    let errName = networkErr?.message || networkErr?.name || 'Failed to fetch';
+    if (networkErr?.name === 'TypeError' || errName.toLowerCase().includes('failed to fetch')) {
+      errName = `Network/CORS Connection Refused (Website B unreachable at ${WEBSITE_B_API_ENDPOINT})`;
+    }
+    syncStatus = 'failed';
+    syncError = errName;
+    syncMessage = `Sync Failed: [${errName}]`;
+    showToast(`Sync Failed: [${errName}]`, 'error', 7000);
   }
 
   // 2. Also ensure local / fallback relay receives the encrypted package
@@ -199,7 +239,14 @@ export async function postEncryptedPayloadToWebsiteB(
     console.warn('[Website B Relay Notice]:', relayErr);
   }
 
-  return { success: true, deliveredDirect };
+  return {
+    success: deliveredDirect,
+    deliveredDirect,
+    status: syncStatus,
+    message: syncMessage,
+    error: syncError,
+    endpoint: WEBSITE_B_API_ENDPOINT
+  };
 }
 
 /**

@@ -46,10 +46,12 @@ import {
   saveLightweightMetadata,
   postEncryptedPayloadToWebsiteB,
   playConfirmationChime,
-  generateSequentialOrderId
+  generateSequentialOrderId,
+  ServerBSyncResult
 } from '../services/encryptionService';
 import { ExternalLink, Lock } from 'lucide-react';
 import { showToast } from '../services/toastService';
+import { ServerBSyncStatusCard } from './ServerBSyncStatusCard';
 
 interface DocumentWizardViewProps {
   document: LegalDocument;
@@ -304,6 +306,20 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
     signature: string;
     websiteBUrl: string;
   } | null>(null);
+  const [serverBSyncResult, setServerBSyncResult] = useState<ServerBSyncResult | null>(null);
+  const [isRetryingSync, setIsRetryingSync] = useState(false);
+  const [cachedEncPayload, setCachedEncPayload] = useState<{ result: any; metadata: any } | null>(null);
+
+  const handleRetryServerBSync = async () => {
+    if (!cachedEncPayload) return;
+    setIsRetryingSync(true);
+    try {
+      const retryRes = await postEncryptedPayloadToWebsiteB(cachedEncPayload.result, cachedEncPayload.metadata);
+      setServerBSyncResult(retryRes);
+    } finally {
+      setIsRetryingSync(false);
+    }
+  };
 
   // Toggle all 5 declarations
   const handleToggleAllDeclarations = () => {
@@ -559,8 +575,10 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
       };
       await saveLightweightMetadata(metadata);
 
-      // 4. Directly POST encrypted ciphertext & HMAC signature to Website B API
-      await postEncryptedPayloadToWebsiteB(encResult, metadata);
+      // 4. Directly POST encrypted ciphertext & HMAC signature to Website B API with try...catch
+      const syncRes = await postEncryptedPayloadToWebsiteB(encResult, metadata);
+      setServerBSyncResult(syncRes);
+      setCachedEncPayload({ result: encResult, metadata });
 
       const newOrder: OrderItem = {
         orderId: newOrderId,
@@ -661,21 +679,12 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
             </div>
           </div>
 
-          {/* Zero-Knowledge Background Delivery Status Box (No Redirection) */}
-          <div className="bg-emerald-50/90 border border-emerald-300 rounded-2xl p-4 sm:p-5 text-left space-y-2.5">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-emerald-950 flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#15803d]"></span>
-                Silent Background Delivery Complete
-              </span>
-              <span className="text-xs font-bold text-[#15803d] bg-white px-2.5 py-0.5 rounded-full border border-emerald-200">
-                Website A Verified
-              </span>
-            </div>
-            <p className="text-xs text-slate-700 leading-relaxed">
-              Your document data was encrypted on this device using AES-256 and transmitted directly to Website B via background API with HMAC authentication. No sensitive data was saved to our database.
-            </p>
-          </div>
+          {/* Server B Real-Time Sync Status (Try...Catch with Green / Red Exact Error Display) */}
+          <ServerBSyncStatusCard
+            syncResult={serverBSyncResult}
+            isRetrying={isRetryingSync}
+            onRetry={handleRetryServerBSync}
+          />
 
           {/* Details Card */}
           <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200 text-left text-xs sm:text-sm space-y-3">
