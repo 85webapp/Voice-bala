@@ -15,11 +15,7 @@ import {
   Clock,
   Sparkles,
   HelpCircle,
-  ChevronRight,
-  Volume2,
-  VolumeX,
-  Play,
-  Square
+  ChevronRight
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { LegalDocument, OrderItem } from '../types';
@@ -29,16 +25,6 @@ import { INITIAL_FRONT_DOCUMENTS } from '../data/documentsData';
 import { getDocumentIdRule } from '../data/documentIdRequirements';
 import { DateOfBirthPicker } from './DateOfBirthPicker';
 import { useExampleDetails } from '../hooks/useExampleDetails';
-import {
-  SupportedLanguage,
-  SUPPORTED_LANGUAGES,
-  speechController,
-  getStoredAudioLanguage,
-  setStoredAudioLanguage,
-  fetchPageExplanation,
-  fetchFieldExplanation,
-  getVisibleFormLabels
-} from '../data/voiceNarrationData';
 import { AadhaarInput } from './AadhaarInput';
 import { AddressFieldGroup } from './AddressFieldGroup';
 import {
@@ -47,6 +33,8 @@ import {
   postEncryptedPayloadToWebsiteB,
   playConfirmationChime,
   generateSequentialOrderId,
+  buildSubmissionOverview,
+  fieldEntry,
   ServerBSyncResult
 } from '../services/encryptionService';
 import { ExternalLink, Lock } from 'lucide-react';
@@ -82,93 +70,6 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
   // Page index (1 to 5). If isUnilateral, step 3 is skipped
   const [currentPage, setCurrentPage] = useState<number>(1);
   const totalPages = isUnilateral ? 4 : 5; // User UI shows Page X of 5, or adjusts cleanly
-
-  // --- AUDIO EXPLAINER & MULTILINGUAL VOICE GUIDE ---
-  const [selectedLang, setSelectedLang] = useState<SupportedLanguage>(getStoredAudioLanguage);
-  const [isAudioPlaying, setIsAudioPlaying] = useState(false);
-
-  useEffect(() => {
-    const unsub = speechController.subscribe((speaking) => {
-      setIsAudioPlaying(speaking);
-    });
-    return () => {
-      unsub();
-      speechController.stop();
-    };
-  }, []);
-
-  useEffect(() => {
-    speechController.stop();
-  }, [currentPage, selectedDocTitle]);
-
-  const activeLangConfig = useMemo(() => {
-    return SUPPORTED_LANGUAGES.find((l) => l.code === selectedLang) || SUPPORTED_LANGUAGES[0];
-  }, [selectedLang]);
-
-  const handlePlayPageSpeech = async () => {
-    if (isAudioPlaying) {
-      speechController.stop();
-      return;
-    }
-
-    const explanation = await fetchPageExplanation(
-      selectedDocTitle,
-      currentPage,
-      getStepTitle(),
-      getVisibleFormLabels(),
-      selectedLang
-    );
-
-    if (explanation) speechController.speak(explanation, activeLangConfig.speechCode);
-  };
-
-  useEffect(() => {
-    const wizardRoot = document.querySelector<HTMLElement>('[data-document-wizard]');
-    if (!wizardRoot) return;
-
-    const attachFieldSpeakers = () => {
-      wizardRoot.querySelectorAll<HTMLLabelElement>('label').forEach((label) => {
-        if (label.querySelector('[data-field-speaker]')) return;
-        const control = label.control || (label.nextElementSibling?.matches('input,select,textarea') && label.nextElementSibling)
-          || label.parentElement?.querySelector('input,select,textarea');
-        if (!(control instanceof HTMLInputElement || control instanceof HTMLSelectElement || control instanceof HTMLTextAreaElement)) return;
-        if (control instanceof HTMLInputElement && ['checkbox', 'radio', 'hidden', 'submit'].includes(control.type)) return;
-
-        const fieldLabel = label.textContent?.replace(/\s+/g, ' ').trim() || control.getAttribute('aria-label') || control.getAttribute('placeholder') || 'This field';
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.dataset.fieldSpeaker = 'true';
-        button.className = 'ml-1 inline-flex align-middle items-center justify-center rounded-full p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 cursor-pointer';
-        button.setAttribute('aria-label', `Explain ${fieldLabel}`);
-        button.title = `Explain ${fieldLabel}`;
-        button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>';
-        button.addEventListener('click', (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          void (async () => {
-            try {
-              const context = getVisibleFormLabels().filter((text) => !text.startsWith('Explain ')).join('; ');
-              const explanation = await fetchFieldExplanation(selectedDocTitle, control.name || control.id || fieldLabel, fieldLabel, context, selectedLang);
-              if (explanation) speechController.speak(explanation, activeLangConfig.speechCode);
-            } catch (error) {
-              console.warn('Field explanation failed:', error);
-            }
-          })();
-        });
-        label.append(button);
-      });
-    };
-
-    attachFieldSpeakers();
-    const observer = new MutationObserver(attachFieldSpeakers);
-    observer.observe(wizardRoot, { childList: true, subtree: true });
-    return () => {
-      observer.disconnect();
-      wizardRoot.querySelectorAll('[data-field-speaker]').forEach((btn) => {
-        try { btn.remove(); } catch {}
-      });
-    };
-  }, [selectedDocTitle, selectedLang, activeLangConfig.speechCode]);
 
   // --- PAGE 1: Document & State Selection ---
   const [selectedState, setSelectedState] = useState<string>('Uttar Pradesh');
@@ -290,7 +191,6 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
 
   // 5 Legal Declaration Checkboxes
   const [declarations, setDeclarations] = useState<boolean[]>([false, false, false, false, false]);
-  const [isSpeakingDeclarations, setIsSpeakingDeclarations] = useState(false);
 
   // Verification Mode: 'self' (₹0) vs 'expert' (+₹10)
   const [verificationMode, setVerificationMode] = useState<'self' | 'expert'>('self');
@@ -325,33 +225,6 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
   const handleToggleAllDeclarations = () => {
     const allChecked = declarations.every(Boolean);
     setDeclarations([!allChecked, !allChecked, !allChecked, !allChecked, !allChecked]);
-  };
-
-  // TTS Readout of 5 Declarations
-  const handlePlayDeclarationsSpeech = () => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return;
-    if (isSpeakingDeclarations) {
-      window.speechSynthesis.cancel();
-      setIsSpeakingDeclarations(false);
-      return;
-    }
-    window.speechSynthesis.cancel();
-    const declarationText = [
-      "कानूनी घोषणाएँ:",
-      "पहला: मैंने दस्तावेज़ के सभी नियम व शर्तें ध्यानपूर्वक पढ़ ली हैं और मैं इनसे सहमत हूँ।",
-      "दूसरा: प्रस्तुत की गई दोनों पक्षों और गवाहों की व्यक्तिगत पहचान व पते की जानकारी पूर्णतः सत्य और प्रामाणिक है।",
-      "तीसरा: इस विलेख का निष्पादन बिना किसी दबाव, कपट अथवा अनुचित प्रभाव के स्वतंत्र सहमति से किया जा रहा है।",
-      "चौथा: संबंधित राज्य सरकार की स्टाम्प ड्यूटी एवं ई-हस्ताक्षर नियमों के अनुपालन की पूरी ज़िम्मेदारी मेरी है।",
-      "पाँचवाँ: मैं पुष्टि करता हूँ कि दस्तावेज़ डिलीवरी के पश्चात देय राशि का भुगतान नियमानुसार करूँगा।"
-    ].join(" ");
-
-    const utterance = new SpeechSynthesisUtterance(declarationText);
-    utterance.lang = 'hi-IN';
-    utterance.rate = 1.3;
-    utterance.onend = () => setIsSpeakingDeclarations(false);
-    utterance.onerror = () => setIsSpeakingDeclarations(false);
-    setIsSpeakingDeclarations(true);
-    window.speechSynthesis.speak(utterance);
   };
 
   // --- PRICING CALCULATION ---
@@ -514,14 +387,149 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
     setIsSubmitting(true);
 
     try {
-      const todayISO = new Date().toISOString().split('T')[0];
+      const now = new Date();
+      const todayISO = now.toISOString().split('T')[0];
       const newOrderId = generateSequentialOrderId();
+
+      const resolvedDocMeta = INITIAL_FRONT_DOCUMENTS.find((d) => d.title === selectedDocTitle);
+      const resolvedMainCategory = resolvedDocMeta?.category || initialDoc.category || 'Legal Document';
+      const lowerTitle = selectedDocTitle.toLowerCase();
+      const inferredRequestType = lowerTitle.includes('affidavit') || resolvedMainCategory.toLowerCase().includes('affidavit')
+        ? 'Affidavit Request'
+        : lowerTitle.includes('noc')
+        ? 'NOC Request'
+        : lowerTitle.includes('will') || lowerTitle.includes('power of attorney')
+        ? 'Legal Deed / Authorization Request'
+        : 'Agreement Request';
+
+      const submissionOverview = buildSubmissionOverview({
+        orderId: newOrderId,
+        requestType: inferredRequestType,
+        mainCategory: resolvedMainCategory,
+        subCategory: selectedDocTitle,
+        availableCategories: Array.from(new Set(INITIAL_FRONT_DOCUMENTS.map((d) => d.category))),
+        availableSubCategories: INITIAL_FRONT_DOCUMENTS.map((d) => d.title),
+        documentTitle: selectedDocTitle,
+        date: now
+      });
+
+      const sections = [
+        {
+          pageNumber: 1,
+          sectionTitle: 'Page 1: Document Type, Jurisdiction & Stamp Selection',
+          fields: [
+            fieldEntry('Selected Document Type', selectedDocTitle, false, INITIAL_FRONT_DOCUMENTS.map((d) => d.title)),
+            fieldEntry('Document Category', resolvedMainCategory, false),
+            fieldEntry('Execution Nature', isUnilateral ? 'Unilateral (1 Party)' : 'Bilateral (2 Parties)', false),
+            fieldEntry('Selected State / Union Territory', selectedState, false),
+            fieldEntry('Stamp Paper Value (INR)', `₹${activeStampValue}`, false),
+            fieldEntry('Stamp Paper Override Applied', overrideStampValue !== null ? `Yes (₹${overrideStampValue})` : `Default Recommended (₹${autoStampValue})`, true),
+            fieldEntry('Stamp Duty Paid By', paidBy, false, isUnilateral ? ['First Party'] : ['First Party', 'Second Party', '50-50%'])
+          ]
+        },
+        {
+          pageNumber: 2,
+          sectionTitle: `Page 2: 1st Party Details (${docConfig.firstPartyRole})`,
+          fields: [
+            fieldEntry('First Party Entity Type', firstPartyEntityType, false, ['Individual', 'Company']),
+            fieldEntry(firstPartyEntityType === 'Company' ? 'Registered Company / Firm Name' : 'Full Legal Name', firstPartyName, false),
+            ...(firstPartyEntityType === 'Company' ? [
+              fieldEntry('Authorized Signatory Name', firstPartySignatory, false),
+              fieldEntry('Authorized Signatory Designation', firstPartyDesignation === 'Other' ? firstPartyCustomDesignation : firstPartyDesignation, false)
+            ] : [
+              fieldEntry("Father's / Husband's Name", firstPartyFatherName, true)
+            ]),
+            fieldEntry(firstPartyEntityType === 'Company' ? 'Date of Incorporation' : 'Age / Date of Birth', firstPartyAgeOrIncDate, true),
+            fieldEntry('Complete Address', firstPartyAddress, false),
+            fieldEntry('Aadhaar Number', firstPartyAadhaarLast4, docIdRule.aadhaar !== 'mandatory'),
+            fieldEntry('Mobile Number', firstPartyMobile, false),
+            fieldEntry('PAN Card Number', firstPartyPan, docIdRule.pan !== 'mandatory')
+          ]
+        },
+        {
+          pageNumber: 3,
+          sectionTitle: isUnilateral
+            ? 'Page 3: 2nd Party Details (Skipped — Unilateral Document)'
+            : `Page 3: 2nd Party Details (${docConfig.secondPartyRole})`,
+          fields: isUnilateral
+            ? [fieldEntry('Second Party Applicable', 'No — Unilateral Affidavit / Declaration', true)]
+            : [
+                fieldEntry('Second Party Entity Type', secondPartyEntityType, false, ['Individual', 'Company']),
+                fieldEntry(secondPartyEntityType === 'Company' ? 'Registered Company / Firm Name' : 'Full Legal Name', secondPartyName, false),
+                ...(secondPartyEntityType === 'Company' ? [
+                  fieldEntry('Authorized Signatory Name', secondPartySignatory, false),
+                  fieldEntry('Authorized Signatory Designation', secondPartyDesignation === 'Other' ? secondPartyCustomDesignation : secondPartyDesignation, false)
+                ] : [
+                  fieldEntry("Father's / Husband's Name", secondPartyFatherName, true)
+                ]),
+                fieldEntry(secondPartyEntityType === 'Company' ? 'Date of Incorporation' : 'Age / Date of Birth', secondPartyAgeOrIncDate, true),
+                fieldEntry('Complete Address', secondPartyAddress, false),
+                fieldEntry('Aadhaar Number', secondPartyAadhaarLast4, docIdRule.aadhaar !== 'mandatory'),
+                fieldEntry('Mobile Number', secondPartyMobile, false),
+                fieldEntry('PAN Card Number', secondPartyPan, docIdRule.pan !== 'mandatory')
+              ]
+        },
+        {
+          pageNumber: 4,
+          sectionTitle: 'Page 4: Core Legal Scope & Custom Terms',
+          fields: [
+            fieldEntry(docConfig.coreSectionTitle || 'Scope / Statement / Core Clauses', scopeOfWork, true),
+            fieldEntry('Consideration / Financial Terms', considerationAmount, true),
+            fieldEntry('Duration / Validity Months', durationMonths, true),
+            fieldEntry('Territory / Jurisdiction Scope', exclusivityTerritory, true),
+            fieldEntry('Notice Period / Termination Clause', noticePeriod, true),
+            fieldEntry(
+              'Custom Terms Added',
+              customTerms.length > 0
+                ? customTerms.map((t, i) => `${i + 1}. ${t.title || 'Untitled'}: ${t.description}`).join(' | ')
+                : '',
+              true
+            )
+          ]
+        },
+        {
+          pageNumber: 5,
+          sectionTitle: 'Page 5: Witnesses, Delivery, Review Mode & Legal Declarations',
+          fields: [
+            fieldEntry('Witness 1 Full Legal Name', w1Name, false),
+            fieldEntry("Witness 1 Father's / Husband's Name", w1FatherName, false),
+            fieldEntry('Witness 1 Residential Address', w1Address, false),
+            fieldEntry('Witness 1 Mobile Number', w1Mobile, false),
+            fieldEntry('Witness 1 Age / Date of Birth', w1Age, true),
+            fieldEntry('Witness 1 Aadhaar Last 4 Digits', w1AadhaarLast4, true),
+            fieldEntry('Witness 2 Full Legal Name', w2Name, true),
+            fieldEntry("Witness 2 Father's / Husband's Name", w2FatherName, true),
+            fieldEntry('Witness 2 Residential Address', w2Address, true),
+            fieldEntry('Witness 2 Mobile Number', w2Mobile, true),
+            fieldEntry('Witness 2 Age / Date of Birth', w2Age, true),
+            fieldEntry('Witness 2 Aadhaar Last 4 Digits', w2AadhaarLast4, true),
+            fieldEntry('Delivery Mode Selected', deliveryType === 'physical' ? 'Physical Courier Delivery (+₹50)' : 'Digital Delivery Only (Free)', false, ['digital', 'physical']),
+            fieldEntry('Shipping Recipient Name', shippingRecipientName, deliveryType !== 'physical'),
+            fieldEntry('Shipping Delivery Phone', shippingPhone, deliveryType !== 'physical'),
+            fieldEntry('Shipping Street Address', shippingAddress, deliveryType !== 'physical'),
+            fieldEntry('Shipping Pincode', shippingPincode, deliveryType !== 'physical'),
+            fieldEntry('Verification & Review Mode', verificationMode === 'expert' ? 'Expert Legal Re-check (+₹10)' : 'Self-Verified (Free)', false, ['self', 'expert']),
+            fieldEntry('Total Amount Payable Post-Delivery', `₹${pricing.totalPayable}`, false),
+            fieldEntry('All 5 Legal Declarations Accepted', declarations.every(Boolean) ? 'Yes (All 5 Accepted)' : 'No', false),
+            fieldEntry('Intermediary Disclaimer Accepted', intermediaryDisclaimerAccepted ? 'Yes' : 'No', false)
+          ]
+        }
+      ];
 
       // 1. Gather complete sensitive details for zero-database encryption
       const sensitivePayload = {
         orderId: newOrderId,
+        submissionOverview,
+        submittedDate: submissionOverview.submittedDate,
+        submittedTime: submissionOverview.submittedTime,
+        requestType: submissionOverview.requestType,
+        mainCategory: submissionOverview.mainCategory,
+        subCategory: submissionOverview.subCategory,
         docTitle: selectedDocTitle,
+        category: resolvedMainCategory,
         state: selectedState,
+        paidBy,
+        stampDutyAmount: activeStampValue,
         firstParty: {
           entityType: firstPartyEntityType,
           name: firstPartyName,
@@ -546,19 +554,31 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
           mobile: secondPartyMobile,
           pan: secondPartyPan
         },
+        documentDetails: {
+          scopeOfWork,
+          considerationAmount,
+          durationMonths,
+          exclusivityTerritory,
+          noticePeriod
+        },
         witnesses: [
-          { name: w1Name, fatherName: w1FatherName, address: w1Address, mobile: w1Mobile, age: w1Age },
-          { name: w2Name, fatherName: w2FatherName, address: w2Address, mobile: w2Mobile, age: w2Age }
+          { name: w1Name, fatherName: w1FatherName, address: w1Address, mobile: w1Mobile, age: w1Age, aadhaarLast4: w1AadhaarLast4 },
+          { name: w2Name, fatherName: w2FatherName, address: w2Address, mobile: w2Mobile, age: w2Age, aadhaarLast4: w2AadhaarLast4 }
         ],
         pricing,
+        verificationMode,
         delivery: {
           type: deliveryType,
+          recipientName: deliveryType === 'physical' ? shippingRecipientName : undefined,
           shippingAddress: deliveryType === 'physical' ? shippingAddress : undefined,
           pincode: deliveryType === 'physical' ? shippingPincode : undefined,
           shippingPhone: deliveryType === 'physical' ? shippingPhone : undefined
         },
         customTerms,
-        timestamp: new Date().toISOString()
+        declarationsAccepted: declarations.every(Boolean),
+        intermediaryDisclaimerAccepted,
+        sections,
+        timestamp: now.toISOString()
       };
 
       // 2. Client-Side AES-256 Encryption & HMAC Signature
@@ -773,71 +793,6 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
           <span className="text-sm font-bold text-[#15803d] block mt-0.5">
             Architecture
           </span>
-        </div>
-      </div>
-
-      {/* MULTILINGUAL AUDIO EXPLAINER BAR (TOP OF EVERY PAGE) */}
-      <div className="mb-4 bg-linear-to-r from-blue-50 via-indigo-50 to-blue-50 border border-blue-200 rounded-2xl p-3 sm:p-4 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-colors ${isAudioPlaying ? 'bg-blue-600 text-white animate-pulse' : 'bg-white text-blue-600 border border-blue-200'}`}>
-            <Volume2 className="w-4 h-4" />
-          </div>
-          <div>
-            <span className="text-xs font-bold text-slate-900 block flex items-center gap-1.5">
-              <span>Voice Guide &amp; Audio Explainer</span>
-              {isAudioPlaying && (
-                <span className="inline-flex items-center gap-1 text-[10px] text-blue-600 bg-white px-2 py-0.5 rounded-full border border-blue-200 font-semibold animate-pulse">
-                  Playing...
-                </span>
-              )}
-            </span>
-            <span className="text-[11px] text-slate-500">
-              Listen to AI audio guidance for this section
-            </span>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 self-end sm:self-auto">
-          {/* Language Selector */}
-          <select
-            value={selectedLang}
-            onChange={(e) => {
-              speechController.stop();
-              const nextLang = e.target.value as SupportedLanguage;
-              setSelectedLang(nextLang);
-              setStoredAudioLanguage(nextLang);
-            }}
-            className="bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-600 cursor-pointer shadow-2xs"
-          >
-            {SUPPORTED_LANGUAGES.map((lang) => (
-              <option key={lang.code} value={lang.code}>
-                {lang.nativeName} ({lang.name})
-              </option>
-            ))}
-          </select>
-
-          {/* Play / Stop Button */}
-          <button
-            type="button"
-            onClick={handlePlayPageSpeech}
-            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl font-bold text-xs shadow-xs transition-all cursor-pointer ${
-              isAudioPlaying
-                ? 'bg-rose-600 hover:bg-rose-700 text-white'
-                : 'bg-blue-600 hover:bg-blue-700 text-white'
-            }`}
-          >
-            {isAudioPlaying ? (
-              <>
-                <Square className="w-3.5 h-3.5 fill-current" />
-                <span>Stop</span>
-              </>
-            ) : (
-              <>
-                <Play className="w-3.5 h-3.5 fill-current" />
-                <span>Listen Page</span>
-              </>
-            )}
-          </button>
         </div>
       </div>
 
@@ -1997,21 +1952,6 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                 </div>
 
                 <div className="flex items-center gap-2">
-                  {/* Speaker button to read all 5 declarations aloud */}
-                  <button
-                    type="button"
-                    onClick={handlePlayDeclarationsSpeech}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                      isSpeakingDeclarations
-                        ? 'bg-rose-100 text-rose-700 border border-rose-300 animate-pulse'
-                        : 'bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-200'
-                    }`}
-                    title="Listen to 5 declarations in voice"
-                  >
-                    <Volume2 className="w-3.5 h-3.5" />
-                    <span>{isSpeakingDeclarations ? 'रोकें (Stop Voice)' : '🔊 5 घोषणाएँ सुनें (Voice)'}</span>
-                  </button>
-
                   {/* Select All toggle */}
                   <button
                     type="button"

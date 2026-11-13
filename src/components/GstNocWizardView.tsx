@@ -13,9 +13,6 @@ import {
   Layers,
   FileCheck2,
   AlertCircle,
-  Volume2,
-  Play,
-  Square,
   MapPin
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
@@ -25,23 +22,16 @@ import { STATE_CATEGORIES, getSafeStampDuty } from '../data/stampDutyMatrix';
 import { lookupGstJurisdiction } from '../data/gstJurisdictionData';
 import { useExampleDetails } from '../hooks/useExampleDetails';
 import {
-  SupportedLanguage,
-  SUPPORTED_LANGUAGES,
-  speechController,
-  fetchPageExplanation,
-  fetchFieldExplanation,
-  getVisibleFormLabels,
-  getVisibleFieldLabel,
-  getStoredAudioLanguage,
-  setStoredAudioLanguage
-} from '../data/voiceNarrationData';
-import {
   encryptFormDataAndSign,
   saveLightweightMetadata,
   postEncryptedPayloadToWebsiteB,
   playConfirmationChime,
   generateSequentialOrderId,
-  ServerBSyncResult
+  ServerBSyncResult,
+  UploadedDocumentPayload,
+  fieldEntry,
+  buildSubmissionOverview,
+  readFileAsUploadPayload
 } from '../services/encryptionService';
 import { Lock, ExternalLink } from 'lucide-react';
 import { showToast } from '../services/toastService';
@@ -78,42 +68,6 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
   const { showExampleDetails, getPlaceholder } = useExampleDetails();
   const showExample = showExampleDetails;
   const [currentPage, setCurrentPage] = useState<StepId>('1');
-
-  // --- AUDIO EXPLAINER & MULTILINGUAL VOICE GUIDE ---
-  const [selectedLang, setSelectedLang] = useState<SupportedLanguage>(getStoredAudioLanguage);
-  const [isAudioPlaying, setIsAudioPlaying] = useState(false);
-
-  useEffect(() => {
-    const unsub = speechController.subscribe((speaking) => {
-      setIsAudioPlaying(speaking);
-    });
-    return () => {
-      unsub();
-      speechController.stop();
-    };
-  }, []);
-
-  useEffect(() => {
-    speechController.stop();
-  }, [currentPage]);
-
-  const activeLangConfig = useMemo(() => {
-    return SUPPORTED_LANGUAGES.find((l) => l.code === selectedLang) || SUPPORTED_LANGUAGES[0];
-  }, [selectedLang]);
-
-  const handlePlayPageSpeech = async () => {
-    if (isAudioPlaying) { speechController.stop(); return; }
-    const fields = getVisibleFormLabels();
-    const explanation = await fetchPageExplanation('GST NOC Application', Number(currentPage), `Page ${currentPage}`, fields, selectedLang);
-    if (explanation) speechController.speak(explanation, activeLangConfig.speechCode);
-  };
-
-  const handlePlayFieldSpeech = async (fieldKey: string) => {
-    const label = getVisibleFieldLabel(fieldKey);
-    const context = getVisibleFormLabels().join('; ');
-    const explanation = await fetchFieldExplanation('GST NOC Application', fieldKey, label, context, selectedLang);
-    if (explanation) speechController.speak(explanation, activeLangConfig.speechCode);
-  };
 
   // --- PAGE 1: PREMISES TYPE & GEOGRAPHIC JURISDICTION ---
   const [premisesType, setPremisesType] = useState<string>('Commercial Building / Shop / Office');
@@ -167,7 +121,8 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
   const [coOwners, setCoOwners] = useState<CoOwner[]>([]);
   const [corpCompanyName, setCorpCompanyName] = useState('');
   const [corpCin, setCorpCin] = useState('');
-  const [boardResolutionUploaded, setBoardResolutionUploaded] = useState(false);
+  const [boardResolutionFile, setBoardResolutionFile] = useState<UploadedDocumentPayload | null>(null);
+  const boardResolutionUploaded = Boolean(boardResolutionFile);
 
   const addCoOwner = () => {
     setCoOwners((prev) => [
@@ -195,7 +150,8 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
   const [constitutionOfBusiness, setConstitutionOfBusiness] = useState<string>('Proprietorship');
   const [granteePan, setGranteePan] = useState('');
   const [applicantName, setApplicantName] = useState('');
-  const [signingAuthorityUploaded, setSigningAuthorityUploaded] = useState(false);
+  const [signingAuthorityFile, setSigningAuthorityFile] = useState<UploadedDocumentPayload | null>(null);
+  const signingAuthorityUploaded = Boolean(signingAuthorityFile);
 
   const handleTradeNameChange = (val: string) => {
     const cleaned = val.replace(/[@#$%^&]/g, '');
@@ -207,8 +163,24 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
   const [wardNumber, setWardNumber] = useState('');
   const [propertyTaxAssessmentNo, setPropertyTaxAssessmentNo] = useState('');
   const [ownershipDocType, setOwnershipDocType] = useState<string>('Electricity Bill (Not older than 2 months)');
-  const [utilityDocUploaded, setUtilityDocUploaded] = useState(false);
+  const [utilityDocFile, setUtilityDocFile] = useState<UploadedDocumentPayload | null>(null);
+  const utilityDocUploaded = Boolean(utilityDocFile);
   const [docOwnerNameString, setDocOwnerNameString] = useState('');
+
+  const handleRealFileSelect = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+    fieldLabel: string,
+    setter: React.Dispatch<React.SetStateAction<UploadedDocumentPayload | null>>
+  ) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    const payload = await readFileAsUploadPayload(file, fieldLabel);
+    if (payload) {
+      setter(payload);
+      showToast(`${payload.fileName} attached successfully.`, 'success', 3000);
+    }
+  };
 
   // --- PAGE 4: GST COMPLIANCE & OFFICER INSPECTION CLAUSES ---
   const [clauseRule9Physical, setClauseRule9Physical] = useState(true);
@@ -364,15 +336,163 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
     setIsSubmitting(true);
 
     try {
-      const todayISO = new Date().toISOString().split('T')[0];
+      const now = new Date();
+      const todayISO = now.toISOString().split('T')[0];
       const newOrderId = generateSequentialOrderId();
 
-      // 1. Gather sensitive data for zero-database encryption
+      const submissionOverview = buildSubmissionOverview({
+        orderId: newOrderId,
+        requestType: 'NOC Request',
+        mainCategory: initialDoc.category || 'Affidavits & Legal Formats',
+        subCategory: 'Landlord NOC for GST Registration',
+        availableCategories: [
+          'Affidavits & Legal Formats',
+          'Rent & Property Agreements',
+          'Commercial & Business Contracts',
+          'Registrations & Tax Filings'
+        ],
+        availableSubCategories: [
+          'Landlord NOC for GST Registration',
+          'Commercial Landlord NOC',
+          'Residential / Utility NOC'
+        ],
+        documentTitle: 'Landlord NOC for GST Registration',
+        date: now
+      });
+
+      const uploadedDocuments: UploadedDocumentPayload[] = [
+        boardResolutionFile,
+        signingAuthorityFile,
+        utilityDocFile
+      ].filter((item): item is UploadedDocumentPayload => Boolean(item));
+
+      const sections = [
+        {
+          pageNumber: 1,
+          sectionTitle: 'Page 1: Premises Type, Jurisdiction & Stamp Duty',
+          fields: [
+            fieldEntry('Type of Premises', premisesType, false, [
+              'Commercial Building / Shop / Office',
+              'Industrial Area / Shed / Warehouse',
+              'Residential Property used for Business'
+            ]),
+            fieldEntry('State / Union Territory', selectedState, false),
+            fieldEntry('PIN Code', pincode, false),
+            fieldEntry('GST Commissionerate', gstCommissionerate, true),
+            fieldEntry('GST Division', gstDivision, true),
+            fieldEntry('GST Range', gstRange, true),
+            fieldEntry('Stamp Duty Fee Paid By', stampFeePaidBy, false, [
+              'Landlord',
+              'Business Owner',
+              'Shared Equally'
+            ]),
+            fieldEntry('Stamp Paper Selection Mode', stampMode === 'auto' ? 'Recommended Stamp Paper Value' : 'Manual Stamp Value Selection', false, [
+              'Recommended Stamp Paper Value',
+              'Manual Stamp Value Selection'
+            ]),
+            fieldEntry('Selected Stamp Paper Value (INR)', `₹${pricing.stamp}`, false),
+            fieldEntry('Custom Stamp Input (if Custom selected)', stampMode === 'manual' && manualStampValue === -1 ? customManualStamp : '', true)
+          ]
+        },
+        {
+          pageNumber: 2,
+          sectionTitle: 'Page 2: 1st Party (Landlord / Property Owner)',
+          fields: [
+            fieldEntry('Landlord Standing & Entity Type', ownershipStatus, false, [
+              'Sole Owner',
+              'Co-Owner / Joint Owner',
+              'Authorized Director / Partner / Trustee'
+            ]),
+            fieldEntry('Landlord Full Legal Name', landlordName, false),
+            fieldEntry("Father's / Husband's Name", landlordFatherName, false),
+            fieldEntry('Landlord PAN Card', landlordPan, false),
+            fieldEntry('Aadhaar Number (12 Digits)', landlordAadhaarLast4, true),
+            fieldEntry('Active Mobile Number', landlordMobile, false),
+            fieldEntry('Email ID', landlordEmail, true),
+            fieldEntry('Co-Owners / Joint Owners List', coOwners.length > 0 ? coOwners : [], ownershipStatus !== 'Co-Owner / Joint Owner'),
+            fieldEntry('Corporate Company / LLP Name', corpCompanyName, ownershipStatus !== 'Authorized Director / Partner / Trustee'),
+            fieldEntry('Corporate CIN / LLPIN', corpCin, ownershipStatus !== 'Authorized Director / Partner / Trustee'),
+            fieldEntry('Board Resolution / Authorization Upload', boardResolutionFile ? `${boardResolutionFile.fileName} (${boardResolutionFile.mimeType})` : '', true)
+          ]
+        },
+        {
+          pageNumber: 3,
+          sectionTitle: 'Page 3: 2nd Party (Proposed GST Business Entity)',
+          fields: [
+            fieldEntry('Constitution of Business', constitutionOfBusiness, false, [
+              'Proprietorship',
+              'Partnership',
+              'Private Limited Company',
+              'Limited Liability Partnership',
+              'One Person Company',
+              'Trust / Society / Club / AOP'
+            ]),
+            fieldEntry('Proposed Trade Name', proposedTradeName, false),
+            fieldEntry('Legal Name (As on PAN)', legalBusinessName, false),
+            fieldEntry('Business / Grantee PAN Card', granteePan, false),
+            fieldEntry('Applicant Full Name', applicantName, false),
+            fieldEntry('Applicant Signing Authority / ID Proof Upload', signingAuthorityFile ? `${signingAuthorityFile.fileName} (${signingAuthorityFile.mimeType})` : '', true)
+          ]
+        },
+        {
+          pageNumber: '3B',
+          sectionTitle: 'Page 3B: Principal Place of Business & Utility Proof',
+          fields: [
+            fieldEntry('Principal Place of Business Address', premisesAddress, false),
+            fieldEntry('Municipal Ward / Zone', wardNumber, true),
+            fieldEntry('Property Tax / Assessment No.', propertyTaxAssessmentNo, true),
+            fieldEntry('Ownership / Utility Document Type', ownershipDocType, false, [
+              'Electricity Bill (Not older than 2 months)',
+              'Municipal Property Tax Receipt',
+              'Registered Sale Deed / Title Deed',
+              'Water Bill / Landline Bill'
+            ]),
+            fieldEntry('Supporting Utility / Ownership File', utilityDocFile ? `${utilityDocFile.fileName} (${utilityDocFile.mimeType})` : '', true),
+            fieldEntry('Owner Name Printed on Utility Bill / Deed', docOwnerNameString, true)
+          ]
+        },
+        {
+          pageNumber: 4,
+          sectionTitle: 'Page 4: Statutory GST Compliance & Custom Clauses',
+          fields: [
+            fieldEntry('Rule 9 Physical Verification Consent', clauseRule9Physical, false),
+            fieldEntry('Rule 18 GSTIN Signboard Display Consent', clauseRule18Banner, false),
+            fieldEntry('Section 35 Books of Accounts Consent', clauseSec35Books, false),
+            fieldEntry('Tax Liability Indemnity Clause', clauseTaxIndemnity, false),
+            fieldEntry('Sub-meter / Utility Consent Clause', clauseSubmeterConsent, true),
+            fieldEntry('Custom Operational Clauses', customGstClauses.length > 0 ? customGstClauses : [], true)
+          ]
+        },
+        {
+          pageNumber: 5,
+          sectionTitle: 'Page 5: Delivery Mode, Courier Address & Fee Breakdown',
+          fields: [
+            fieldEntry('Delivery & Execution Preference', deliveryPreference, false, ['digital', 'physical', 'hybrid']),
+            fieldEntry('Courier Shipping Address', deliveryPreference !== 'digital' ? shippingAddress : '', deliveryPreference === 'digital'),
+            fieldEntry('Courier Delivery PIN Code', deliveryPreference !== 'digital' ? shippingPincode : '', deliveryPreference === 'digital'),
+            fieldEntry('Courier Contact Mobile Number', deliveryPreference !== 'digital' ? shippingPhone : '', deliveryPreference === 'digital'),
+            fieldEntry('Total Payable Fee (Pay After Delivery)', `₹${pricing.totalPayable}`, false)
+          ]
+        }
+      ];
+
+      // 1. Gather complete sensitive data for zero-database encryption
       const sensitiveData = {
         orderId: newOrderId,
+        submissionOverview,
+        submittedDate: submissionOverview.submittedDate,
+        submittedTime: submissionOverview.submittedTime,
+        requestType: submissionOverview.requestType,
+        mainCategory: submissionOverview.mainCategory,
+        subCategory: submissionOverview.subCategory,
         docTitle: 'Landlord NOC for GST Registration',
+        category: initialDoc.category,
+        premisesType,
         state: selectedState,
         pincode,
+        stampMode,
+        stampFeePaidBy,
+        stampDutyAmount: pricing.stamp,
         gstJurisdiction: {
           commissionerate: gstCommissionerate,
           division: gstDivision,
@@ -384,23 +504,52 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
           ownershipStatus,
           pan: landlordPan,
           aadhaar: landlordAadhaarLast4,
-          mobile: landlordMobile
+          mobile: landlordMobile,
+          email: landlordEmail,
+          coOwners,
+          corpCompanyName: corpCompanyName || '',
+          corpCin: corpCin || '',
+          boardResolutionUploaded,
+          boardResolutionFile
         },
         premises: {
           address: premisesAddress,
           pincode,
           wardNumber,
-          propertyTaxAssessmentNo
+          propertyTaxAssessmentNo,
+          ownershipDocType,
+          utilityDocUploaded,
+          utilityDocFile,
+          docOwnerNameString
         },
         trade: {
           proposedTradeName,
           legalBusinessName,
           constitutionOfBusiness,
           granteePan,
-          applicantName
+          applicantName,
+          signingAuthorityUploaded,
+          signingAuthorityFile
         },
+        clauses: {
+          clauseRule9Physical,
+          clauseRule18Banner,
+          clauseSec35Books,
+          clauseTaxIndemnity,
+          clauseSubmeterConsent,
+          customGstClauses
+        },
+        delivery: {
+          deliveryPreference,
+          shippingAddress: deliveryPreference !== 'digital' ? shippingAddress : '',
+          pincode: deliveryPreference !== 'digital' ? shippingPincode : '',
+          shippingPhone: deliveryPreference !== 'digital' ? shippingPhone : ''
+        },
+        sections,
+        uploadedDocuments,
+        photoUrl: uploadedDocuments[0]?.dataUrl || undefined,
         pricing,
-        timestamp: new Date().toISOString()
+        timestamp: now.toISOString()
       };
 
       // 2. Client-Side AES-256 + HMAC-SHA256
@@ -581,90 +730,15 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
         </div>
       </div>
 
-      {/* MULTILINGUAL AUDIO EXPLAINER BAR */}
-      <div className="mb-4 bg-linear-to-r from-blue-50 via-indigo-50 to-blue-50 border border-blue-200 rounded-2xl p-3 sm:p-4 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-colors ${isAudioPlaying ? 'bg-blue-600 text-white animate-pulse' : 'bg-white text-blue-600 border border-blue-200'}`}>
-            <Volume2 className="w-4 h-4" />
-          </div>
-          <div>
-            <span className="text-xs font-bold text-slate-900 block flex items-center gap-1.5">
-              <span>Voice Guide &amp; Audio Explainer</span>
-              {isAudioPlaying && (
-                <span className="inline-flex items-center gap-1 text-[10px] text-blue-600 bg-white px-2 py-0.5 rounded-full border border-blue-200 font-semibold animate-pulse">
-                  Playing...
-                </span>
-              )}
-            </span>
-            <span className="text-[11px] text-slate-500">
-              Listen to complete instructions for Page {currentPage}
-            </span>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 self-end sm:self-auto">
-          {/* Language Selector */}
-          <select
-            value={selectedLang}
-            onChange={(e) => {
-              speechController.stop();
-              const nextLang = e.target.value as SupportedLanguage;
-              setSelectedLang(nextLang);
-              setStoredAudioLanguage(nextLang);
-            }}
-            className="bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-600 cursor-pointer shadow-2xs"
-          >
-            {SUPPORTED_LANGUAGES.map((lang) => (
-              <option key={lang.code} value={lang.code}>
-                {lang.nativeName} ({lang.name})
-              </option>
-            ))}
-          </select>
-
-          {/* Play / Stop Button */}
-          <button
-            type="button"
-            onClick={handlePlayPageSpeech}
-            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl font-bold text-xs shadow-xs transition-all cursor-pointer ${
-              isAudioPlaying
-                ? 'bg-rose-600 hover:bg-rose-700 text-white'
-                : 'bg-blue-600 hover:bg-blue-700 text-white'
-            }`}
-          >
-            {isAudioPlaying ? (
-              <>
-                <Square className="w-3.5 h-3.5 fill-current" />
-                <span>Stop</span>
-              </>
-            ) : (
-              <>
-                <Play className="w-3.5 h-3.5 fill-current" />
-                <span>Listen Page</span>
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-
       <div className="bg-white border border-slate-200 rounded-2xl shadow-xs p-5 sm:p-7">
         {/* ================= PAGE 1 ================= */}
         {currentPage === '1' && (
           <div className="space-y-6 animate-fadeIn">
             {/* Type of Premises */}
             <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-bold text-slate-800">
-                  Type of Premises <span className="text-red-500">*</span>
-                </label>
-                <button
-                  type="button"
-                  onClick={() => handlePlayFieldSpeech('gstPremisesType')}
-                  className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                  title="Listen to field guide"
-                >
-                  <Volume2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
+              <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                Type of Premises <span className="text-red-500">*</span>
+              </label>
               <select
                 value={premisesType}
                 onChange={(e) => setPremisesType(e.target.value)}
@@ -678,19 +752,9 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
 
             {/* State Selection */}
             <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-bold text-slate-800">
-                  State / Union Territory (36 States/UTs) <span className="text-red-500">*</span>
-                </label>
-                <button
-                  type="button"
-                  onClick={() => handlePlayFieldSpeech('state')}
-                  className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                  title="Listen to field guide"
-                >
-                  <Volume2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
+              <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                State / Union Territory (36 States/UTs) <span className="text-red-500">*</span>
+              </label>
               <select
                 value={selectedState}
                 onChange={(e) => setSelectedState(e.target.value)}
@@ -706,19 +770,9 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
 
             {/* Pincode & GST Jurisdiction auto-mapping */}
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="block text-xs font-bold text-slate-700">
-                  PIN Code <span className="text-red-500">*</span>
-                </label>
-                <button
-                  type="button"
-                  onClick={() => handlePlayFieldSpeech('gstPincode')}
-                  className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                  title="Listen to field guide"
-                >
-                  <Volume2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                PIN Code <span className="text-red-500">*</span>
+              </label>
               <input
                 type="text"
                 maxLength={6}
@@ -736,13 +790,6 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
                       <MapPin className="w-3.5 h-3.5 text-blue-600" />
                       Auto-Mapped GST Jurisdiction
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => handlePlayFieldSpeech('gstJurisdiction')}
-                      className="text-slate-400 hover:text-blue-600 p-0.5"
-                    >
-                      <Volume2 className="w-3 h-3" />
-                    </button>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 pt-1 text-[11px] text-slate-700">
                     <div>Commissionerate: <strong>{gstCommissionerate}</strong></div>
@@ -755,19 +802,9 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
 
             {/* Stamp Duty Fee Paid By */}
             <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-bold text-slate-800">
-                  Who is paying the Stamp Duty Fee? <span className="text-red-500">*</span>
-                </label>
-                <button
-                  type="button"
-                  onClick={() => handlePlayFieldSpeech('stampBorneBy')}
-                  className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                  title="Listen to field guide"
-                >
-                  <Volume2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
+              <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                Who is paying the Stamp Duty Fee? <span className="text-red-500">*</span>
+              </label>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                 {[
                   { key: 'Landlord', label: 'Landlord' },
@@ -797,19 +834,9 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
 
             {/* Stamp Paper Denomination */}
             <div className="space-y-3 pt-2 border-t border-slate-200">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
-                  Stamp Paper Value Selection
-                </span>
-                <button
-                  type="button"
-                  onClick={() => handlePlayFieldSpeech('stampValue')}
-                  className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                  title="Listen to field guide"
-                >
-                  <Volume2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
+              <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
+                Stamp Paper Value Selection
+              </span>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label
@@ -927,19 +954,9 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
             </div>
 
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="block text-xs font-bold text-slate-700">
-                  Landlord Standing &amp; Entity Type <span className="text-red-500">*</span>
-                </label>
-                <button
-                  type="button"
-                  onClick={() => handlePlayFieldSpeech('landlordEntity')}
-                  className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                  title="Listen to field guide"
-                >
-                  <Volume2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Landlord Standing &amp; Entity Type <span className="text-red-500">*</span>
+              </label>
               <select
                 value={ownershipStatus}
                 onChange={(e) => setOwnershipStatus(e.target.value)}
@@ -953,18 +970,9 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-bold text-slate-700">
-                    Landlord Full Legal Name <span className="text-red-500">*</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => handlePlayFieldSpeech('landlordName')}
-                    className="text-slate-400 hover:text-blue-600 p-1"
-                  >
-                    <Volume2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Landlord Full Legal Name <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="text"
                   required
@@ -976,18 +984,9 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-bold text-slate-700">
-                    Father's / Husband's Name <span className="text-red-500">*</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => handlePlayFieldSpeech('landlordFatherName')}
-                    className="text-slate-400 hover:text-blue-600 p-1"
-                  >
-                    <Volume2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Father's / Husband's Name <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="text"
                   required
@@ -1002,18 +1001,9 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
             {/* KYC: PAN (Alphanumeric text removed), Mobile (No OTP button), Email (Optional) */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-bold text-slate-700">
-                    Landlord PAN Card <span className="text-red-500">*</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => handlePlayFieldSpeech('landlordPan')}
-                    className="text-slate-400 hover:text-blue-600 p-1"
-                  >
-                    <Volume2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Landlord PAN Card <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="text"
                   required
@@ -1035,18 +1025,9 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-bold text-slate-700">
-                    Active Mobile Number <span className="text-red-500">*</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => handlePlayFieldSpeech('landlordMobile')}
-                    className="text-slate-400 hover:text-blue-600 p-1"
-                  >
-                    <Volume2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Active Mobile Number <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="tel"
                   required
@@ -1059,18 +1040,9 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-bold text-slate-700">
-                    Email ID <span className="text-slate-400 font-normal">(Optional)</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => handlePlayFieldSpeech('landlordEmail')}
-                    className="text-slate-400 hover:text-blue-600 p-1"
-                  >
-                    <Volume2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Email ID <span className="text-slate-400 font-normal">(Optional)</span>
+                </label>
                 <input
                   type="email"
                   value={landlordEmail}
@@ -1080,6 +1052,75 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
                 />
               </div>
             </div>
+
+            {/* Co-Owner Joint Landlords Extension */}
+            {ownershipStatus === 'Co-Owner / Joint Owner' && (
+              <div className="space-y-3 p-4 bg-slate-50 border border-slate-200 rounded-xl animate-fadeIn">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-blue-700 uppercase tracking-wider">
+                    Joint Property Co-Owners (Optional)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={addCoOwner}
+                    className="inline-flex items-center gap-1 text-xs font-bold text-blue-700 hover:text-blue-800 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Co-Owner</span>
+                  </button>
+                </div>
+
+                {coOwners.map((co, idx) => (
+                  <div key={co.id} className="p-3 bg-white border border-slate-200 rounded-xl space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-slate-600">Co-Owner #{idx + 1}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeCoOwner(co.id)}
+                        className="text-slate-400 hover:text-rose-600 p-1 cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
+                          Co-Owner Full Name
+                        </label>
+                        <input
+                          type="text"
+                          value={co.name}
+                          onChange={(e) => updateCoOwner(co.id, 'name', e.target.value)}
+                          placeholder={showExample ? "e.g. Sunita Verma" : ""}
+                          className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
+                          PAN Card Number
+                        </label>
+                        <input
+                          type="text"
+                          maxLength={10}
+                          value={co.pan}
+                          onChange={(e) => updateCoOwner(co.id, 'pan', e.target.value.toUpperCase())}
+                          placeholder={showExample ? "ABCDE1234F" : ""}
+                          className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-mono uppercase text-slate-900"
+                        />
+                      </div>
+                      <div>
+                        <AadhaarInput
+                          value={co.aadhaarLast4}
+                          onChange={(val) => updateCoOwner(co.id, 'aadhaarLast4', val)}
+                          label="Aadhaar Number (12 Digits)"
+                          placeholder={showExample ? "1234 - 5678 - 9012" : "12-digit Aadhaar number"}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Corporate Owner Extension */}
             {ownershipStatus === 'Authorized Director / Partner / Trustee' && (
@@ -1115,6 +1156,40 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
                     />
                   </div>
                 </div>
+
+                <div className="pt-2 border-t border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-800">
+                      Board Resolution / Authorization Letter <span className="text-slate-400 font-normal">(Optional)</span>
+                    </label>
+                    <span className="text-[11px] text-slate-500 block">
+                      {boardResolutionFile
+                        ? `Attached: ${boardResolutionFile.fileName} (${Math.max(1, Math.round(boardResolutionFile.sizeBytes / 1024))} KB)`
+                        : 'Attach signed corporate authorization (PDF/JPG/PNG)'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs cursor-pointer shadow-xs transition-all">
+                      <UploadCloud className="w-3.5 h-3.5" />
+                      <span>{boardResolutionFile ? 'Change File' : 'Upload File'}</span>
+                      <input
+                        type="file"
+                        accept="image/*,.pdf"
+                        onChange={(e) => handleRealFileSelect(e, 'Corporate Board Resolution', setBoardResolutionFile)}
+                        className="sr-only"
+                      />
+                    </label>
+                    {boardResolutionFile && (
+                      <button
+                        type="button"
+                        onClick={() => setBoardResolutionFile(null)}
+                        className="px-2.5 py-1.5 rounded-xl border border-slate-300 bg-white text-slate-600 hover:text-rose-600 text-xs font-semibold cursor-pointer"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -1141,18 +1216,9 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
             </div>
 
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="block text-xs font-bold text-slate-700">
-                  Constitution of Business <span className="text-red-500">*</span>
-                </label>
-                <button
-                  type="button"
-                  onClick={() => handlePlayFieldSpeech('nocBizCategory')}
-                  className="text-slate-400 hover:text-blue-600 p-1"
-                >
-                  <Volume2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Constitution of Business <span className="text-red-500">*</span>
+              </label>
               <select
                 value={constitutionOfBusiness}
                 onChange={(e) => setConstitutionOfBusiness(e.target.value)}
@@ -1169,18 +1235,9 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-bold text-slate-700">
-                    Proposed Trade Name <span className="text-red-500">*</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => handlePlayFieldSpeech('gstTradeName')}
-                    className="text-slate-400 hover:text-blue-600 p-1"
-                  >
-                    <Volume2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Proposed Trade Name <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="text"
                   required
@@ -1192,18 +1249,9 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-bold text-slate-700">
-                    Legal Name (As on PAN) <span className="text-red-500">*</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => handlePlayFieldSpeech('gstLegalName')}
-                    className="text-slate-400 hover:text-blue-600 p-1"
-                  >
-                    <Volume2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Legal Name (As on PAN) <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="text"
                   required
@@ -1217,18 +1265,9 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-bold text-slate-700">
-                    PAN Card <span className="text-red-500">*</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => handlePlayFieldSpeech('nocGranteePan')}
-                    className="text-slate-400 hover:text-blue-600 p-1"
-                  >
-                    <Volume2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  PAN Card <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="text"
                   required
@@ -1241,18 +1280,9 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-bold text-slate-700">
-                    Applicant Full Name <span className="text-red-500">*</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => handlePlayFieldSpeech('nocApplicantName')}
-                    className="text-slate-400 hover:text-blue-600 p-1"
-                  >
-                    <Volume2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Applicant Full Name <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="text"
                   required
@@ -1263,6 +1293,40 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
                 />
               </div>
             </div>
+
+            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-800">
+                  Applicant Signing Authority / Authorization Proof <span className="text-slate-400 font-normal">(Optional)</span>
+                </label>
+                <span className="text-[11px] text-slate-500 block">
+                  {signingAuthorityFile
+                    ? `Attached: ${signingAuthorityFile.fileName} (${Math.max(1, Math.round(signingAuthorityFile.sizeBytes / 1024))} KB)`
+                    : 'Upload Partnership Deed, Authorization Letter, or ID Proof (PDF/JPG/PNG)'}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs cursor-pointer shadow-xs transition-all">
+                  <UploadCloud className="w-3.5 h-3.5" />
+                  <span>{signingAuthorityFile ? 'Change File' : 'Upload File'}</span>
+                  <input
+                    type="file"
+                    accept="image/*,.pdf"
+                    onChange={(e) => handleRealFileSelect(e, 'Applicant Signing Authority Proof', setSigningAuthorityFile)}
+                    className="sr-only"
+                  />
+                </label>
+                {signingAuthorityFile && (
+                  <button
+                    type="button"
+                    onClick={() => setSigningAuthorityFile(null)}
+                    className="px-2.5 py-1.5 rounded-xl border border-slate-300 bg-white text-slate-600 hover:text-rose-600 text-xs font-semibold cursor-pointer"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
@@ -1270,18 +1334,9 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
         {currentPage === '3B' && (
           <div className="space-y-4 animate-fadeIn">
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="block text-xs font-bold text-slate-700">
-                  Principal Place of Business Address <span className="text-red-500">*</span>
-                </label>
-                <button
-                  type="button"
-                  onClick={() => handlePlayFieldSpeech('premisesAddress')}
-                  className="text-slate-400 hover:text-blue-600 p-1"
-                >
-                  <Volume2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Principal Place of Business Address <span className="text-red-500">*</span>
+              </label>
               <textarea
                 rows={3}
                 required
@@ -1294,18 +1349,9 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-bold text-slate-700">
-                    Municipal Ward / Zone <span className="text-slate-400 font-normal">(Optional)</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => handlePlayFieldSpeech('nocMunicipalWard')}
-                    className="text-slate-400 hover:text-blue-600 p-1"
-                  >
-                    <Volume2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Municipal Ward / Zone <span className="text-slate-400 font-normal">(Optional)</span>
+                </label>
                 <input
                   type="text"
                   value={wardNumber}
@@ -1316,18 +1362,9 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-bold text-slate-700">
-                    Property Tax / Assessment No. <span className="text-slate-400 font-normal">(Optional)</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => handlePlayFieldSpeech('nocHoldingNo')}
-                    className="text-slate-400 hover:text-blue-600 p-1"
-                  >
-                    <Volume2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Property Tax / Assessment No. <span className="text-slate-400 font-normal">(Optional)</span>
+                </label>
                 <input
                   type="text"
                   value={propertyTaxAssessmentNo}
@@ -1340,22 +1377,13 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
 
             {/* Utility Document Upload (Electricity Bill not older than 2 months) */}
             <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3 pt-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-xs font-bold text-slate-900 block">
-                    Upload Supporting Ownership / Utility Document <span className="text-red-500">*</span>
-                  </span>
-                  <span className="text-[11px] text-slate-500">
-                    GST Rule 9 mandates an electricity bill, municipal tax receipt, or property deed
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handlePlayFieldSpeech('propertyProof')}
-                  className="text-slate-400 hover:text-blue-600 p-1"
-                >
-                  <Volume2 className="w-3.5 h-3.5" />
-                </button>
+              <div>
+                <label className="text-xs font-bold text-slate-900 block">
+                  Upload Supporting Ownership / Utility Document <span className="text-red-500">*</span>
+                </label>
+                <span className="text-[11px] text-slate-500">
+                  GST Rule 9 mandates an electricity bill, municipal tax receipt, or property deed
+                </span>
               </div>
 
               <select
@@ -1372,24 +1400,40 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-white border border-slate-200 rounded-xl">
                 <div>
                   <span className="text-xs font-bold text-slate-800 block">
-                    {utilityDocUploaded ? '✓ Document Attached' : 'Attach Scanned File (PDF/JPG)'}
+                    {utilityDocFile
+                      ? `Attached: ${utilityDocFile.fileName} (${Math.max(1, Math.round(utilityDocFile.sizeBytes / 1024))} KB)`
+                      : 'Attach Scanned File (PDF/JPG/PNG)'}
                   </span>
                   <span className="text-[11px] text-slate-500">
                     File must be clear and legible for GST officer audit
                   </span>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => setUtilityDocUploaded(true)}
-                  className={`px-3.5 py-1.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
-                    utilityDocUploaded
+                <div className="flex items-center gap-2">
+                  <label className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
+                    utilityDocFile
                       ? 'bg-emerald-50 text-emerald-700 border border-emerald-300'
                       : 'bg-blue-600 hover:bg-blue-700 text-white shadow-xs'
-                  }`}
-                >
-                  {utilityDocUploaded ? 'Attached' : 'Upload Document'}
-                </button>
+                  }`}>
+                    <UploadCloud className="w-3.5 h-3.5" />
+                    <span>{utilityDocFile ? 'Change File' : 'Upload Document'}</span>
+                    <input
+                      type="file"
+                      accept="image/*,.pdf"
+                      onChange={(e) => handleRealFileSelect(e, ownershipDocType || 'Supporting Utility Document', setUtilityDocFile)}
+                      className="sr-only"
+                    />
+                  </label>
+                  {utilityDocFile && (
+                    <button
+                      type="button"
+                      onClick={() => setUtilityDocFile(null)}
+                      className="px-2.5 py-1.5 rounded-xl border border-slate-300 bg-white text-slate-600 hover:text-rose-600 text-xs font-semibold cursor-pointer"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
               </div>
 
               {utilityDocUploaded && (
@@ -1433,13 +1477,6 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
                 <span className="text-xs text-slate-700">
                   <strong>Physical Verification by GST Officer (Rule 9):</strong> Landlord has no objection to physical inspection or verification of the premises by GST authorities.
                 </span>
-                <button
-                  type="button"
-                  onClick={(e) => { e.preventDefault(); handlePlayFieldSpeech('declNoObjection'); }}
-                  className="text-slate-400 hover:text-blue-600 p-0.5 ml-auto"
-                >
-                  <Volume2 className="w-3 h-3" />
-                </button>
               </label>
 
               <label className="flex items-start gap-2.5 cursor-pointer select-none">
@@ -1452,13 +1489,6 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
                 <span className="text-xs text-slate-700">
                   <strong>Display of GSTIN Signboard (Rule 18):</strong> Full consent to display the business name and 15-digit GSTIN on the entrance signboard.
                 </span>
-                <button
-                  type="button"
-                  onClick={(e) => { e.preventDefault(); handlePlayFieldSpeech('declStatutoryCompliance'); }}
-                  className="text-slate-400 hover:text-blue-600 p-0.5 ml-auto"
-                >
-                  <Volume2 className="w-3 h-3" />
-                </button>
               </label>
 
               <label className="flex items-start gap-2.5 cursor-pointer select-none">
@@ -1471,13 +1501,6 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
                 <span className="text-xs text-slate-700">
                   <strong>Maintenance of Books of Accounts (Section 35):</strong> Consent to keep business accounting records, invoices, and ledgers at these premises.
                 </span>
-                <button
-                  type="button"
-                  onClick={(e) => { e.preventDefault(); handlePlayFieldSpeech('declStatutoryCompliance'); }}
-                  className="text-slate-400 hover:text-blue-600 p-0.5 ml-auto"
-                >
-                  <Volume2 className="w-3 h-3" />
-                </button>
               </label>
 
               <label className="flex items-start gap-2.5 cursor-pointer select-none">
@@ -1490,13 +1513,6 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
                 <span className="text-xs text-slate-700">
                   <strong>Tax Liability Indemnity:</strong> All commercial taxes, GST liabilities, and penalties remain solely with the tenant/grantee, not the property owner.
                 </span>
-                <button
-                  type="button"
-                  onClick={(e) => { e.preventDefault(); handlePlayFieldSpeech('declRevocationRight'); }}
-                  className="text-slate-400 hover:text-blue-600 p-0.5 ml-auto"
-                >
-                  <Volume2 className="w-3 h-3" />
-                </button>
               </label>
             </div>
 
@@ -1562,18 +1578,9 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
           <div className="space-y-5 animate-fadeIn">
             {/* Delivery Preference */}
             <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
-                  Delivery &amp; Execution Preference
-                </span>
-                <button
-                  type="button"
-                  onClick={() => handlePlayFieldSpeech('executionMode')}
-                  className="text-slate-400 hover:text-blue-600 p-1"
-                >
-                  <Volume2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
+              <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block mb-2">
+                Delivery &amp; Execution Preference
+              </span>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <label
@@ -1644,33 +1651,48 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
                 <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
                   Courier Shipping Address
                 </span>
-                <textarea
-                  rows={2}
-                  required
-                  value={shippingAddress}
-                  onChange={(e) => setShippingAddress(e.target.value)}
-                  placeholder={showExample ? "Complete shipping address for physical delivery" : ""}
-                  className="w-full bg-white border border-slate-300 rounded-xl p-2.5 text-xs text-slate-900 resize-none"
-                />
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    Full Delivery Street Address <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    rows={2}
+                    required
+                    value={shippingAddress}
+                    onChange={(e) => setShippingAddress(e.target.value)}
+                    placeholder={showExample ? "Complete shipping address for physical delivery" : ""}
+                    className="w-full bg-white border border-slate-300 rounded-xl p-2.5 text-xs text-slate-900 resize-none"
+                  />
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <input
-                    type="text"
-                    maxLength={6}
-                    required
-                    value={shippingPincode}
-                    onChange={(e) => setShippingPincode(e.target.value.replace(/\D/g, ''))}
-                    placeholder={showExample ? "Delivery PIN Code" : ""}
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono"
-                  />
-                  <input
-                    type="tel"
-                    maxLength={10}
-                    required
-                    value={shippingPhone}
-                    onChange={(e) => setShippingPhone(e.target.value.replace(/\D/g, ''))}
-                    placeholder={showExample ? "Courier Contact Mobile Number" : ""}
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono"
-                  />
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Delivery PIN Code <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={6}
+                      required
+                      value={shippingPincode}
+                      onChange={(e) => setShippingPincode(e.target.value.replace(/\D/g, ''))}
+                      placeholder={showExample ? "Delivery PIN Code" : ""}
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Courier Contact Mobile Number <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="tel"
+                      maxLength={10}
+                      required
+                      value={shippingPhone}
+                      onChange={(e) => setShippingPhone(e.target.value.replace(/\D/g, ''))}
+                      placeholder={showExample ? "Courier Contact Mobile Number" : ""}
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono"
+                    />
+                  </div>
                 </div>
               </div>
             )}

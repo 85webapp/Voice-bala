@@ -27,6 +27,9 @@ import {
   postEncryptedPayloadToWebsiteB,
   playConfirmationChime,
   generateSequentialOrderId,
+  buildSubmissionOverview,
+  fieldEntry,
+  DossierSection,
   ServerBSyncResult
 } from '../services/encryptionService';
 import { ServerBSyncStatusCard } from './ServerBSyncStatusCard';
@@ -154,23 +157,143 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
     e.preventDefault();
     const ref = generateSequentialOrderId();
     setReferenceId(ref);
+    const now = new Date();
+
+    const requestTypeMap: Record<string, string> = {
+      registrations: 'Registration Request',
+      insurance: 'Insurance Request',
+      filings: 'Tax / Compliance Filing Request',
+      notices: 'Notice Handling Request',
+      website: 'Website & Digital Branding Request',
+      'bank-loans': 'Bank Loan & Finance File Request'
+    };
+
+    const submissionOverview = buildSubmissionOverview({
+      orderId: ref,
+      requestType: requestTypeMap[category.id] || `${category.title} Request`,
+      mainCategory: category.title,
+      subCategory: selectedTitle,
+      availableCategories: SERVICE_CATEGORIES.map((c) => c.title),
+      availableSubCategories: category.services,
+      documentTitle: selectedTitle,
+      date: now
+    });
+
+    const sections: DossierSection[] = [
+      {
+        pageNumber: 1,
+        sectionTitle: 'Applicant & Service Selection',
+        fields: [
+          fieldEntry('Category', category.title, false, SERVICE_CATEGORIES.map((c) => c.title)),
+          fieldEntry('Selected Service', selectedTitle, false, category.services),
+          fieldEntry('Applicant Full Name', name, false),
+          fieldEntry('10-Digit Mobile Number', phone, false),
+          fieldEntry('Email Address', email, true)
+        ]
+      }
+    ];
+
+    if (isInsurance) {
+      sections.push({
+        pageNumber: 2,
+        sectionTitle: 'Vehicle & Policy Insurance Details',
+        fields: [
+          fieldEntry('Vehicle Registration Number', vehicleNumber, isOtherInsurance),
+          fieldEntry('Chassis Number', chassisNumber, !isOtherInsurance),
+          fieldEntry('Engine Number', engineNumber, !isOtherInsurance),
+          fieldEntry('Is Current Policy Expired?', policyExpired, false, ['yes', 'no']),
+          fieldEntry('Preferred Policy Type', policyType, false, ['comprehensive', 'third_party']),
+          fieldEntry('Additional Insurance Notes / Requirements', insuranceNotes, true)
+        ]
+      });
+    } else if (isGstFiling) {
+      sections.push({
+        pageNumber: 2,
+        sectionTitle: 'GST Return Filing Details',
+        fields: [
+          fieldEntry('15-Digit GSTIN', gstin, false),
+          fieldEntry('Filing Frequency', gstFrequency, false, ['monthly', 'quarterly']),
+          fieldEntry('Selected Return Months', gstFrequency === 'monthly' ? selectedMonths.join(', ') : '', gstFrequency !== 'monthly'),
+          fieldEntry('Selected Return Quarter', gstFrequency === 'quarterly' ? selectedQuarter : '', gstFrequency !== 'quarterly')
+        ]
+      });
+    } else if (isItrFiling) {
+      sections.push({
+        pageNumber: 2,
+        sectionTitle: 'Income Tax Return (ITR) Details',
+        fields: [
+          fieldEntry('10-Character PAN Number', panNumber, false),
+          fieldEntry('Assessment Year', assessmentYear, false),
+          fieldEntry('Primary Income Source', incomeSource, false),
+          fieldEntry('Residential / Communication Address', taxAddress, false)
+        ]
+      });
+    } else if (isOtherFiling) {
+      sections.push({
+        pageNumber: 2,
+        sectionTitle: 'Other Filing Details',
+        fields: [
+          fieldEntry('Business / Applicant Address', otherFilingAddress, false),
+          fieldEntry('Which Filing / Compliance Needed', whichFilingDetails, false)
+        ]
+      });
+    } else if (isRegistrations) {
+      sections.push({
+        pageNumber: 2,
+        sectionTitle: 'Business Registration Details',
+        fields: [
+          fieldEntry('Proposed Business / Firm / Brand Name', businessName, false),
+          fieldEntry('Business Activity / Scope', businessActivity, true),
+          fieldEntry('Registered / Operating Address', businessAddress, false)
+        ]
+      });
+    } else {
+      sections.push({
+        pageNumber: 2,
+        sectionTitle: `${category.title} Specific Requirements`,
+        fields: [
+          fieldEntry('Business / Brand Name', businessName, true),
+          fieldEntry('Notice / Domain / Loan Details & Requirements', generalDetails, false)
+        ]
+      });
+    }
 
     // 1. Zero-Database Client-Side Encryption
     const sensitiveData = {
       orderId: ref,
+      submissionOverview,
+      sections,
       category: category.title,
       service: selectedTitle,
       name,
       phone,
-      email,
-      vehicleNumber,
-      chassisNumber,
-      engineNumber,
+      email: email || 'Not Filled (Optional)',
+      // Insurance fields
+      vehicleNumber: isInsurance ? vehicleNumber : undefined,
+      chassisNumber: isInsurance ? chassisNumber : undefined,
+      engineNumber: isInsurance ? engineNumber : undefined,
+      policyExpired: isInsurance ? policyExpired : undefined,
+      policyType: isInsurance ? policyType : undefined,
+      insuranceNotes: isInsurance ? insuranceNotes : undefined,
+      // GST Filing fields
+      gstin: isGstFiling ? gstin : undefined,
+      gstFrequency: isGstFiling ? gstFrequency : undefined,
+      selectedMonths: isGstFiling ? selectedMonths : undefined,
+      selectedQuarter: isGstFiling ? selectedQuarter : undefined,
+      // ITR Filing fields
+      panNumber: isItrFiling ? panNumber : undefined,
+      assessmentYear: isItrFiling ? assessmentYear : undefined,
+      incomeSource: isItrFiling ? incomeSource : undefined,
+      taxAddress: isItrFiling ? taxAddress : undefined,
+      // Other Filing fields
+      otherFilingAddress: isOtherFiling ? otherFilingAddress : undefined,
+      whichFilingDetails: isOtherFiling ? whichFilingDetails : undefined,
+      // Registration / Notice / Website / Loan fields
       businessName,
       businessAddress,
       businessActivity,
       generalDetails,
-      timestamp: new Date().toISOString()
+      timestamp: now.toISOString()
     };
     const encResult = encryptFormDataAndSign(sensitiveData);
     const { encryptedPayload, signature, websiteBUrl } = encResult;

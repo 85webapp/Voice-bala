@@ -34,6 +34,9 @@ import {
   postEncryptedPayloadToWebsiteB,
   playConfirmationChime,
   generateSequentialOrderId,
+  buildSubmissionOverview,
+  fieldEntry,
+  DossierSection,
   ServerBSyncResult
 } from '../services/encryptionService';
 import { ServerBSyncStatusCard } from './ServerBSyncStatusCard';
@@ -225,9 +228,74 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
     setUnitsList((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleRequestSubmit = (e: React.FormEvent) => {
+  const handleRequestSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const orderId = generateSequentialOrderId();
+    const urn = `UDYAM-REQ-${orderId}`;
+    const now = new Date();
+    setUdyamRegNumber(urn);
+
+    const registrationServices = SERVICE_CATEGORIES.find((c) => c.id === 'registrations')?.services || [];
+    const submissionOverview = buildSubmissionOverview({
+      orderId: urn,
+      requestType: 'Registration Callback Request (1-Hour Instant)',
+      mainCategory: 'Registrations',
+      subCategory: requestData.service || 'MSME Udyam Registration',
+      availableCategories: SERVICE_CATEGORIES.map((c) => c.title),
+      availableSubCategories: registrationServices,
+      documentTitle: `${requestData.service || 'MSME Udyam Registration'} (Callback Request)`,
+      date: now
+    });
+
+    const sections: DossierSection[] = [
+      {
+        pageNumber: 1,
+        sectionTitle: 'Instant Udyam Callback Request Details',
+        fields: [
+          fieldEntry('Applicant Name', requestData.name, false),
+          fieldEntry('10-Digit Mobile Number', requestData.phone, false),
+          fieldEntry('Email Address', requestData.email, true),
+          fieldEntry('Service Selected', requestData.service, false, registrationServices)
+        ]
+      }
+    ];
+
+    const sensitiveData = {
+      orderId,
+      urn,
+      submissionOverview,
+      sections,
+      mode: 'Quick Callback Request',
+      service: requestData.service || 'MSME Udyam Registration',
+      category: 'Registrations',
+      clientName: requestData.name,
+      clientPhone: requestData.phone,
+      clientEmail: requestData.email || 'Not Filled (Optional)',
+      requestData,
+      timestamp: now.toISOString()
+    };
+
+    const encResult = encryptFormDataAndSign(sensitiveData);
+    const metadata = {
+      firstPartyName: requestData.name || 'MSME Callback Applicant',
+      formName: `${requestData.service || 'MSME Udyam Registration'} (Callback Request)`,
+      timestamp: now.toISOString(),
+      totalPrice: '0',
+      orderId: urn
+    };
+    await saveLightweightMetadata(metadata);
+    const syncRes = await postEncryptedPayloadToWebsiteB(encResult, metadata);
+    setServerBSyncResult(syncRes);
+    setCachedEncPayload({ result: encResult, metadata });
+    setSubmissionSecurityDetails({
+      encryptedPayload: encResult.encryptedPayload,
+      signature: encResult.signature,
+      websiteBUrl: encResult.websiteBUrl
+    });
     setRequestSubmitted(true);
+    try {
+      playConfirmationChime();
+    } catch {}
   };
 
   const handleFinalUdyamSubmit = async (e: React.FormEvent) => {
@@ -236,28 +304,125 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
     const distCode = '07';
     const orderId = generateSequentialOrderId();
     const urn = `UDYAM-${stateCode}-${distCode}-${orderId}`;
+    const now = new Date();
     setUdyamRegNumber(urn);
+
+    const registrationServices = SERVICE_CATEGORIES.find((c) => c.id === 'registrations')?.services || [];
+    const submissionOverview = buildSubmissionOverview({
+      orderId: urn,
+      requestType: 'Registration Request (Full 5-Step MSME Udyam Form)',
+      mainCategory: 'Registrations',
+      subCategory: 'MSME Udyam Registration',
+      availableCategories: SERVICE_CATEGORIES.map((c) => c.title),
+      availableSubCategories: registrationServices,
+      documentTitle: 'MSME Udyam Registration',
+      date: now
+    });
+
+    const sections: DossierSection[] = [
+      {
+        pageNumber: 1,
+        sectionTitle: 'Step 1: Aadhaar Authentication & PAN Gate',
+        fields: [
+          fieldEntry('Aadhaar Number (12 Digits)', step1.aadhaarNumber, false),
+          fieldEntry('Name of Entrepreneur (As per Aadhaar)', step1.entrepreneurName, false),
+          fieldEntry('Aadhaar OTP Verified?', step1.otpVerified ? 'Yes' : 'Pending Verification', true),
+          fieldEntry('Do you have PAN?', step1.hasPan, false, ['Yes', 'No']),
+          fieldEntry('PAN Number', step1.hasPan === 'Yes' ? step1.panNumber : '', step1.hasPan !== 'Yes')
+        ]
+      },
+      {
+        pageNumber: 2,
+        sectionTitle: 'Step 2: Type of Organisation & Social Category',
+        fields: [
+          fieldEntry('Type of Organisation', step2.organizationType, false, [
+            'PROPRIETORY', 'HINDU UNDIVIDED FAMILY', 'PARTNERSHIP', 'CO-OPERATIVE',
+            'PRIVATE LIMITED COMPANY', 'PUBLIC LIMITED COMPANY', 'SELF HELP GROUP',
+            'LIMITED LIABILITY PARTNERSHIP', 'SOCIETY', 'TRUST', 'OTHERS'
+          ]),
+          fieldEntry('Social Category', step2.socialCategory, false, ['GENERAL', 'SC', 'ST', 'OBC']),
+          fieldEntry('Caste Certificate Number', step2.socialCategory !== 'GENERAL' ? step2.casteCertificateNumber : '', step2.socialCategory === 'GENERAL'),
+          fieldEntry('Gender', step2.gender, false, ['Male', 'Female', 'Other']),
+          fieldEntry('Specially Abled (Divyang)?', step2.physicallyHandicapped, false, ['Yes', 'No'])
+        ]
+      },
+      {
+        pageNumber: 3,
+        sectionTitle: 'Step 3: Enterprise Contact, Bank & Plant/Unit Addresses',
+        fields: [
+          fieldEntry('Name of Enterprise', step3.enterpriseName, false),
+          fieldEntry('Official Email ID', step3.officialEmail, false),
+          fieldEntry('Official Mobile Number', step3.officialMobile, false),
+          fieldEntry('Date of Commencement of Business', step3.dateOfCommencement, false),
+          fieldEntry('Previous UAM / EM-II Number', step3.previousUamNumber, true),
+          fieldEntry('Bank Name', step3.bankName, false),
+          fieldEntry('IFSC Code', step3.ifscCode, false),
+          fieldEntry('Bank Account Number', step3.bankAccountNumber, false),
+          ...unitsList.flatMap((u, idx) => [
+            fieldEntry(`Plant/Unit #${idx + 1} Name`, u.unitName, false),
+            fieldEntry(`Plant/Unit #${idx + 1} Flat / Door / Block`, u.flatNo, false),
+            fieldEntry(`Plant/Unit #${idx + 1} Building / Premises`, u.buildingName, true),
+            fieldEntry(`Plant/Unit #${idx + 1} Village / Town`, u.villageOrTown, true),
+            fieldEntry(`Plant/Unit #${idx + 1} Block / Road`, u.block, true),
+            fieldEntry(`Plant/Unit #${idx + 1} City`, u.city, false),
+            fieldEntry(`Plant/Unit #${idx + 1} District`, u.district, false),
+            fieldEntry(`Plant/Unit #${idx + 1} State`, u.state, false),
+            fieldEntry(`Plant/Unit #${idx + 1} PIN Code`, u.pinCode, false)
+          ])
+        ]
+      },
+      {
+        pageNumber: 4,
+        sectionTitle: 'Step 4: Major Activity, NIC Codes, Employment & Financials',
+        fields: [
+          fieldEntry('Major Activity', step4.majorActivity, false, ['MANUFACTURING', 'SERVICES']),
+          fieldEntry('NIC 2/4/5-Digit Codes', step4.nicCodes, false),
+          fieldEntry('Employees - Male', step4.empMale, false),
+          fieldEntry('Employees - Female', step4.empFemale, false),
+          fieldEntry('Employees - Other', step4.empOther, true),
+          fieldEntry('Total Persons Employed', totalEmployees, false),
+          fieldEntry('Investment in Plant & Machinery (INR)', step4.investmentInPlantMachinery, false),
+          fieldEntry('Annual Turnover (INR)', step4.annualTurnover, false),
+          fieldEntry('Computed MSME Classification', classification.category, false)
+        ]
+      },
+      {
+        pageNumber: 5,
+        sectionTitle: 'Step 5: DIC Office & Final Declaration',
+        fields: [
+          fieldEntry('Selected District Industries Centre (DIC)', step5.preferredDIC, false),
+          fieldEntry('Declaration Accepted?', step5.declarationAccepted ? 'Yes' : 'No', false),
+          fieldEntry('Final Aadhaar OTP Entered', step5.finalAadhaarOtp, true)
+        ]
+      }
+    ];
 
     // 1. Zero-Database Client-Side Encryption
     const sensitiveData = {
       orderId,
       urn,
+      submissionOverview,
+      sections,
       service: 'MSME Udyam Registration',
+      category: 'Registrations',
       step1,
       step2,
       step3,
+      unitsList,
       step4,
+      classification,
+      totalEmployees,
       step5,
-      timestamp: new Date().toISOString()
+      timestamp: now.toISOString()
     };
     const encResult = encryptFormDataAndSign(sensitiveData);
     const { encryptedPayload, signature, websiteBUrl } = encResult;
 
     // 2. Save ONLY 4 lightweight metadata fields in Supabase
     const metadata = {
-      firstPartyName: step1.entrepreneurName || 'MSME Applicant',
+      firstPartyName: step1.entrepreneurName || step3.enterpriseName || 'MSME Applicant',
       formName: 'MSME Udyam Registration',
-      timestamp: new Date().toISOString(),
+      timestamp: now.toISOString(),
       totalPrice: '0',
       orderId: urn
     };
@@ -411,19 +576,28 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
       {activeTab === 'request' && (
         <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-sm">
           {requestSubmitted ? (
-            <div className="text-center py-8">
-              <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-3">
+            <div className="text-center py-8 space-y-4">
+              <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
                 <CheckCircle2 className="w-7 h-7" />
               </div>
-              <h3 className="text-lg font-bold text-slate-900">Request Submitted Successfully!</h3>
-              <p className="text-sm text-slate-600 mt-1 max-w-md mx-auto">
-                Our MSME officer will call you on <strong>{requestData.phone}</strong> within 1 hour and generate your Udyam Certificate immediately.
-              </p>
-              <div className="mt-5 flex justify-center gap-3">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Request Submitted Successfully!</h3>
+                <p className="text-sm text-slate-600 mt-1 max-w-md mx-auto">
+                  Reference <strong>{udyamRegNumber}</strong>: Our MSME officer will call you on <strong>{requestData.phone}</strong> within 1 hour and generate your Udyam Certificate immediately.
+                </p>
+              </div>
+              <div className="max-w-md mx-auto text-left">
+                <ServerBSyncStatusCard
+                  syncResult={serverBSyncResult}
+                  isRetrying={isRetryingSync}
+                  onRetry={handleRetryServerBSync}
+                />
+              </div>
+              <div className="pt-2 flex justify-center gap-3">
                 <button
                   type="button"
                   onClick={onBack}
-                  className="px-5 py-2 bg-blue-600 text-white font-bold rounded-xl text-xs"
+                  className="px-5 py-2 bg-blue-600 text-white font-bold rounded-xl text-xs cursor-pointer"
                 >
                   Back to Services
                 </button>

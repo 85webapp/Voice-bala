@@ -10,10 +10,18 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { LegalDocument, OrderItem } from '../types';
-import { STAMP_PAPER_VALUES } from '../data/documentsData';
+import { STAMP_PAPER_VALUES, MASTER_CATEGORIES } from '../data/documentsData';
 import { INDIAN_STATES_LIST } from '../data/indianCities';
 import { useExampleDetails } from '../hooks/useExampleDetails';
-import { generateSequentialOrderId } from '../services/encryptionService';
+import {
+  generateSequentialOrderId,
+  encryptFormDataAndSign,
+  saveLightweightMetadata,
+  postEncryptedPayloadToWebsiteB,
+  buildSubmissionOverview,
+  fieldEntry,
+  DossierSection
+} from '../services/encryptionService';
 import { showToast } from '../services/toastService';
 
 interface DocumentOrderModalProps {
@@ -45,7 +53,7 @@ export const DocumentOrderModal: React.FC<DocumentOrderModalProps> = ({
   const baseFee = document.basePrice;
   const totalFee = baseFee + fastTrackFee;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!party1Name.trim() || !phone.trim()) {
       showToast('Please enter Primary Party Name & Mobile Number.', 'warning');
@@ -54,9 +62,74 @@ export const DocumentOrderModal: React.FC<DocumentOrderModalProps> = ({
 
     setIsSubmitting(true);
 
-    setTimeout(() => {
-      const todayISO = new Date().toISOString().split('T')[0];
+    try {
+      const now = new Date();
+      const todayISO = now.toISOString().split('T')[0];
       const newOrderId = generateSequentialOrderId();
+      const stampNumeric = Number(stampValue.replace(/[^0-9]/g, '')) || 100;
+      const isAffidavit = document.title.toLowerCase().includes('affidavit');
+
+      const submissionOverview = buildSubmissionOverview({
+        orderId: newOrderId,
+        requestType: isAffidavit ? 'Affidavit Request (Quick Order)' : 'Legal Agreement Request (Quick Order)',
+        mainCategory: document.category,
+        subCategory: document.title,
+        availableCategories: MASTER_CATEGORIES.map((c) => c.name),
+        availableSubCategories: MASTER_CATEGORIES.find((c) => c.name === document.category)?.items,
+        documentTitle: document.title,
+        date: now
+      });
+
+      const sections: DossierSection[] = [
+        {
+          pageNumber: 1,
+          sectionTitle: 'Document Order, State & Stamp Details',
+          fields: [
+            fieldEntry('Document Title', document.title, false),
+            fieldEntry('Document Category', document.category, false, MASTER_CATEGORIES.map((c) => c.name)),
+            fieldEntry('State / Jurisdiction', selectedState, false),
+            fieldEntry('Stamp Paper Value', stampValue, false, STAMP_PAPER_VALUES.map((s) => s.value)),
+            fieldEntry('Delivery SLA (Hours)', `${deliveryHours} Hours`, false),
+            fieldEntry('Primary Party / Applicant Name', party1Name, false),
+            fieldEntry('Second Party / Counterparty Name', party2Name, true),
+            fieldEntry('Mobile Number', phone, false),
+            fieldEntry('Email Address', email, true),
+            fieldEntry('Special Clauses / Custom Instructions', specialTerms, true),
+            fieldEntry('Base Fee', `₹${baseFee}`, false),
+            fieldEntry('Fast Track Fee', `₹${fastTrackFee}`, false),
+            fieldEntry('Total Payable', `₹${totalFee}`, false)
+          ]
+        }
+      ];
+
+      const sensitiveData = {
+        orderId: newOrderId,
+        submissionOverview,
+        sections,
+        docTitle: document.title,
+        category: document.category,
+        state: selectedState,
+        stampDutyAmount: stampNumeric,
+        stampDenomination: stampValue,
+        deliveryHours,
+        firstParty: { name: party1Name, mobile: phone, email: email || 'Not Filled (Optional)' },
+        secondParty: party2Name ? { name: party2Name } : null,
+        specialTerms: specialTerms || 'Not Filled (Optional)',
+        pricing: { baseFee, fastTrackFee, totalPayable: totalFee, stamp: stampNumeric },
+        timestamp: now.toISOString()
+      };
+
+      const encResult = encryptFormDataAndSign(sensitiveData);
+      const metadata = {
+        firstPartyName: party1Name,
+        formName: document.title,
+        timestamp: new Date().toISOString(),
+        totalPrice: totalFee,
+        orderId: newOrderId
+      };
+      await saveLightweightMetadata(metadata);
+      await postEncryptedPayloadToWebsiteB(encResult, metadata);
+
       const newOrder: OrderItem = {
         orderId: newOrderId,
         docTitle: document.title,
@@ -85,8 +158,9 @@ export const DocumentOrderModal: React.FC<DocumentOrderModalProps> = ({
 
       setSubmittedOrder(newOrder);
       onOrderCreated(newOrder);
+    } finally {
       setIsSubmitting(false);
-    }, 600);
+    }
   };
 
   return (

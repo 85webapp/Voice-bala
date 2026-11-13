@@ -97,8 +97,8 @@ export const CheckStepsView: React.FC<CheckStepsViewProps> = ({ onBack, onSelect
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-6 space-y-6">
-        {/* Continuous Autoplaying Video: Full portrait aspect ratio so no bottom characters are cut off */}
-        <div className="relative max-w-xs sm:max-w-sm mx-auto rounded-2xl overflow-hidden border-2 border-slate-900/10 shadow-lg bg-black aspect-[9/16] flex items-center justify-center">
+        {/* Continuous Autoplaying Vertical Video: Tall 9:16 portrait layout */}
+        <div className="relative w-full max-w-[340px] sm:max-w-[380px] h-[580px] sm:h-[660px] mx-auto rounded-2xl overflow-hidden border-2 border-slate-900/10 shadow-lg bg-black aspect-[9/16]">
           <video
             ref={videoRef}
             src="/assets/aistudio/Blue_Stop_Dreaming_Start_Doing_Quote_Mobile_Video_9deb27ad.mp4"
@@ -109,7 +109,7 @@ export const CheckStepsView: React.FC<CheckStepsViewProps> = ({ onBack, onSelect
             controls={false}
             disablePictureInPicture
             disableRemotePlayback
-            className="w-full h-full object-contain pointer-events-none select-none"
+            className="w-full h-full object-cover block pointer-events-none select-none"
             aria-label="Cotrix Tcg Process Video"
           />
         </div>

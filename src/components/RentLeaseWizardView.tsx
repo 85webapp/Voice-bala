@@ -13,28 +13,13 @@ import {
   Trash2,
   Sparkles,
   UploadCloud,
-  Layers,
-  Volume2,
-  VolumeX,
-  Play,
-  Square
+  Layers
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { LegalDocument, OrderItem } from '../types';
 import { STATE_CATEGORIES, getSafeStampDuty } from '../data/stampDutyMatrix';
 import { DateOfBirthPicker } from './DateOfBirthPicker';
 import { useExampleDetails } from '../hooks/useExampleDetails';
-import {
-  SUPPORTED_LANGUAGES,
-  SupportedLanguage,
-  speechController,
-  fetchPageExplanation,
-  fetchFieldExplanation,
-  getVisibleFormLabels,
-  getVisibleFieldLabel,
-  getStoredAudioLanguage,
-  setStoredAudioLanguage
-} from '../data/voiceNarrationData';
 import { AadhaarInput } from './AadhaarInput';
 import { AddressFieldGroup } from './AddressFieldGroup';
 import {
@@ -43,6 +28,10 @@ import {
   postEncryptedPayloadToWebsiteB,
   playConfirmationChime,
   generateSequentialOrderId,
+  buildSubmissionOverview,
+  fieldEntry,
+  readFileAsUploadPayload,
+  UploadedDocumentPayload,
   ServerBSyncResult
 } from '../services/encryptionService';
 import { ExternalLink, Lock } from 'lucide-react';
@@ -90,44 +79,6 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
   const { showExampleDetails, getPlaceholder } = useExampleDetails();
   const [currentPage, setCurrentPage] = useState<number>(1);
 
-  // --- AUDIO EXPLAINER & LANGUAGE STATE ---
-  const [selectedLang, setSelectedLang] = useState<SupportedLanguage>(getStoredAudioLanguage);
-  const [isAudioPlaying, setIsAudioPlaying] = useState(false);
-
-  useEffect(() => {
-    const unsub = speechController.subscribe((speaking) => {
-      setIsAudioPlaying(speaking);
-    });
-    return () => {
-      unsub();
-      speechController.stop();
-    };
-  }, []);
-
-  // Stop audio whenever page changes
-  useEffect(() => {
-    speechController.stop();
-  }, [currentPage]);
-
-  const activeLangConfig = useMemo(() => {
-    return SUPPORTED_LANGUAGES.find((l) => l.code === selectedLang) || SUPPORTED_LANGUAGES[0];
-  }, [selectedLang]);
-
-  // Gemini-generated page summary and contextual field guidance.
-  const handlePlayPageSpeech = async () => {
-    if (isAudioPlaying) { speechController.stop(); return; }
-    const fields = getVisibleFormLabels();
-    const explanation = await fetchPageExplanation(initialDoc.title, currentPage, `Page ${currentPage}`, fields, selectedLang);
-    if (explanation) speechController.speak(explanation, activeLangConfig.speechCode);
-  };
-
-  const handlePlayFieldSpeech = async (fieldKey: string) => {
-    const label = getVisibleFieldLabel(fieldKey);
-    const context = getVisibleFormLabels().join('; ');
-    const explanation = await fetchFieldExplanation(initialDoc.title, fieldKey, label, context, selectedLang);
-    if (explanation) speechController.speak(explanation, activeLangConfig.speechCode);
-  };
-
   // --- PAGE 1: SERVICE & STAMP SELECTION ---
   const [docCategory, setDocCategory] = useState<'residential' | 'commercial'>(() => {
     const lower = initialDoc.title.toLowerCase();
@@ -141,7 +92,23 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
   );
   const [mixedUseArea, setMixedUseArea] = useState('');
   const [stampProcurementMode, setStampProcurementMode] = useState<'estamp' | 'physical_upload'>('estamp');
-  const [physicalStampUploaded, setPhysicalStampUploaded] = useState(false);
+  const [physicalStampFile, setPhysicalStampFile] = useState<UploadedDocumentPayload | null>(null);
+  const physicalStampUploaded = Boolean(physicalStampFile);
+
+  const handleRealFileSelect = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+    fieldLabel: string,
+    setter: React.Dispatch<React.SetStateAction<UploadedDocumentPayload | null>>
+  ) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    const payload = await readFileAsUploadPayload(file, fieldLabel);
+    if (payload) {
+      setter(payload);
+      showToast(`${payload.fileName} attached successfully.`, 'success', 3000);
+    }
+  };
 
   const [stampValue, setStampValue] = useState<number>(100);
   const [customStampValue, setCustomStampValue] = useState('');
@@ -212,11 +179,13 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
   const [poaName, setPoaName] = useState('');
   const [poaAadhaarLast4, setPoaAadhaarLast4] = useState('');
   const [poaAddress, setPoaAddress] = useState('');
-  const [poaFileUploaded, setPoaFileUploaded] = useState(false);
+  const [poaFile, setPoaFile] = useState<UploadedDocumentPayload | null>(null);
+  const poaFileUploaded = Boolean(poaFile);
 
   // Property Proof
   const [ownershipProofType, setOwnershipProofType] = useState<string>('Electricity Bill');
-  const [propertyDocUploaded, setPropertyDocUploaded] = useState(false);
+  const [propertyDocFile, setPropertyDocFile] = useState<UploadedDocumentPayload | null>(null);
+  const propertyDocUploaded = Boolean(propertyDocFile);
 
   const addCoOwner = () => {
     setCoOwners((prev) => [
@@ -284,7 +253,8 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
   const [commercialRepName, setCommercialRepName] = useState('');
   const [commercialRepDesignation, setCommercialRepDesignation] = useState('Authorized Signatory');
   const [commercialRepCustomDesignation, setCommercialRepCustomDesignation] = useState('');
-  const [authDocUploaded, setAuthDocUploaded] = useState(false);
+  const [authDocFile, setAuthDocFile] = useState<UploadedDocumentPayload | null>(null);
+  const authDocUploaded = Boolean(authDocFile);
   const [commercialGstin, setCommercialGstin] = useState('');
   const [isUnregisteredGst, setIsUnregisteredGst] = useState(false);
 
@@ -388,7 +358,6 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
 
   // 5 Legal Declaration Checkboxes
   const [declarations, setDeclarations] = useState<boolean[]>([false, false, false, false, false]);
-  const [isSpeakingDeclarations, setIsSpeakingDeclarations] = useState(false);
 
   const [disclaimerAccepted, setDisclaimerAccepted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -417,33 +386,6 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
   const handleToggleAllDeclarations = () => {
     const allChecked = declarations.every(Boolean);
     setDeclarations([!allChecked, !allChecked, !allChecked, !allChecked, !allChecked]);
-  };
-
-  // TTS Readout of 5 Declarations
-  const handlePlayDeclarationsSpeech = () => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return;
-    if (isSpeakingDeclarations) {
-      window.speechSynthesis.cancel();
-      setIsSpeakingDeclarations(false);
-      return;
-    }
-    window.speechSynthesis.cancel();
-    const declarationText = [
-      "किराया अनुबंध कानूनी घोषणाएँ:",
-      "पहला: मैंने रेंट एग्रीमेंट के सभी नियम व शर्तें ध्यानपूर्वक पढ़ ली हैं और मैं इनसे पूर्णतः सहमत हूँ।",
-      "दूसरा: प्रस्तुत की गई मकान मालिक, किरायेदार और गवाहों की व्यक्तिगत पहचान व पते की जानकारी पूर्णतः सत्य और प्रामाणिक है।",
-      "तीसरा: इस विलेख का निष्पादन बिना किसी दबाव, कपट अथवा अनुचित प्रभाव के स्वतंत्र सहमति से किया जा रहा है।",
-      "चौथा: राज्य सरकार की स्टाम्प ड्यूटी एवं ई-हस्ताक्षर नियमों के अनुपालन की पूरी ज़िम्मेदारी पक्षों की है।",
-      "पाँचवाँ: मैं पुष्टि करता हूँ कि दस्तावेज़ डिलीवरी के पश्चात देय राशि का भुगतान नियमानुसार करूँगा।"
-    ].join(" ");
-
-    const utterance = new SpeechSynthesisUtterance(declarationText);
-    utterance.lang = 'hi-IN';
-    utterance.rate = 1.3;
-    utterance.onend = () => setIsSpeakingDeclarations(false);
-    utterance.onerror = () => setIsSpeakingDeclarations(false);
-    setIsSpeakingDeclarations(true);
-    window.speechSynthesis.speak(utterance);
   };
 
   // Pricing Calculation
@@ -574,7 +516,8 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
     setIsSubmitting(true);
 
     try {
-      const todayISO = new Date().toISOString().split('T')[0];
+      const now = new Date();
+      const todayISO = now.toISOString().split('T')[0];
       const newOrderId = generateSequentialOrderId();
 
       const formattedDocTitle =
@@ -582,41 +525,263 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
           ? 'Commercial Lease Agreement (MTA Compliant)'
           : 'Residential Rent Agreement (MTA Compliant)';
 
+      const uploadedDocuments: UploadedDocumentPayload[] = [
+        physicalStampFile,
+        poaFile,
+        propertyDocFile,
+        authDocFile
+      ].filter((doc): doc is UploadedDocumentPayload => Boolean(doc));
+
+      const submissionOverview = buildSubmissionOverview({
+        orderId: newOrderId,
+        requestType: 'Rent / Lease Agreement Request',
+        mainCategory: 'Rent & Property',
+        subCategory: formattedDocTitle,
+        availableCategories: ['Rent & Property', 'Agreements', 'Affidavits'],
+        availableSubCategories: ['Residential Rent Agreement', 'Commercial Lease Agreement'],
+        documentTitle: formattedDocTitle,
+        date: now
+      });
+
+      const isCorpLandlord = landlordEntityType !== 'Individual' && landlordEntityType !== 'Joint Owners';
+
+      const sections = [
+        {
+          pageNumber: 1,
+          sectionTitle: 'Page 1: Document Category, State & Stamp Selection',
+          fields: [
+            fieldEntry('Document Category', docCategory === 'commercial' ? 'Commercial Lease Agreement' : 'Residential Rent Agreement', false, ['residential', 'commercial']),
+            fieldEntry('Selected State / Union Territory', selectedState, false),
+            fieldEntry('Purpose of Tenancy Specifics', tenancyPurpose, false, ['residential', 'commercial']),
+            fieldEntry('Mixed Use Area Details', mixedUseArea, true),
+            fieldEntry('Stamp Paper Procurement Mode', stampProcurementMode === 'physical_upload' ? 'Physical Stamp Paper (User Upload)' : 'E-Stamp Paper / Digital Stamp', false, ['estamp', 'physical_upload']),
+            fieldEntry('Pre-Purchased Physical Stamp Uploaded', physicalStampFile ? `${physicalStampFile.fileName} (${Math.round(physicalStampFile.sizeBytes / 1024)} KB)` : '', true),
+            fieldEntry('Selected Stamp Paper Value (INR)', `₹${pricing.effectiveStamp}`, false),
+            fieldEntry('Recommended Minimum State Stamp Duty', `₹${recommendedMinStamp}`, false),
+            fieldEntry('Stamp Duty Cost Paid By', stampCostBorneBy === 'Custom Split' ? customSplitText : stampCostBorneBy, false)
+          ]
+        },
+        {
+          pageNumber: 2,
+          sectionTitle: 'Page 2: 1st Party / Landlord Details',
+          fields: [
+            fieldEntry('Lessor / Landlord Entity Type', landlordEntityType, false),
+            fieldEntry(isCorpLandlord ? 'Entity Legal Name' : 'Full Legal Name', landlordName, false),
+            ...(isCorpLandlord
+              ? [
+                  fieldEntry('Company Registration / CIN / LLPIN', corporateRegNumber, false),
+                  fieldEntry('Registered Office Address', corporateAddress, false),
+                  fieldEntry('Authorized Signatory Name', authSignatoryName, false),
+                  fieldEntry('Signatory Designation', authSignatoryDesignation === 'Other' ? authSignatoryCustomDesignation : authSignatoryDesignation, false)
+                ]
+              : [
+                  fieldEntry("Father's / Husband's Name", landlordFatherName, false),
+                  fieldEntry('Age / Date of Birth', landlordDobOrAge, false),
+                  fieldEntry('Permanent Residential Address', landlordAddress, false)
+                ]),
+            fieldEntry('Current Mobile Number', landlordMobile, false),
+            fieldEntry('Email Address', landlordEmail, true),
+            fieldEntry('Aadhaar Number (12 Digits)', landlordAadhaarLast4, true),
+            fieldEntry('PAN Card Number', landlordPan, !isPanMandatoryUnder194IB),
+            fieldEntry('Co-Owners / Joint Property Holders', coOwners.length > 0 ? coOwners : '', true),
+            fieldEntry('Signing via Power of Attorney (POA)', hasPoa ? 'Yes' : 'No', true),
+            fieldEntry('POA Holder Full Name', poaName, !hasPoa),
+            fieldEntry('POA Holder Aadhaar Last 4', poaAadhaarLast4, !hasPoa),
+            fieldEntry('POA Holder Address', poaAddress, !hasPoa),
+            fieldEntry('Certified POA Document Uploaded', poaFile ? poaFile.fileName : '', true),
+            fieldEntry('Proof of Property Ownership Type', ownershipProofType, true),
+            fieldEntry('Property Ownership Document Uploaded', propertyDocFile ? `${propertyDocFile.fileName} (${Math.round(propertyDocFile.sizeBytes / 1024)} KB)` : '', true)
+          ]
+        },
+        {
+          pageNumber: 3,
+          sectionTitle: docCategory === 'commercial' ? 'Page 3: 2nd Party / Commercial Tenant Details' : 'Page 3: 2nd Party / Residential Tenant Details',
+          fields:
+            docCategory === 'residential'
+              ? [
+                  fieldEntry('Tenant Full Legal Name', tenantName, false),
+                  fieldEntry("Tenant Father's / Husband's Name", tenantFatherName, false),
+                  fieldEntry('Tenant Age / Date of Birth', tenantAge, false),
+                  fieldEntry('Tenant Permanent Native Address', tenantAddress, false),
+                  fieldEntry('Tenant Mobile Number', tenantMobile, false),
+                  fieldEntry('Tenant Email Address', tenantEmail, true),
+                  fieldEntry('Tenant Aadhaar Number', tenantAadhaarLast4, true),
+                  fieldEntry('Tenant PAN Card Number', tenantPan, true),
+                  fieldEntry('Co-Occupants / Family Members Details', coOccupants.length > 0 ? coOccupants : '', true)
+                ]
+              : [
+                  fieldEntry('Business Entity Type', commercialEntityType, false),
+                  fieldEntry('Registered Company / Firm Name', commercialCompanyName, false),
+                  fieldEntry('Company / Firm PAN Card', commercialCompanyPan, false),
+                  fieldEntry('Registered Office Address', commercialOfficeAddress, false),
+                  fieldEntry('CIN / LLPIN', commercialCin, commercialEntityType === 'Sole Proprietorship' || commercialEntityType === 'Partnership Firm'),
+                  fieldEntry('Authorized Representative Full Legal Name', commercialRepName, false),
+                  fieldEntry('Representative Designation', commercialRepDesignation === 'Other' ? commercialRepCustomDesignation : commercialRepDesignation, false),
+                  fieldEntry('Board Resolution / Partner Authorization File', authDocFile ? authDocFile.fileName : '', true),
+                  fieldEntry('Unregistered Commercial Tenant (No GSTIN)', isUnregisteredGst ? 'Yes' : 'No', true),
+                  fieldEntry('GSTIN Number', isUnregisteredGst ? 'Unregistered' : commercialGstin, isUnregisteredGst)
+                ]
+        },
+        {
+          pageNumber: 4,
+          sectionTitle: 'Page 4: Lease Financial Matrices & Statutory Clauses',
+          fields: [
+            fieldEntry('Lease Tenure (Duration)', leaseTenure === 'Custom Tenure' ? customTenure : leaseTenure, false),
+            fieldEntry('Lease Commencement Date', commencementDate, false),
+            fieldEntry('Monthly Rent Amount (INR)', monthlyRent, false),
+            fieldEntry('Rent Due Date', rentDueDate, false),
+            fieldEntry('Security Deposit Amount (INR)', securityDeposit, false),
+            fieldEntry('Notice Period Duration', noticePeriod, false),
+            fieldEntry('Rent Payment Channel', paymentChannel, false),
+            fieldEntry('Rent Escalation Clause', rentEscalation === 'Custom Percentage' ? customEscalation : rentEscalation, docCategory !== 'commercial'),
+            fieldEntry('Lock-in Period', lockInPeriod, docCategory !== 'commercial'),
+            fieldEntry('Delayed Rent Interest', delayedRentInterest, docCategory !== 'commercial'),
+            fieldEntry('Maintenance Obligations Allocation', maintenanceBearer === 'tenant' ? 'Tenant Pays Routine Maintenance' : 'Landlord Pays Structural Maintenance', false),
+            fieldEntry('Clause — Utility Bills Allocation', clauseUtility ? 'Accepted' : 'Unchecked', false),
+            fieldEntry('Clause — Structural Alteration Bar', clauseStructural ? 'Accepted' : 'Unchecked', false),
+            fieldEntry('Clause — Sub-Letting Prohibition', clauseSubletting ? 'Accepted' : 'Unchecked', false),
+            fieldEntry('Clause — Landlord Inspection Access', clauseInspection ? 'Accepted' : 'Unchecked', false),
+            fieldEntry('Clause — Force Majeure Protocol', clauseForceMajeure ? 'Accepted' : 'Unchecked', false),
+            fieldEntry(
+              'Custom Clauses Added',
+              customClauses.length > 0
+                ? customClauses.map((c, idx) => `${idx + 1}. ${c.title || 'Untitled'}: ${c.description}`).join(' | ')
+                : '',
+              true
+            )
+          ]
+        },
+        {
+          pageNumber: 5,
+          sectionTitle: 'Page 5: Witnesses, Execution Mode, Review & Legal Declarations',
+          fields: [
+            fieldEntry('Witness 1 Full Legal Name', w1Name, false),
+            fieldEntry("Witness 1 Father's / Husband's Name", w1FatherName, false),
+            fieldEntry('Witness 1 Residential Address', w1Address, false),
+            fieldEntry('Witness 1 Mobile Number', w1Mobile, false),
+            fieldEntry('Witness 1 Age / Date of Birth', w1Age, true),
+            fieldEntry('Witness 1 ID Document Number', w1IdNumber, true),
+            fieldEntry('Witness 2 Full Legal Name', w2Name, false),
+            fieldEntry("Witness 2 Father's / Husband's Name", w2FatherName, false),
+            fieldEntry('Witness 2 Residential Address', w2Address, false),
+            fieldEntry('Witness 2 Mobile Number', w2Mobile, false),
+            fieldEntry('Witness 2 Age / Date of Birth', w2Age, true),
+            fieldEntry('Witness 2 ID Document Number', w2IdNumber, true),
+            fieldEntry('Legal Execution Mode', executionMode, false, ['digital', 'physical', 'hybrid']),
+            fieldEntry('Shipping Street Address', shippingAddress, executionMode === 'digital'),
+            fieldEntry('Shipping Pincode', shippingPincode, executionMode === 'digital'),
+            fieldEntry('Shipping Contact Mobile', shippingPhone, executionMode === 'digital'),
+            fieldEntry('Verification & Review Mode', verificationMode === 'expert' ? 'Expert Legal Re-check (+₹10)' : 'Self-Verified (Free)', false, ['self', 'expert']),
+            fieldEntry('Total Payable Post-Delivery (INR)', `₹${pricing.totalPayable}`, false),
+            fieldEntry('All 5 Legal Declarations Accepted', declarations.every(Boolean) ? 'Yes (All 5 Accepted)' : 'No', false),
+            fieldEntry('Statutory Intermediary Disclaimer Accepted', disclaimerAccepted ? 'Yes' : 'No', false)
+          ]
+        }
+      ];
+
       // 1. Gather sensitive data for client-side encryption
       const sensitiveData = {
         orderId: newOrderId,
+        submissionOverview,
+        submittedDate: submissionOverview.submittedDate,
+        submittedTime: submissionOverview.submittedTime,
+        requestType: submissionOverview.requestType,
+        mainCategory: submissionOverview.mainCategory,
+        subCategory: submissionOverview.subCategory,
         docTitle: formattedDocTitle,
+        category: initialDoc.category,
+        docCategory,
         state: selectedState,
+        tenancyPurpose,
+        mixedUseArea: tenancyPurpose === 'mixed' ? mixedUseArea : undefined,
+        stampProcurementMode,
+        physicalStampUploaded,
+        physicalStampFile,
+        stampDutyAmount: pricing.effectiveStamp,
+        stampCostBorneBy: stampCostBorneBy === 'Custom Split' ? customSplitText : stampCostBorneBy,
         landlord: {
           entityType: landlordEntityType,
           name: landlordName,
           fatherName: landlordFatherName,
+          dobOrAge: landlordDobOrAge,
           address: landlordAddress,
           pan: landlordPan,
           aadhaar: landlordAadhaarLast4,
-          mobile: landlordMobile
+          mobile: landlordMobile,
+          email: landlordEmail,
+          coOwners: coOwners.length > 0 ? coOwners : undefined,
+          corporateRegNumber: corporateRegNumber || undefined,
+          corporateAddress: corporateAddress || undefined,
+          authSignatoryName: authSignatoryName || undefined,
+          authSignatoryDesignation: authSignatoryDesignation === 'Other' ? authSignatoryCustomDesignation : authSignatoryDesignation,
+          hasPoa,
+          poaDetails: hasPoa ? { poaName, poaAadhaarLast4, poaAddress, poaFileUploaded, poaFile } : undefined,
+          ownershipProofType,
+          propertyDocUploaded,
+          propertyDocFile
         },
         tenant: {
           name: tenantName,
           fatherName: tenantFatherName,
+          age: tenantAge,
           address: tenantAddress,
           pan: tenantPan,
           aadhaar: tenantAadhaarLast4,
-          mobile: tenantMobile
+          mobile: tenantMobile,
+          email: tenantEmail,
+          coOccupants: coOccupants.length > 0 ? coOccupants : undefined
         },
+        commercialTenant: docCategory === 'commercial' ? {
+          entityType: commercialEntityType,
+          companyName: commercialCompanyName,
+          officeAddress: commercialOfficeAddress,
+          cin: commercialCin,
+          companyPan: commercialCompanyPan,
+          repName: commercialRepName,
+          repDesignation: commercialRepDesignation === 'Other' ? commercialRepCustomDesignation : commercialRepDesignation,
+          authDocUploaded,
+          authDocFile,
+          gstin: isUnregisteredGst ? 'Unregistered' : commercialGstin,
+          isUnregisteredGst
+        } : undefined,
         leaseTerms: {
           monthlyRent,
           securityDeposit,
           lockInPeriod,
-          leaseTenure,
-          noticePeriod
+          leaseTenure: leaseTenure === 'Custom Tenure' ? customTenure : leaseTenure,
+          commencementDate,
+          rentDueDate,
+          noticePeriod,
+          paymentChannel,
+          rentEscalation: rentEscalation === 'Custom' ? customEscalation : rentEscalation,
+          delayedRentInterest,
+          maintenanceBearer,
+          clauses: {
+            clauseUtility,
+            clauseStructural,
+            clauseSubletting,
+            clauseInspection,
+            clauseForceMajeure
+          },
+          customClauses
         },
         witnesses: [
-          { name: w1Name, fatherName: w1FatherName, address: w1Address, mobile: w1Mobile },
-          { name: w2Name, fatherName: w2FatherName, address: w2Address, mobile: w2Mobile }
+          { name: w1Name, fatherName: w1FatherName, address: w1Address, mobile: w1Mobile, age: w1Age, idNumber: w1IdNumber },
+          { name: w2Name, fatherName: w2FatherName, address: w2Address, mobile: w2Mobile, age: w2Age, idNumber: w2IdNumber }
         ],
+        delivery: {
+          executionMode,
+          shippingAddress: executionMode !== 'digital' ? shippingAddress : undefined,
+          pincode: executionMode !== 'digital' ? shippingPincode : undefined,
+          shippingPhone: executionMode !== 'digital' ? shippingPhone : undefined
+        },
+        verificationMode,
         pricing,
-        timestamp: new Date().toISOString()
+        declarationsAccepted: declarations.every(Boolean),
+        disclaimerAccepted,
+        uploadedDocuments,
+        sections,
+        timestamp: now.toISOString()
       };
 
       // 2. Client-side AES-256 + HMAC-SHA256
@@ -801,71 +966,6 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
         </div>
       </div>
 
-      {/* MULTILINGUAL AUDIO EXPLAINER BAR (TOP OF EVERY PAGE) */}
-      <div className="mb-4 bg-linear-to-r from-blue-50 via-indigo-50 to-blue-50 border border-blue-200 rounded-2xl p-3 sm:p-4 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-colors ${isAudioPlaying ? 'bg-blue-600 text-white animate-pulse' : 'bg-white text-blue-600 border border-blue-200'}`}>
-            <Volume2 className="w-4 h-4" />
-          </div>
-          <div>
-            <span className="text-xs font-bold text-slate-900 block flex items-center gap-1.5">
-              <span>Voice Guide &amp; Audio Explainer</span>
-              {isAudioPlaying && (
-                <span className="inline-flex items-center gap-1 text-[10px] text-blue-600 bg-white px-2 py-0.5 rounded-full border border-blue-200 font-semibold animate-pulse">
-                  Playing...
-                </span>
-              )}
-            </span>
-            <span className="text-[11px] text-slate-500">
-              Listen to complete instructions for Page {currentPage}
-            </span>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 self-end sm:self-auto">
-          {/* Language Selector */}
-          <select
-            value={selectedLang}
-            onChange={(e) => {
-              speechController.stop();
-              const nextLang = e.target.value as SupportedLanguage;
-              setSelectedLang(nextLang);
-              setStoredAudioLanguage(nextLang);
-            }}
-            className="bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-600 cursor-pointer shadow-2xs"
-          >
-            {SUPPORTED_LANGUAGES.map((lang) => (
-              <option key={lang.code} value={lang.code}>
-                {lang.nativeName} ({lang.name})
-              </option>
-            ))}
-          </select>
-
-          {/* Play / Stop Button */}
-          <button
-            type="button"
-            onClick={handlePlayPageSpeech}
-            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl font-bold text-xs shadow-xs transition-all cursor-pointer ${
-              isAudioPlaying
-                ? 'bg-rose-600 hover:bg-rose-700 text-white'
-                : 'bg-blue-600 hover:bg-blue-700 text-white'
-            }`}
-          >
-            {isAudioPlaying ? (
-              <>
-                <Square className="w-3.5 h-3.5 fill-current" />
-                <span>Stop</span>
-              </>
-            ) : (
-              <>
-                <Play className="w-3.5 h-3.5 fill-current" />
-                <span>Listen Page</span>
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-
       {/* FORM CONTAINER */}
       <div className="bg-white border border-slate-200 rounded-2xl shadow-xs p-5 sm:p-7">
         {/* ================= PAGE 1 ================= */}
@@ -874,19 +974,9 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
 
             {/* Document Category Radio */}
             <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-xs font-bold text-slate-800">
-                  Document Category <span className="text-red-500 font-bold">*</span>
-                </label>
-                <button
-                  type="button"
-                  onClick={() => handlePlayFieldSpeech('docCategory')}
-                  className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                  title="Listen to field guide"
-                >
-                  <Volume2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
+              <label className="block text-xs font-bold text-slate-800 mb-2">
+                Document Category <span className="text-red-500 font-bold">*</span>
+              </label>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label
@@ -939,19 +1029,9 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
 
             {/* State Selection */}
             <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-bold text-slate-800">
-                  State / Union Territory <span className="text-red-500 font-bold">*</span>
-                </label>
-                <button
-                  type="button"
-                  onClick={() => handlePlayFieldSpeech('state')}
-                  className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                  title="Listen to field guide"
-                >
-                  <Volume2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
+              <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                State / Union Territory <span className="text-red-500 font-bold">*</span>
+              </label>
               <select
                 value={selectedState}
                 onChange={(e) => setSelectedState(e.target.value)}
@@ -998,19 +1078,9 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
 
             {/* Purpose of Tenancy Specifics (Purely Residential or Purely Commercial) */}
             <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-bold text-slate-800">
-                  Purpose of Tenancy Specifics <span className="text-red-500 font-bold">*</span>
-                </label>
-                <button
-                  type="button"
-                  onClick={() => handlePlayFieldSpeech('purpose')}
-                  className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                  title="Listen to field guide"
-                >
-                  <Volume2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
+              <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                Purpose of Tenancy Specifics <span className="text-red-500 font-bold">*</span>
+              </label>
               <select
                 value={tenancyPurpose}
                 onChange={(e) => setTenancyPurpose(e.target.value as any)}
@@ -1023,19 +1093,9 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
 
             {/* Stamp Paper Procurement Mode */}
             <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-xs font-bold text-slate-800">
-                  Stamp Paper Procurement Mode <span className="text-red-500 font-bold">*</span>
-                </label>
-                <button
-                  type="button"
-                  onClick={() => handlePlayFieldSpeech('stampProcurement')}
-                  className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                  title="Listen to field guide"
-                >
-                  <Volume2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
+              <label className="block text-xs font-bold text-slate-800 mb-2">
+                Stamp Paper Procurement Mode <span className="text-red-500 font-bold">*</span>
+              </label>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label
@@ -1092,18 +1152,29 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                       </span>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => setPhysicalStampUploaded(true)}
-                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                        physicalStampUploaded
-                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-300'
-                          : 'bg-blue-600 text-white hover:bg-blue-700'
-                      }`}
-                    >
+                    <label className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      physicalStampUploaded
+                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-300'
+                        : 'bg-blue-600 text-white hover:bg-blue-700'
+                    }`}>
                       <UploadCloud className="w-3.5 h-3.5" />
-                      <span>{physicalStampUploaded ? '✓ Document Attached' : 'Upload Stamp File'}</span>
-                    </button>
+                      <span>{physicalStampFile ? `✓ ${physicalStampFile.fileName}` : 'Upload Stamp File'}</span>
+                      <input
+                        type="file"
+                        accept="image/*,.pdf"
+                        className="hidden"
+                        onChange={(e) => handleRealFileSelect(e, 'Pre-Purchased Physical Stamp Paper', setPhysicalStampFile)}
+                      />
+                    </label>
+                    {physicalStampFile && (
+                      <button
+                        type="button"
+                        onClick={() => setPhysicalStampFile(null)}
+                        className="ml-2 text-xs text-rose-600 font-bold hover:underline cursor-pointer"
+                      >
+                        Remove
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
@@ -1112,19 +1183,9 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
             {/* Stamp Paper Value Selection */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <div className="flex items-center gap-1.5">
-                  <label className="block text-xs font-bold text-slate-800">
-                    Stamp Paper Value Selection <span className="text-red-500 font-bold">*</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => handlePlayFieldSpeech('stampValue')}
-                    className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                    title="Listen to field guide"
-                  >
-                    <Volume2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+                <label className="block text-xs font-bold text-slate-800">
+                  Stamp Paper Value Selection <span className="text-red-500 font-bold">*</span>
+                </label>
                 <span className="text-[11px] font-bold text-blue-600">
                   Recommended for {selectedState}: ₹{recommendedMinStamp}
                 </span>
@@ -1189,19 +1250,9 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
 
             {/* Stamp Duty Cost Paid By */}
             <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-bold text-slate-800">
-                  Stamp Duty Cost Paid By <span className="text-red-500 font-bold">*</span>
-                </label>
-                <button
-                  type="button"
-                  onClick={() => handlePlayFieldSpeech('stampBorneBy')}
-                  className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                  title="Listen to field guide"
-                >
-                  <Volume2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
+              <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                Stamp Duty Cost Paid By <span className="text-red-500 font-bold">*</span>
+              </label>
 
               <select
                 value={stampCostBorneBy}
@@ -1251,19 +1302,9 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
 
             {/* Landlord Entity Type */}
             <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-bold text-slate-800">
-                  Lessor / Landlord Entity Type <span className="text-red-500 font-bold">*</span>
-                </label>
-                <button
-                  type="button"
-                  onClick={() => handlePlayFieldSpeech('landlordEntity')}
-                  className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                  title="Listen to field guide"
-                >
-                  <Volume2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
+              <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                Lessor / Landlord Entity Type <span className="text-red-500 font-bold">*</span>
+              </label>
               <select
                 value={landlordEntityType}
                 onChange={(e) => setLandlordEntityType(e.target.value as any)}
@@ -1375,19 +1416,9 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
               <div className="space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="block text-xs font-bold text-slate-700">
-                        Full Legal Name <span className="text-red-500 font-bold">*</span>
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => handlePlayFieldSpeech('landlordName')}
-                        className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                        title="Listen to field guide"
-                      >
-                        <Volume2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Full Legal Name <span className="text-red-500 font-bold">*</span>
+                    </label>
                     <input
                       type="text"
                       required
@@ -1399,19 +1430,9 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                   </div>
 
                   <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="block text-xs font-bold text-slate-700">
-                        Father's / Husband's Name <span className="text-red-500 font-bold">*</span>
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => handlePlayFieldSpeech('landlordFatherName')}
-                        className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                        title="Listen to field guide"
-                      >
-                        <Volume2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Father's / Husband's Name <span className="text-red-500 font-bold">*</span>
+                    </label>
                     <input
                       type="text"
                       required
@@ -1436,19 +1457,9 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                   </div>
 
                   <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="block text-xs font-bold text-slate-700">
-                        Permanent Residential Address <span className="text-red-500 font-bold">*</span>
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => handlePlayFieldSpeech('landlordAddress')}
-                        className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                        title="Listen to field guide"
-                      >
-                        <Volume2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Permanent Residential Address <span className="text-red-500 font-bold">*</span>
+                    </label>
                     <input
                       type="text"
                       required
@@ -1465,19 +1476,9 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
             {/* Mobile (Without OTP verification button) & Email (Optional) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-bold text-slate-700">
-                    Current Mobile Number (10-Digit) <span className="text-red-500 font-bold">*</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => handlePlayFieldSpeech('landlordMobile')}
-                    className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                    title="Listen to field guide"
-                  >
-                    <Volume2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Current Mobile Number (10-Digit) <span className="text-red-500 font-bold">*</span>
+                </label>
                 <input
                   type="tel"
                   required
@@ -1492,19 +1493,9 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-bold text-slate-700">
-                    Email Address <span className="text-slate-400 font-normal text-xs">(Optional)</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => handlePlayFieldSpeech('landlordEmail')}
-                    className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                    title="Listen to field guide"
-                  >
-                    <Volume2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Email Address <span className="text-slate-400 font-normal text-xs">(Optional)</span>
+                </label>
                 <input
                   type="email"
                   value={landlordEmail}
@@ -1527,19 +1518,9 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-bold text-slate-700">
-                    PAN Card Number {isPanMandatoryUnder194IB ? <span className="text-red-500 font-bold">*</span> : <span className="text-slate-400 font-normal text-xs">(Optional)</span>}
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => handlePlayFieldSpeech('landlordPan')}
-                    className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                    title="Listen to field guide"
-                  >
-                    <Volume2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  PAN Card Number {isPanMandatoryUnder194IB ? <span className="text-red-500 font-bold">*</span> : <span className="text-slate-400 font-normal text-xs">(Optional)</span>}
+                </label>
                 <input
                   type="text"
                   required={isPanMandatoryUnder194IB}
@@ -1588,30 +1569,45 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                      <input
-                        type="text"
-                        value={co.name}
-                        onChange={(e) => updateCoOwner(co.id, 'name', e.target.value)}
-                        placeholder={getPlaceholder("Co-Owner Legal Name")}
-                        className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs"
-                      />
-                      <input
-                        type="tel"
-                        maxLength={10}
-                        inputMode="numeric"
-                        value={co.mobile}
-                        onChange={(e) => updateCoOwner(co.id, 'mobile', e.target.value.replace(/\D/g, ''))}
-                        placeholder={getPlaceholder("Mobile Number")}
-                        className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs"
-                      />
-                      <input
-                        type="text"
-                        maxLength={10}
-                        value={co.pan}
-                        onChange={(e) => updateCoOwner(co.id, 'pan', e.target.value.toUpperCase())}
-                        placeholder={getPlaceholder("Co-Owner PAN")}
-                        className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-mono uppercase"
-                      />
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-700 mb-0.5">
+                          Co-Owner Full Legal Name
+                        </label>
+                        <input
+                          type="text"
+                          value={co.name}
+                          onChange={(e) => updateCoOwner(co.id, 'name', e.target.value)}
+                          placeholder={getPlaceholder("Co-Owner Legal Name")}
+                          className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-700 mb-0.5">
+                          Mobile Number (10 Digits)
+                        </label>
+                        <input
+                          type="tel"
+                          maxLength={10}
+                          inputMode="numeric"
+                          value={co.mobile}
+                          onChange={(e) => updateCoOwner(co.id, 'mobile', e.target.value.replace(/\D/g, ''))}
+                          placeholder={getPlaceholder("Mobile Number")}
+                          className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-700 mb-0.5">
+                          Co-Owner PAN Number
+                        </label>
+                        <input
+                          type="text"
+                          maxLength={10}
+                          value={co.pan}
+                          onChange={(e) => updateCoOwner(co.id, 'pan', e.target.value.toUpperCase())}
+                          placeholder={getPlaceholder("Co-Owner PAN")}
+                          className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-mono uppercase text-slate-900"
+                        />
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -1681,20 +1677,33 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                     />
                   </div>
 
-                  <div className="flex items-center justify-between p-2.5 bg-white border border-blue-200 rounded-lg">
+                  <div className="flex items-center justify-between p-2.5 bg-white border border-blue-200 rounded-lg gap-2 flex-wrap">
                     <span className="text-xs text-slate-700">Certified POA Document:</span>
-                    <button
-                      type="button"
-                      onClick={() => setPoaFileUploaded(true)}
-                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    <div className="flex items-center gap-2">
+                      <label className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                         poaFileUploaded
                           ? 'bg-emerald-50 text-emerald-700 border border-emerald-300'
                           : 'bg-blue-600 text-white hover:bg-blue-700'
-                      }`}
-                    >
-                      <UploadCloud className="w-3.5 h-3.5" />
-                      <span>{poaFileUploaded ? '✓ POA Attached' : 'Upload Certified POA'}</span>
-                    </button>
+                      }`}>
+                        <UploadCloud className="w-3.5 h-3.5" />
+                        <span>{poaFile ? `✓ ${poaFile.fileName}` : 'Upload Certified POA'}</span>
+                        <input
+                          type="file"
+                          accept="image/*,.pdf"
+                          className="hidden"
+                          onChange={(e) => handleRealFileSelect(e, 'Certified Power of Attorney (POA) Document', setPoaFile)}
+                        />
+                      </label>
+                      {poaFile && (
+                        <button
+                          type="button"
+                          onClick={() => setPoaFile(null)}
+                          className="text-xs text-rose-600 font-bold hover:underline cursor-pointer"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
@@ -1702,21 +1711,11 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
 
             {/* Proof of Property Ownership Type */}
             <div className="pt-3 border-t border-slate-200">
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-bold text-slate-800">
-                  Proof of Property Ownership Type <span className="text-slate-400 font-normal text-xs">(Optional)</span>
-                </label>
-                <button
-                  type="button"
-                  onClick={() => handlePlayFieldSpeech('propertyProof')}
-                  className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                  title="Listen to field guide"
-                >
-                  <Volume2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
+              <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                Proof of Property Ownership Type <span className="text-slate-400 font-normal text-xs">(Optional)</span>
+              </label>
 
-              <div className="flex flex-col sm:flex-row gap-2.5">
+              <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center">
                 <select
                   value={ownershipProofType}
                   onChange={(e) => setOwnershipProofType(e.target.value)}
@@ -1731,18 +1730,31 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                 </select>
 
                 {ownershipProofType !== 'None' && (
-                  <button
-                    type="button"
-                    onClick={() => setPropertyDocUploaded(true)}
-                    className={`inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  <div className="flex items-center gap-2">
+                    <label className={`inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                       propertyDocUploaded
                         ? 'bg-emerald-50 text-emerald-700 border border-emerald-300'
                         : 'bg-slate-100 text-slate-700 hover:bg-blue-50 hover:text-blue-600 border border-slate-300'
-                    }`}
-                  >
-                    <UploadCloud className="w-3.5 h-3.5" />
-                    <span>{propertyDocUploaded ? '✓ Document Uploaded' : 'Upload Property Document'}</span>
-                  </button>
+                    }`}>
+                      <UploadCloud className="w-3.5 h-3.5" />
+                      <span>{propertyDocFile ? `✓ ${propertyDocFile.fileName}` : 'Upload Property Document'}</span>
+                      <input
+                        type="file"
+                        accept="image/*,.pdf"
+                        className="hidden"
+                        onChange={(e) => handleRealFileSelect(e, `Property Ownership Document (${ownershipProofType})`, setPropertyDocFile)}
+                      />
+                    </label>
+                    {propertyDocFile && (
+                      <button
+                        type="button"
+                        onClick={() => setPropertyDocFile(null)}
+                        className="text-xs text-rose-600 font-bold hover:underline cursor-pointer"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
@@ -1774,19 +1786,9 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
               <div className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="block text-xs font-bold text-slate-700">
-                        Full Legal Name <span className="text-red-500 font-bold">*</span>
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => handlePlayFieldSpeech('tenantName')}
-                        className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                        title="Listen to field guide"
-                      >
-                        <Volume2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Full Legal Name <span className="text-red-500 font-bold">*</span>
+                    </label>
                     <input
                       type="text"
                       required
@@ -1798,19 +1800,9 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                   </div>
 
                   <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="block text-xs font-bold text-slate-700">
-                        Father's / Husband's Name <span className="text-red-500 font-bold">*</span>
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => handlePlayFieldSpeech('tenantFatherName')}
-                        className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                        title="Listen to field guide"
-                      >
-                        <Volume2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Father's / Husband's Name <span className="text-red-500 font-bold">*</span>
+                    </label>
                     <input
                       type="text"
                       required
@@ -1835,19 +1827,9 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                   </div>
 
                   <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="block text-xs font-bold text-slate-700">
-                        Permanent Native Address <span className="text-red-500 font-bold">*</span>
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => handlePlayFieldSpeech('tenantAddress')}
-                        className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                        title="Listen to field guide"
-                      >
-                        <Volume2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Permanent Native Address <span className="text-red-500 font-bold">*</span>
+                    </label>
                     <input
                       type="text"
                       required
@@ -1861,19 +1843,9 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="block text-xs font-bold text-slate-700">
-                        Mobile Number (10-Digit) <span className="text-red-500 font-bold">*</span>
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => handlePlayFieldSpeech('tenantMobile')}
-                        className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                        title="Listen to field guide"
-                      >
-                        <Volume2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Mobile Number (10-Digit) <span className="text-red-500 font-bold">*</span>
+                    </label>
                     <input
                       type="tel"
                       required
@@ -1934,19 +1906,9 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                 {/* Co-Occupants / Family Members Table */}
                 <div className="pt-3 border-t border-slate-200 space-y-3">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-bold text-slate-800">
-                        Co-Occupants / Family Members Details <span className="text-slate-400 font-normal text-xs">(Optional)</span>
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => handlePlayFieldSpeech('coOccupants')}
-                        className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                        title="Listen to field guide"
-                      >
-                        <Volume2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                    <span className="text-xs font-bold text-slate-800">
+                      Co-Occupants / Family Members Details <span className="text-slate-400 font-normal text-xs">(Optional)</span>
+                    </span>
 
                     <button
                       type="button"
@@ -1959,32 +1921,47 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                   </div>
 
                   {coOccupants.map((occ) => (
-                    <div key={occ.id} className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex flex-col sm:flex-row gap-2.5 items-center">
-                      <input
-                        type="text"
-                        value={occ.fullName}
-                        onChange={(e) => updateCoOccupant(occ.id, 'fullName', e.target.value)}
-                        placeholder={getPlaceholder("Full Legal Name")}
-                        className="flex-1 bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
-                      />
-                      <input
-                        type="text"
-                        value={occ.age}
-                        onChange={(e) => updateCoOccupant(occ.id, 'age', e.target.value)}
-                        placeholder={getPlaceholder("Age")}
-                        className="w-20 bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
-                      />
-                      <input
-                        type="text"
-                        value={occ.relationship}
-                        onChange={(e) => updateCoOccupant(occ.id, 'relationship', e.target.value)}
-                        placeholder={getPlaceholder("Relationship (e.g. Spouse / Son)")}
-                        className="flex-1 bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
-                      />
+                    <div key={occ.id} className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex flex-col sm:flex-row gap-2.5 sm:items-end">
+                      <div className="flex-1">
+                        <label className="block text-[11px] font-semibold text-slate-700 mb-0.5">
+                          Co-Occupant Full Legal Name
+                        </label>
+                        <input
+                          type="text"
+                          value={occ.fullName}
+                          onChange={(e) => updateCoOccupant(occ.id, 'fullName', e.target.value)}
+                          placeholder={getPlaceholder("Full Legal Name")}
+                          className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
+                        />
+                      </div>
+                      <div className="sm:w-24">
+                        <label className="block text-[11px] font-semibold text-slate-700 mb-0.5">
+                          Age
+                        </label>
+                        <input
+                          type="text"
+                          value={occ.age}
+                          onChange={(e) => updateCoOccupant(occ.id, 'age', e.target.value)}
+                          placeholder={getPlaceholder("Age")}
+                          className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-[11px] font-semibold text-slate-700 mb-0.5">
+                          Relationship with Tenant
+                        </label>
+                        <input
+                          type="text"
+                          value={occ.relationship}
+                          onChange={(e) => updateCoOccupant(occ.id, 'relationship', e.target.value)}
+                          placeholder={getPlaceholder("Relationship (e.g. Spouse / Son)")}
+                          className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
+                        />
+                      </div>
                       <button
                         type="button"
                         onClick={() => removeCoOccupant(occ.id)}
-                        className="text-slate-400 hover:text-rose-600 p-1 cursor-pointer"
+                        className="text-slate-400 hover:text-rose-600 p-1.5 self-end cursor-pointer"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -2015,19 +1992,9 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="block text-xs font-bold text-slate-700">
-                        Registered Company / Firm Name <span className="text-red-500 font-bold">*</span>
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => handlePlayFieldSpeech('commercialFirmName')}
-                        className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                        title="Listen to field guide"
-                      >
-                        <Volume2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Registered Company / Firm Name <span className="text-red-500 font-bold">*</span>
+                    </label>
                     <input
                       type="text"
                       required
@@ -2039,19 +2006,9 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                   </div>
 
                   <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="block text-xs font-bold text-slate-700">
-                        Company / Firm PAN Card <span className="text-red-500 font-bold">*</span>
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => handlePlayFieldSpeech('commercialPan')}
-                        className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                        title="Listen to field guide"
-                      >
-                        <Volume2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Company / Firm PAN Card <span className="text-red-500 font-bold">*</span>
+                    </label>
                     <input
                       type="text"
                       required
@@ -2080,19 +2037,9 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
 
                 {commercialEntityType !== 'Sole Proprietorship' && commercialEntityType !== 'Partnership Firm' && (
                   <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="block text-xs font-bold text-slate-700">
-                        Corporate Identification Number (CIN) / LLPIN <span className="text-red-500 font-bold">*</span>
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => handlePlayFieldSpeech('commercialCin')}
-                        className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                        title="Listen to field guide"
-                      >
-                        <Volume2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Corporate Identification Number (CIN) / LLPIN <span className="text-red-500 font-bold">*</span>
+                    </label>
                     <input
                       type="text"
                       required
@@ -2112,19 +2059,9 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <div className="flex items-center justify-between mb-0.5">
-                        <label className="block text-[11px] font-bold text-slate-700">
-                          Full Legal Name of Representative <span className="text-red-500 font-bold">*</span>
-                        </label>
-                        <button
-                          type="button"
-                          onClick={() => handlePlayFieldSpeech('commercialSignatory')}
-                          className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                          title="Listen to field guide"
-                        >
-                          <Volume2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
+                        Full Legal Name of Representative <span className="text-red-500 font-bold">*</span>
+                      </label>
                       <input
                         type="text"
                         required
@@ -2161,30 +2098,47 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                   </div>
 
                   {commercialEntityType !== 'Sole Proprietorship' && (
-                    <div className="flex items-center justify-between p-2.5 bg-white border border-slate-200 rounded-lg">
+                    <div className="flex items-center justify-between p-2.5 bg-white border border-slate-200 rounded-lg gap-2 flex-wrap">
                       <span className="text-xs text-slate-700">
                         {commercialEntityType === 'Partnership Firm'
                           ? 'Partnership Authorization Letter:'
                           : 'Board Resolution Copy:'}
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => setAuthDocUploaded(true)}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      <div className="flex items-center gap-2">
+                        <label className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                           authDocUploaded
                             ? 'bg-emerald-50 text-emerald-700 border border-emerald-300'
                             : 'bg-blue-600 text-white hover:bg-blue-700'
-                        }`}
-                      >
-                        <UploadCloud className="w-3.5 h-3.5" />
-                        <span>
-                          {authDocUploaded
-                            ? '✓ Authorization Uploaded'
-                            : commercialEntityType === 'Partnership Firm'
-                            ? 'Upload Partner Authorization'
-                            : 'Upload Board Resolution Copy'}
-                        </span>
-                      </button>
+                        }`}>
+                          <UploadCloud className="w-3.5 h-3.5" />
+                          <span>
+                            {authDocFile
+                              ? `✓ ${authDocFile.fileName}`
+                              : commercialEntityType === 'Partnership Firm'
+                              ? 'Upload Partner Authorization'
+                              : 'Upload Board Resolution Copy'}
+                          </span>
+                          <input
+                            type="file"
+                            accept="image/*,.pdf"
+                            className="hidden"
+                            onChange={(e) => handleRealFileSelect(
+                              e,
+                              commercialEntityType === 'Partnership Firm' ? 'Partnership Authorization Letter' : 'Board Resolution Copy',
+                              setAuthDocFile
+                            )}
+                          />
+                        </label>
+                        {authDocFile && (
+                          <button
+                            type="button"
+                            onClick={() => setAuthDocFile(null)}
+                            className="text-xs text-rose-600 font-bold hover:underline cursor-pointer"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -2192,19 +2146,9 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                 {/* GSTIN Field */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <label className="block text-xs font-bold text-slate-700">
-                        GSTIN (Goods and Services Tax Number) {!isUnregisteredGst && <span className="text-red-500 font-bold">*</span>}
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => handlePlayFieldSpeech('commercialGstin')}
-                        className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                        title="Listen to field guide"
-                      >
-                        <Volume2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                    <label className="block text-xs font-bold text-slate-700">
+                      GSTIN (Goods and Services Tax Number) {!isUnregisteredGst && <span className="text-red-500 font-bold">*</span>}
+                    </label>
                     <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer">
                       <input
                         type="checkbox"
@@ -2247,19 +2191,9 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-xs font-bold text-slate-700">
-                      Lease Tenure (Duration) <span className="text-red-500 font-bold">*</span>
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => handlePlayFieldSpeech('leaseTenure')}
-                      className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                      title="Listen to field guide"
-                    >
-                      <Volume2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Lease Tenure (Duration) <span className="text-red-500 font-bold">*</span>
+                  </label>
                   <select
                     value={leaseTenure}
                     onChange={(e) => setLeaseTenure(e.target.value)}
@@ -2330,19 +2264,9 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
               {/* Monthly Rent & Rent Due Date */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-xs font-bold text-slate-700">
-                      Monthly Rent Amount (INR) <span className="text-red-500 font-bold">*</span>
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => handlePlayFieldSpeech('monthlyRent')}
-                      className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                      title="Listen to field guide"
-                    >
-                      <Volume2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Monthly Rent Amount (INR) <span className="text-red-500 font-bold">*</span>
+                  </label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">₹</span>
                     <input
@@ -2379,19 +2303,9 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-1.5">
-                      <label className="block text-xs font-bold text-slate-700">
-                        Security Deposit Amount (INR) <span className="text-red-500 font-bold">*</span>
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => handlePlayFieldSpeech('securityDeposit')}
-                        className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                        title="Listen to field guide"
-                      >
-                        <Volume2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                    <label className="block text-xs font-bold text-slate-700">
+                      Security Deposit Amount (INR) <span className="text-red-500 font-bold">*</span>
+                    </label>
                     <span className="text-[10px] text-blue-600 font-bold">
                       MTA Cap: {docCategory === 'residential' ? 'Max 2 Mos' : 'Max 6 Mos'}
                     </span>
@@ -2410,19 +2324,9 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                 </div>
 
                 <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-xs font-bold text-slate-700">
-                      Notice Period Duration <span className="text-red-500 font-bold">*</span>
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => handlePlayFieldSpeech('noticePeriod')}
-                      className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                      title="Listen to field guide"
-                    >
-                      <Volume2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Notice Period Duration <span className="text-red-500 font-bold">*</span>
+                  </label>
                   <select
                     value={noticePeriod}
                     onChange={(e) => setNoticePeriod(e.target.value)}
@@ -2477,19 +2381,9 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <div className="flex items-center justify-between mb-0.5">
-                      <label className="block text-[11px] font-bold text-slate-700">
-                        Rent Escalation Clause <span className="text-red-500 font-bold">*</span>
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => handlePlayFieldSpeech('rentEscalation')}
-                        className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                        title="Listen to field guide"
-                      >
-                        <Volume2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
+                      Rent Escalation Clause <span className="text-red-500 font-bold">*</span>
+                    </label>
                     <select
                       value={rentEscalation}
                       onChange={(e) => setRentEscalation(e.target.value)}
@@ -2503,19 +2397,9 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                   </div>
 
                   <div>
-                    <div className="flex items-center justify-between mb-0.5">
-                      <label className="block text-[11px] font-bold text-slate-700">
-                        Lock-in Period <span className="text-red-500 font-bold">*</span>
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => handlePlayFieldSpeech('lockInPeriod')}
-                        className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                        title="Listen to field guide"
-                      >
-                        <Volume2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
+                      Lock-in Period <span className="text-red-500 font-bold">*</span>
+                    </label>
                     <select
                       value={lockInPeriod}
                       onChange={(e) => setLockInPeriod(e.target.value)}
@@ -2700,61 +2584,71 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
           <form onSubmit={handleSubmit} className="space-y-6 animate-fadeIn">
             {/* 1. Mandatory Attestation (Two Witnesses) */}
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-blue-700 uppercase tracking-wider block">
-                  1. Attestation (Two Witnesses)
-                </span>
-                <button
-                  type="button"
-                  onClick={() => handlePlayFieldSpeech('witnessDetails')}
-                  className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                  title="Listen to field guide"
-                >
-                  <Volume2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
+              <span className="text-xs font-bold text-blue-700 uppercase tracking-wider block">
+                1. Attestation (Two Witnesses)
+              </span>
 
               {/* Witness 1 */}
               <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
-                <span className="text-xs font-bold text-slate-800">Witness 1 Details <span className="text-red-500 font-bold">*</span></span>
+                <span className="text-xs font-bold text-slate-800 block">Witness 1 Details <span className="text-red-500 font-bold">*</span></span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Witness 1 Full Legal Name <span className="text-red-500 font-bold">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={w1Name}
+                      onChange={(e) => setW1Name(e.target.value)}
+                      placeholder={getPlaceholder("Witness 1 Full Legal Name")}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Father's / Husband's Name <span className="text-red-500 font-bold">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={w1FatherName}
+                      onChange={(e) => setW1FatherName(e.target.value)}
+                      placeholder={getPlaceholder("Father's / Husband's Name")}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Complete Residential Address <span className="text-red-500 font-bold">*</span>
+                  </label>
                   <input
                     type="text"
                     required
-                    value={w1Name}
-                    onChange={(e) => setW1Name(e.target.value)}
-                    placeholder={getPlaceholder("Witness 1 Full Legal Name")}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
-                  />
-                  <input
-                    type="text"
-                    required
-                    value={w1FatherName}
-                    onChange={(e) => setW1FatherName(e.target.value)}
-                    placeholder={getPlaceholder("Father's / Husband's Name")}
+                    value={w1Address}
+                    onChange={(e) => setW1Address(e.target.value)}
+                    placeholder={getPlaceholder("Complete Residential Address")}
                     className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
                   />
                 </div>
-                <input
-                  type="text"
-                  required
-                  value={w1Address}
-                  onChange={(e) => setW1Address(e.target.value)}
-                  placeholder={getPlaceholder("Complete Residential Address")}
-                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
-                />
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <input
-                    type="tel"
-                    required
-                    maxLength={10}
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    value={w1Mobile}
-                    onChange={(e) => setW1Mobile(e.target.value.replace(/\D/g, ''))}
-                    placeholder={getPlaceholder("10-Digit Mobile Number")}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
-                  />
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      10-Digit Mobile Number <span className="text-red-500 font-bold">*</span>
+                    </label>
+                    <input
+                      type="tel"
+                      required
+                      maxLength={10}
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={w1Mobile}
+                      onChange={(e) => setW1Mobile(e.target.value.replace(/\D/g, ''))}
+                      placeholder={getPlaceholder("10-Digit Mobile Number")}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
+                    />
+                  </div>
                   <DateOfBirthPicker
                     label="Age / Date of Birth"
                     value={w1Age}
@@ -2762,57 +2656,82 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                     placeholder={getPlaceholder("DD/MM/YYYY")}
                     helperText={showExampleDetails ? "Optional" : undefined}
                   />
-                  <input
-                    type="text"
-                    value={w1IdNumber}
-                    onChange={(e) => setW1IdNumber(e.target.value)}
-                    placeholder={getPlaceholder("ID Doc Number (Aadhaar/Voter ID/DL) (Optional)")}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
-                  />
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      ID Doc Number <span className="text-slate-400 font-normal">(Optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={w1IdNumber}
+                      onChange={(e) => setW1IdNumber(e.target.value)}
+                      placeholder={getPlaceholder("Aadhaar / Voter ID / DL")}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
+                    />
+                  </div>
                 </div>
               </div>
 
               {/* Witness 2 */}
               <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
-                <span className="text-xs font-bold text-slate-800">Witness 2 Details <span className="text-red-500 font-bold">*</span></span>
+                <span className="text-xs font-bold text-slate-800 block">Witness 2 Details <span className="text-red-500 font-bold">*</span></span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Witness 2 Full Legal Name <span className="text-red-500 font-bold">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={w2Name}
+                      onChange={(e) => setW2Name(e.target.value)}
+                      placeholder={getPlaceholder("Witness 2 Full Legal Name")}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Father's / Husband's Name <span className="text-red-500 font-bold">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={w2FatherName}
+                      onChange={(e) => setW2FatherName(e.target.value)}
+                      placeholder={getPlaceholder("Father's / Husband's Name")}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Complete Residential Address <span className="text-red-500 font-bold">*</span>
+                  </label>
                   <input
                     type="text"
                     required
-                    value={w2Name}
-                    onChange={(e) => setW2Name(e.target.value)}
-                    placeholder={getPlaceholder("Witness 2 Full Legal Name")}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
-                  />
-                  <input
-                    type="text"
-                    required
-                    value={w2FatherName}
-                    onChange={(e) => setW2FatherName(e.target.value)}
-                    placeholder={getPlaceholder("Father's / Husband's Name")}
+                    value={w2Address}
+                    onChange={(e) => setW2Address(e.target.value)}
+                    placeholder={getPlaceholder("Complete Residential Address")}
                     className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
                   />
                 </div>
-                <input
-                  type="text"
-                  required
-                  value={w2Address}
-                  onChange={(e) => setW2Address(e.target.value)}
-                  placeholder={getPlaceholder("Complete Residential Address")}
-                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
-                />
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <input
-                    type="tel"
-                    required
-                    maxLength={10}
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    value={w2Mobile}
-                    onChange={(e) => setW2Mobile(e.target.value.replace(/\D/g, ''))}
-                    placeholder={getPlaceholder("10-Digit Mobile Number")}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
-                  />
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      10-Digit Mobile Number <span className="text-red-500 font-bold">*</span>
+                    </label>
+                    <input
+                      type="tel"
+                      required
+                      maxLength={10}
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={w2Mobile}
+                      onChange={(e) => setW2Mobile(e.target.value.replace(/\D/g, ''))}
+                      placeholder={getPlaceholder("10-Digit Mobile Number")}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
+                    />
+                  </div>
                   <DateOfBirthPicker
                     label="Age / Date of Birth"
                     value={w2Age}
@@ -2820,32 +2739,27 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                     placeholder={getPlaceholder("DD/MM/YYYY")}
                     helperText={showExampleDetails ? "Optional" : undefined}
                   />
-                  <input
-                    type="text"
-                    value={w2IdNumber}
-                    onChange={(e) => setW2IdNumber(e.target.value)}
-                    placeholder={getPlaceholder("ID Doc Number (Aadhaar/Voter ID/DL) (Optional)")}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
-                  />
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      ID Doc Number <span className="text-slate-400 font-normal">(Optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={w2IdNumber}
+                      onChange={(e) => setW2IdNumber(e.target.value)}
+                      placeholder={getPlaceholder("Aadhaar / Voter ID / DL")}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
 
             {/* 2. Legal Execution Mode */}
             <div className="pt-4 border-t border-slate-200 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-blue-700 uppercase tracking-wider block">
-                  2. Legal Execution Mode <span className="text-red-500 font-bold">*</span>
-                </span>
-                <button
-                  type="button"
-                  onClick={() => handlePlayFieldSpeech('executionMode')}
-                  className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                  title="Listen to field guide"
-                >
-                  <Volume2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
+              <span className="text-xs font-bold text-blue-700 uppercase tracking-wider block">
+                2. Legal Execution Mode <span className="text-red-500 font-bold">*</span>
+              </span>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {/* Online Only */}
@@ -2942,38 +2856,53 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                       Doorstep Shipping Details
                     </span>
 
-                    <input
-                      type="text"
-                      required
-                      value={shippingAddress}
-                      onChange={(e) => setShippingAddress(e.target.value)}
-                      placeholder={getPlaceholder("Enter Complete Street Address with City and State")}
-                      className="w-full bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
-                    />
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="block text-[11px] font-bold text-amber-900 mb-0.5">
+                        Complete Street Address with City &amp; State <span className="text-red-500">*</span>
+                      </label>
                       <input
                         type="text"
-                        maxLength={6}
-                        inputMode="numeric"
-                        pattern="[0-9]*"
                         required
-                        value={shippingPincode}
-                        onChange={(e) => setShippingPincode(e.target.value.replace(/\D/g, ''))}
-                        placeholder={getPlaceholder("Enter 6-Digit Pincode")}
-                        className="w-full bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-xs font-mono text-slate-900"
-                      />
-                      <input
-                        type="tel"
-                        required
-                        maxLength={10}
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        value={shippingPhone}
-                        onChange={(e) => setShippingPhone(e.target.value.replace(/\D/g, ''))}
-                        placeholder={getPlaceholder("Recipient 10-Digit Mobile")}
+                        value={shippingAddress}
+                        onChange={(e) => setShippingAddress(e.target.value)}
+                        placeholder={getPlaceholder("Enter Complete Street Address with City and State")}
                         className="w-full bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
                       />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <div>
+                        <label className="block text-[11px] font-bold text-amber-900 mb-0.5">
+                          6-Digit Delivery Pincode <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          maxLength={6}
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          required
+                          value={shippingPincode}
+                          onChange={(e) => setShippingPincode(e.target.value.replace(/\D/g, ''))}
+                          placeholder={getPlaceholder("Enter 6-Digit Pincode")}
+                          className="w-full bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-xs font-mono text-slate-900"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-amber-900 mb-0.5">
+                          Recipient 10-Digit Mobile <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="tel"
+                          required
+                          maxLength={10}
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          value={shippingPhone}
+                          onChange={(e) => setShippingPhone(e.target.value.replace(/\D/g, ''))}
+                          placeholder={getPlaceholder("Recipient 10-Digit Mobile")}
+                          className="w-full bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -3116,21 +3045,6 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                 </div>
 
                 <div className="flex items-center gap-2">
-                  {/* Speaker button to read all 5 declarations aloud */}
-                  <button
-                    type="button"
-                    onClick={handlePlayDeclarationsSpeech}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                      isSpeakingDeclarations
-                        ? 'bg-rose-100 text-rose-700 border border-rose-300 animate-pulse'
-                        : 'bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-200'
-                    }`}
-                    title="Listen to 5 declarations in voice"
-                  >
-                    <Volume2 className="w-3.5 h-3.5" />
-                    <span>{isSpeakingDeclarations ? 'Stop Voice' : '🔊 Listen to Declarations'}</span>
-                  </button>
-
                   {/* Select All toggle */}
                   <button
                     type="button"

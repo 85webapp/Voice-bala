@@ -12,10 +12,7 @@ import {
   UploadCloud,
   Layers,
   FileCheck2,
-  AlertCircle,
-  Volume2,
-  Play,
-  Square
+  AlertCircle
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { AadhaarInput } from './AadhaarInput';
@@ -23,22 +20,15 @@ import { LegalDocument, OrderItem } from '../types';
 import { STATE_CATEGORIES, getSafeStampDuty } from '../data/stampDutyMatrix';
 import { useExampleDetails } from '../hooks/useExampleDetails';
 import {
-  SupportedLanguage,
-  SUPPORTED_LANGUAGES,
-  speechController,
-  fetchPageExplanation,
-  fetchFieldExplanation,
-  getVisibleFormLabels,
-  getVisibleFieldLabel,
-  getStoredAudioLanguage,
-  setStoredAudioLanguage
-} from '../data/voiceNarrationData';
-import {
   encryptFormDataAndSign,
   saveLightweightMetadata,
   postEncryptedPayloadToWebsiteB,
   playConfirmationChime,
   generateSequentialOrderId,
+  buildSubmissionOverview,
+  fieldEntry,
+  readFileAsUploadPayload,
+  UploadedDocumentPayload,
   ServerBSyncResult
 } from '../services/encryptionService';
 import { Lock, ExternalLink } from 'lucide-react';
@@ -76,42 +66,6 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
   const { showExampleDetails, getPlaceholder } = useExampleDetails();
   const showExample = showExampleDetails;
   const [currentPage, setCurrentPage] = useState<StepId>('1');
-
-  // --- AUDIO EXPLAINER & MULTILINGUAL VOICE GUIDE ---
-  const [selectedLang, setSelectedLang] = useState<SupportedLanguage>(getStoredAudioLanguage);
-  const [isAudioPlaying, setIsAudioPlaying] = useState(false);
-
-  useEffect(() => {
-    const unsub = speechController.subscribe((speaking) => {
-      setIsAudioPlaying(speaking);
-    });
-    return () => {
-      unsub();
-      speechController.stop();
-    };
-  }, []);
-
-  useEffect(() => {
-    speechController.stop();
-  }, [currentPage]);
-
-  const activeLangConfig = useMemo(() => {
-    return SUPPORTED_LANGUAGES.find((l) => l.code === selectedLang) || SUPPORTED_LANGUAGES[0];
-  }, [selectedLang]);
-
-  const handlePlayPageSpeech = async () => {
-    if (isAudioPlaying) { speechController.stop(); return; }
-    const fields = getVisibleFormLabels();
-    const explanation = await fetchPageExplanation('Commercial NOC Application', Number(currentPage), `Page ${currentPage}`, fields, selectedLang);
-    if (explanation) speechController.speak(explanation, activeLangConfig.speechCode);
-  };
-
-  const handlePlayFieldSpeech = async (fieldKey: string) => {
-    const label = getVisibleFieldLabel(fieldKey);
-    const context = getVisibleFormLabels().join('; ');
-    const explanation = await fetchFieldExplanation('Commercial NOC Application', fieldKey, label, context, selectedLang);
-    if (explanation) speechController.speak(explanation, activeLangConfig.speechCode);
-  };
 
   // --- PAGE 1: OBJECTIVE & STAMP JURISDICTION ---
   const [selectedState, setSelectedState] = useState<string>('Maharashtra');
@@ -206,7 +160,19 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
   const [granteeSignatoryName, setGranteeSignatoryName] = useState('');
   const [granteeSignatoryFatherName, setGranteeSignatoryFatherName] = useState('');
   const [granteeDesignation, setGranteeDesignation] = useState<string>('Proprietor');
-  const [authorizationDocUploaded, setAuthorizationDocUploaded] = useState(false);
+  const [authorizationDocFile, setAuthorizationDocFile] = useState<UploadedDocumentPayload | null>(null);
+  const authorizationDocUploaded = Boolean(authorizationDocFile);
+
+  const handleAuthFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    const payload = await readFileAsUploadPayload(file, 'Authorization Letter / Board Resolution');
+    if (payload) {
+      setAuthorizationDocFile(payload);
+      showToast(`${payload.fileName} attached successfully.`, 'success', 3000);
+    }
+  };
 
   // Handle Dynamic Constitution to Signatory Designation Mapping
   const handleConstitutionChange = (newConstitution: string) => {
@@ -414,14 +380,160 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
     setIsSubmitting(true);
 
     try {
-      const todayISO = new Date().toISOString().split('T')[0];
+      const now = new Date();
+      const todayISO = now.toISOString().split('T')[0];
       const newOrderId = generateSequentialOrderId();
 
-      // 1. Gather sensitive data for zero-database encryption
+      const selectedPurposeLabels = [
+        purposes.gst_reg ? 'GST Registration (Tax Allotment)' : null,
+        purposes.biz_license ? 'Business License / Gumasta / Shops & Est' : null,
+        purposes.subletting ? 'Sub-Letting / Sub-Leasing Permissions' : null,
+        purposes.bank_account ? 'Bank Account Opening / Corporate Address Proof' : null,
+        purposes.statutory_reg ? 'Central/State Statutory (FSSAI, MSME, Pollution, Fire)' : null
+      ].filter(Boolean) as string[];
+
+      const isCorpLandlord = landlordOwnershipType !== 'Sole Individual' && landlordOwnershipType !== 'Joint Owners';
+      const uploadedDocuments: UploadedDocumentPayload[] = authorizationDocFile ? [authorizationDocFile] : [];
+
+      const submissionOverview = buildSubmissionOverview({
+        orderId: newOrderId,
+        requestType: 'Commercial NOC Request',
+        mainCategory: 'Rent & Property',
+        subCategory: initialDoc.title || 'Commercial No-Objection Certificate (NOC)',
+        availableCategories: ['Rent & Property', 'Agreements', 'Affidavits'],
+        availableSubCategories: ['Commercial No-Objection Certificate (NOC)', 'Landlord NOC for Business', 'Landlord NOC for GST'],
+        documentTitle: 'Commercial No-Objection Certificate (NOC)',
+        date: now
+      });
+
+      const sections = [
+        {
+          pageNumber: 1,
+          sectionTitle: 'Page 1: Objective, Jurisdiction & Stamp Duty',
+          fields: [
+            fieldEntry('Selected State / Union Territory', selectedState, false),
+            fieldEntry('Selected Purposes of NOC', selectedPurposeLabels, false),
+            fieldEntry('Property Classification', propertyClassification, false),
+            fieldEntry('Stamp Duty Paid By', stampFeePaidBy, false, ['Landlord', 'Business Owner', 'Shared Equally']),
+            fieldEntry('Stamp Selection Mode', stampMode === 'auto' ? `Auto Recommended (₹${recommendedStamp})` : `Manual (₹${activeStampValue})`, false),
+            fieldEntry('Final Stamp Paper Value (INR)', `₹${pricing.stamp}`, false)
+          ]
+        },
+        {
+          pageNumber: 2,
+          sectionTitle: 'Page 2: 1st Party / Grantor (Landlord) Details',
+          fields: [
+            fieldEntry('Landlord Ownership Type', landlordOwnershipType, false),
+            fieldEntry(isCorpLandlord ? 'Entity Legal Name' : 'Landlord Full Legal Name', landlordName, false),
+            ...(isCorpLandlord
+              ? [
+                  fieldEntry('CIN / LLPIN', corpCin, false),
+                  fieldEntry('Registered Office Address', corpRegAddress, false),
+                  fieldEntry('Authorised Representative Name', corpRepName, false),
+                  fieldEntry('Authorised Representative Designation', corpRepDesignation, false),
+                  fieldEntry('Resolution / Authorization Date', corpResolutionDate, false)
+                ]
+              : [
+                  fieldEntry("Father's / Husband's Name", landlordFatherName, false)
+                ]),
+            fieldEntry('Landlord / Corporate PAN Card', landlordPan, false),
+            fieldEntry('Aadhaar Number (12 Digits)', landlordAadhaarLast4, true),
+            fieldEntry('Official Contact Mobile Number', landlordMobile, false),
+            fieldEntry('Contact Email ID', landlordEmail, true),
+            fieldEntry('Joint Co-Owners Added', coOwners.length > 0 ? coOwners : '', true),
+            fieldEntry('Clear Legal Title Declaration Accepted', clearTitleDeclared ? 'Yes' : 'No', false)
+          ]
+        },
+        {
+          pageNumber: 3,
+          sectionTitle: 'Page 3: 2nd Party / Grantee (Business & Entity) Details',
+          fields: [
+            fieldEntry('Business Constitution', businessConstitution, false),
+            fieldEntry('Proposed Business Name / Trade Name', proposedBusinessName, false),
+            fieldEntry('Entity / Proprietor PAN Card', granteePan, false),
+            fieldEntry('CIN / LLPIN', granteeCin, businessConstitution === 'Sole Proprietorship' || businessConstitution === 'Partnership Firm'),
+            fieldEntry('Nature of Business Operations', natureOfOperations === 'Other' ? customNatureOfOperations : natureOfOperations, false),
+            fieldEntry('Signatory Full Legal Name', granteeSignatoryName, false),
+            fieldEntry("Signatory Father's Name", granteeSignatoryFatherName, false),
+            fieldEntry('Signatory Designation', granteeDesignation, false),
+            fieldEntry('Authorization Letter / Board Resolution File', authorizationDocFile ? `${authorizationDocFile.fileName} (${Math.round(authorizationDocFile.sizeBytes / 1024)} KB)` : '', true)
+          ]
+        },
+        {
+          pageNumber: '3B',
+          sectionTitle: 'Page 3B: Premises Location, Area & Boundaries',
+          fields: [
+            fieldEntry('Premises Complete Address', premisesAddress, false),
+            fieldEntry('Municipal Ward Number / Zone', wardNumber, true),
+            fieldEntry('Property Tax Holding / Survey No.', propertyTaxAssessmentNo, true),
+            fieldEntry('Super Built-up Area (Sq. Ft.)', superBuiltupArea, true),
+            fieldEntry('Carpet Area (Sq. Ft.)', carpetArea, true),
+            fieldEntry('East Boundary', eastBound, true),
+            fieldEntry('West Boundary', westBound, true),
+            fieldEntry('North Boundary', northBound, true),
+            fieldEntry('South Boundary', southBound, true)
+          ]
+        },
+        {
+          pageNumber: 4,
+          sectionTitle: 'Page 4: Operational Clauses & Statutory Permissions',
+          fields: [
+            fieldEntry('Multi-Agency Govt Registration Permission', clauseMultiAgency ? 'Accepted' : 'Unchecked', false),
+            fieldEntry('Tax Officer Physical Verification Permission', clausePhysicalVerification ? 'Accepted' : 'Unchecked', false),
+            fieldEntry('Signboard Display Consent', clauseSignboard ? 'Accepted' : 'Unchecked', false),
+            fieldEntry('Books & Invoices Maintenance Consent', clauseBooks ? 'Accepted' : 'Unchecked', false),
+            fieldEntry('Temporary Cabin / Structural Boundaries', clauseStructural ? 'Accepted' : 'Unchecked', false),
+            fieldEntry('Sub-Letting & Co-Working Permission', sublettingPermission, false),
+            fieldEntry('Property Tax Escalation Responsibility', propertyTaxEscalation, false),
+            fieldEntry('Landlord Indemnity Accepted', landlordIndemnityAccepted ? 'Yes' : 'No', false),
+            fieldEntry(
+              'Custom Operational Conditions',
+              customClauses.length > 0
+                ? customClauses.map((c, i) => `${i + 1}. ${c.header || 'Condition'}: ${c.description}`).join(' | ')
+                : '',
+              true
+            )
+          ]
+        },
+        {
+          pageNumber: 5,
+          sectionTitle: 'Page 5: Witnesses, Delivery & Pricing',
+          fields: [
+            fieldEntry('Witness 1 Full Legal Name', witness1Name, true),
+            fieldEntry('Witness 1 Profession', witness1Profession, true),
+            fieldEntry('Witness 1 Residential Address', witness1Address, true),
+            fieldEntry('Witness 1 Mobile Number', witness1Mobile, true),
+            fieldEntry('Witness 1 ID (PAN / Aadhaar / Voter)', witness1Id, true),
+            fieldEntry('Witness 2 Full Legal Name', witness2Name, true),
+            fieldEntry('Witness 2 Profession', witness2Profession, true),
+            fieldEntry('Witness 2 Residential Address', witness2Address, true),
+            fieldEntry('Witness 2 Mobile Number', witness2Mobile, true),
+            fieldEntry('Witness 2 ID (PAN / Aadhaar / Voter)', witness2Id, true),
+            fieldEntry('Execution & Delivery Mode', deliveryPreference, false, ['digital', 'physical', 'hybrid']),
+            fieldEntry('Shipping Postal Address', shippingAddress, deliveryPreference === 'digital'),
+            fieldEntry('Shipping PIN Code', shippingPincode, deliveryPreference === 'digital'),
+            fieldEntry('Shipping Contact Phone', shippingPhone, deliveryPreference === 'digital'),
+            fieldEntry('Total Payable Post-Delivery (INR)', `₹${pricing.totalPayable}`, false)
+          ]
+        }
+      ];
+
+      // 1. Gather complete sensitive data for zero-database encryption
       const sensitiveData = {
         orderId: newOrderId,
+        submissionOverview,
+        submittedDate: submissionOverview.submittedDate,
+        submittedTime: submissionOverview.submittedTime,
+        requestType: submissionOverview.requestType,
+        mainCategory: submissionOverview.mainCategory,
+        subCategory: submissionOverview.subCategory,
         docTitle: 'Commercial No-Objection Certificate (NOC)',
+        category: initialDoc.category,
         state: selectedState,
+        purposes,
+        stampFeePaidBy,
+        stampMode,
+        stampDutyAmount: pricing.stamp,
         landlord: {
           entityType: landlordOwnershipType,
           name: landlordName,
@@ -429,21 +541,67 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
           pan: landlordPan,
           aadhaar: landlordAadhaarLast4,
           mobile: landlordMobile,
-          email: landlordEmail
+          email: landlordEmail,
+          clearTitleDeclared,
+          coOwners: coOwners.length > 0 ? coOwners : undefined,
+          corporate: isCorpLandlord ? {
+            corpCin,
+            corpRegAddress,
+            corpRepName,
+            corpRepDesignation,
+            corpResolutionDate
+          } : undefined
         },
         grantee: {
           businessName: proposedBusinessName,
           constitutionType: businessConstitution,
+          pan: granteePan,
+          cin: granteeCin,
+          natureOfOperations: natureOfOperations === 'Other' ? customNatureOfOperations : natureOfOperations,
           authorizedPerson: granteeSignatoryName,
           fatherName: granteeSignatoryFatherName,
-          designation: granteeDesignation
+          designation: granteeDesignation,
+          authorizationDocUploaded,
+          authorizationDocFile
         },
         property: {
           address: premisesAddress,
-          classification: propertyClassification
+          classification: propertyClassification,
+          wardNumber,
+          propertyTaxAssessmentNo,
+          superBuiltupArea,
+          carpetArea,
+          boundaries: { eastBound, westBound, northBound, southBound }
+        },
+        clauses: {
+          clauseMultiAgency,
+          clausePhysicalVerification,
+          clauseSignboard,
+          clauseBooks,
+          clauseStructural,
+          clauseFssai,
+          clauseFireSafety,
+          clauseHealthTrade,
+          sublettingPermission,
+          propertyTaxEscalation,
+          meterLoadConsent,
+          landlordIndemnityAccepted,
+          customClauses
+        },
+        witnesses: [
+          { name: witness1Name, profession: witness1Profession, address: witness1Address, idNumber: witness1Id, mobile: witness1Mobile },
+          { name: witness2Name, profession: witness2Profession, address: witness2Address, idNumber: witness2Id, mobile: witness2Mobile }
+        ],
+        delivery: {
+          deliveryPreference,
+          shippingAddress: deliveryPreference !== 'digital' ? shippingAddress : undefined,
+          pincode: deliveryPreference !== 'digital' ? shippingPincode : undefined,
+          shippingPhone: deliveryPreference !== 'digital' ? shippingPhone : undefined
         },
         pricing,
-        timestamp: new Date().toISOString()
+        uploadedDocuments,
+        sections,
+        timestamp: now.toISOString()
       };
 
       // 2. Client-Side AES-256 + HMAC-SHA256
@@ -630,71 +788,6 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
         </div>
       </div>
 
-      {/* MULTILINGUAL AUDIO EXPLAINER BAR (TOP OF EVERY PAGE) */}
-      <div className="mb-4 bg-linear-to-r from-blue-50 via-indigo-50 to-blue-50 border border-blue-200 rounded-2xl p-3 sm:p-4 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-colors ${isAudioPlaying ? 'bg-blue-600 text-white animate-pulse' : 'bg-white text-blue-600 border border-blue-200'}`}>
-            <Volume2 className="w-4 h-4" />
-          </div>
-          <div>
-            <span className="text-xs font-bold text-slate-900 block flex items-center gap-1.5">
-              <span>Voice Guide &amp; Audio Explainer</span>
-              {isAudioPlaying && (
-                <span className="inline-flex items-center gap-1 text-[10px] text-blue-600 bg-white px-2 py-0.5 rounded-full border border-blue-200 font-semibold animate-pulse">
-                  Playing...
-                </span>
-              )}
-            </span>
-            <span className="text-[11px] text-slate-500">
-              Listen to complete instructions for Page {currentPage}
-            </span>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 self-end sm:self-auto">
-          {/* Language Selector */}
-          <select
-            value={selectedLang}
-            onChange={(e) => {
-              speechController.stop();
-              const nextLang = e.target.value as SupportedLanguage;
-              setSelectedLang(nextLang);
-              setStoredAudioLanguage(nextLang);
-            }}
-            className="bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-600 cursor-pointer shadow-2xs"
-          >
-            {SUPPORTED_LANGUAGES.map((lang) => (
-              <option key={lang.code} value={lang.code}>
-                {lang.nativeName} ({lang.name})
-              </option>
-            ))}
-          </select>
-
-          {/* Play / Stop Button */}
-          <button
-            type="button"
-            onClick={handlePlayPageSpeech}
-            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl font-bold text-xs shadow-xs transition-all cursor-pointer ${
-              isAudioPlaying
-                ? 'bg-rose-600 hover:bg-rose-700 text-white'
-                : 'bg-blue-600 hover:bg-blue-700 text-white'
-            }`}
-          >
-            {isAudioPlaying ? (
-              <>
-                <Square className="w-3.5 h-3.5 fill-current" />
-                <span>Stop</span>
-              </>
-            ) : (
-              <>
-                <Play className="w-3.5 h-3.5 fill-current" />
-                <span>Listen Page</span>
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-
       <div className="bg-white border border-slate-200 rounded-2xl shadow-xs p-5 sm:p-7">
         {/* ================= PAGE 1: OBJECTIVE & STAMP SELECTION ================= */}
         {currentPage === '1' && (
@@ -702,19 +795,9 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
 
             {/* State Selection */}
             <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-bold text-slate-800">
-                  State / Union Territory (36 States/UTs) <span className="text-red-500 font-bold">*</span>
-                </label>
-                <button
-                  type="button"
-                  onClick={() => handlePlayFieldSpeech('state')}
-                  className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                  title="Listen to field guide"
-                >
-                  <Volume2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
+              <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                State / Union Territory (36 States/UTs) <span className="text-red-500 font-bold">*</span>
+              </label>
               <select
                 value={selectedState}
                 onChange={(e) => setSelectedState(e.target.value)}
@@ -730,19 +813,9 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
 
             {/* Purpose of NOC [Multi-Select Checkbox] */}
             <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-bold text-slate-800">
-                  Purpose of NOC (Select all that apply) <span className="text-red-500 font-bold">*</span>
-                </label>
-                <button
-                  type="button"
-                  onClick={() => handlePlayFieldSpeech('nocPurposes')}
-                  className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                  title="Listen to field guide"
-                >
-                  <Volume2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
+              <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                Purpose of NOC (Select all that apply) <span className="text-red-500 font-bold">*</span>
+              </label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 {[
                   { key: 'gst_reg', label: 'GST Registration (Tax Allotment)' },
@@ -773,19 +846,9 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
 
             {/* Property Classification */}
             <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-bold text-slate-800">
-                  Property Classification <span className="text-red-500 font-bold">*</span>
-                </label>
-                <button
-                  type="button"
-                  onClick={() => handlePlayFieldSpeech('propertyType')}
-                  className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                  title="Listen to field guide"
-                >
-                  <Volume2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
+              <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                Property Classification <span className="text-red-500 font-bold">*</span>
+              </label>
               <select
                 value={propertyClassification}
                 onChange={(e) => setPropertyClassification(e.target.value)}
@@ -801,19 +864,9 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
 
             {/* Stamp Duty Fee Paid By */}
             <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-bold text-slate-800">
-                  Who is paying the Stamp Duty Fee? <span className="text-red-500 font-bold">*</span>
-                </label>
-                <button
-                  type="button"
-                  onClick={() => handlePlayFieldSpeech('stampBorneBy')}
-                  className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                  title="Listen to field guide"
-                >
-                  <Volume2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
+              <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                Who is paying the Stamp Duty Fee? <span className="text-red-500 font-bold">*</span>
+              </label>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                 {[
                   { key: 'Landlord', label: 'Landlord' },
@@ -843,19 +896,9 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
 
             {/* Stamp Value Selection Engine */}
             <div className="space-y-3 pt-2 border-t border-slate-200">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
-                  Stamp Paper Value Selection
-                </span>
-                <button
-                  type="button"
-                  onClick={() => handlePlayFieldSpeech('stampValue')}
-                  className="text-slate-400 hover:text-blue-600 transition-colors p-1"
-                  title="Listen to field guide"
-                >
-                  <Volume2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
+              <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
+                Stamp Paper Value Selection
+              </span>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label
@@ -1093,18 +1136,9 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
               <div className="space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="block text-xs font-bold text-slate-700">
-                        Landlord Full Legal Name <span className="text-red-500">*</span>
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => handlePlayFieldSpeech('landlordName')}
-                        className="text-slate-400 hover:text-blue-600 p-1"
-                      >
-                        <Volume2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Landlord Full Legal Name <span className="text-red-500">*</span>
+                    </label>
                     <input
                       type="text"
                       required
@@ -1116,18 +1150,9 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
                   </div>
 
                   <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="block text-xs font-bold text-slate-700">
-                        Father's / Husband's Name <span className="text-red-500">*</span>
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => handlePlayFieldSpeech('landlordFatherName')}
-                        className="text-slate-400 hover:text-blue-600 p-1"
-                      >
-                        <Volume2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Father's / Husband's Name <span className="text-red-500">*</span>
+                    </label>
                     <input
                       type="text"
                       required
@@ -1144,18 +1169,9 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
             {/* KYC Identifiers: PAN, Aadhaar, Mobile, Email (Optional) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-bold text-slate-700">
-                    Landlord / Corporate PAN Card <span className="text-red-500">*</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => handlePlayFieldSpeech('landlordPan')}
-                    className="text-slate-400 hover:text-blue-600 p-1"
-                  >
-                    <Volume2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Landlord / Corporate PAN Card <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="text"
                   required
@@ -1179,18 +1195,9 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-bold text-slate-700">
-                    Official Contact Mobile Number <span className="text-red-500">*</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => handlePlayFieldSpeech('landlordMobile')}
-                    className="text-slate-400 hover:text-blue-600 p-1"
-                  >
-                    <Volume2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Official Contact Mobile Number <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="tel"
                   required
@@ -1205,18 +1212,9 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-bold text-slate-700">
-                    Contact Email ID <span className="text-slate-400 font-normal">(Optional)</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => handlePlayFieldSpeech('landlordEmail')}
-                    className="text-slate-400 hover:text-blue-600 p-1"
-                  >
-                    <Volume2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Contact Email ID <span className="text-slate-400 font-normal">(Optional)</span>
+                </label>
                 <input
                   type="email"
                   value={landlordEmail}
@@ -1245,26 +1243,36 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
                 </div>
 
                 {coOwners.map((co) => (
-                  <div key={co.id} className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex flex-col sm:flex-row gap-2 items-center">
-                    <input
-                      type="text"
-                      value={co.name}
-                      onChange={(e) => updateCoOwner(co.id, 'name', e.target.value)}
-                      placeholder={showExample ? "Co-Owner Legal Name *" : ""}
-                      className="flex-1 bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
-                    />
-                    <input
-                      type="text"
-                      maxLength={10}
-                      value={co.pan}
-                      onChange={(e) => updateCoOwner(co.id, 'pan', e.target.value.toUpperCase())}
-                      placeholder={showExample ? "PAN *" : ""}
-                      className="w-32 bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-mono uppercase text-slate-900"
-                    />
+                  <div key={co.id} className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex flex-col sm:flex-row gap-2 sm:items-end">
+                    <div className="flex-1 w-full">
+                      <label className="block text-[11px] font-semibold text-slate-700 mb-0.5">
+                        Co-Owner Full Legal Name <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={co.name}
+                        onChange={(e) => updateCoOwner(co.id, 'name', e.target.value)}
+                        placeholder={showExample ? "Co-Owner Legal Name *" : ""}
+                        className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
+                      />
+                    </div>
+                    <div className="sm:w-36 w-full">
+                      <label className="block text-[11px] font-semibold text-slate-700 mb-0.5">
+                        Co-Owner PAN <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        maxLength={10}
+                        value={co.pan}
+                        onChange={(e) => updateCoOwner(co.id, 'pan', e.target.value.toUpperCase())}
+                        placeholder={showExample ? "PAN *" : ""}
+                        className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-mono uppercase text-slate-900"
+                      />
+                    </div>
                     <button
                       type="button"
                       onClick={() => removeCoOwner(co.id)}
-                      className="text-slate-400 hover:text-rose-600 p-1 cursor-pointer"
+                      className="text-slate-400 hover:text-rose-600 p-1.5 self-end cursor-pointer"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -1466,6 +1474,40 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
                     <option value="Director">Director</option>
                     <option value="Authorized Signatory via BR">Authorized Signatory via BR</option>
                   </select>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-800">
+                    Authorization Letter / Board Resolution <span className="text-slate-400 font-normal">(Optional)</span>
+                  </label>
+                  <span className="text-[11px] text-slate-500 block">
+                    {authorizationDocFile
+                      ? `Attached: ${authorizationDocFile.fileName} (${Math.max(1, Math.round(authorizationDocFile.sizeBytes / 1024))} KB)`
+                      : 'Attach signed authorization letter or board resolution (PDF/JPG/PNG)'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs cursor-pointer shadow-xs transition-all">
+                    <UploadCloud className="w-3.5 h-3.5" />
+                    <span>{authorizationDocFile ? 'Change File' : 'Upload File'}</span>
+                    <input
+                      type="file"
+                      accept="image/*,.pdf"
+                      onChange={handleAuthFileSelect}
+                      className="sr-only"
+                    />
+                  </label>
+                  {authorizationDocFile && (
+                    <button
+                      type="button"
+                      onClick={() => setAuthorizationDocFile(null)}
+                      className="px-2.5 py-1.5 rounded-xl border border-slate-300 bg-white text-slate-600 hover:text-rose-600 text-xs font-semibold cursor-pointer"
+                    >
+                      Remove
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -1819,92 +1861,142 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
               </div>
 
               {/* Witness 1 */}
-              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
-                <span className="text-xs font-bold text-slate-800">Witness 1 Details</span>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                <span className="text-xs font-bold text-slate-800 block">Witness 1 Details</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
+                      Full Legal Name <span className="text-slate-400 font-normal">(Optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={witness1Name}
+                      onChange={(e) => setWitness1Name(e.target.value)}
+                      placeholder={showExample ? "Full Legal Name" : ""}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
+                      Profession / Job Title <span className="text-slate-400 font-normal">(Optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={witness1Profession}
+                      onChange={(e) => setWitness1Profession(e.target.value)}
+                      placeholder={showExample ? "Profession / Job Title" : ""}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
+                    Complete Residential Address <span className="text-slate-400 font-normal">(Optional)</span>
+                  </label>
                   <input
                     type="text"
-                    value={witness1Name}
-                    onChange={(e) => setWitness1Name(e.target.value)}
-                    placeholder={showExample ? "Full Legal Name" : ""}
-                    className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
-                  />
-                  <input
-                    type="text"
-                    value={witness1Profession}
-                    onChange={(e) => setWitness1Profession(e.target.value)}
-                    placeholder={showExample ? "Profession / Job Title" : ""}
-                    className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
+                    value={witness1Address}
+                    onChange={(e) => setWitness1Address(e.target.value)}
+                    placeholder={showExample ? "Complete Residential Address" : ""}
+                    className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
                   />
                 </div>
-                <input
-                  type="text"
-                  value={witness1Address}
-                  onChange={(e) => setWitness1Address(e.target.value)}
-                  placeholder={showExample ? "Complete Residential Address" : ""}
-                  className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
-                />
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <input
-                    type="tel"
-                    maxLength={10}
-                    value={witness1Mobile}
-                    onChange={(e) => setWitness1Mobile(e.target.value.replace(/\D/g, ''))}
-                    placeholder={showExample ? "Mobile Number" : ""}
-                    className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
-                  />
-                  <input
-                    type="text"
-                    value={witness1Id}
-                    onChange={(e) => setWitness1Id(e.target.value)}
-                    placeholder={showExample ? "PAN / Aadhaar / Voter ID" : ""}
-                    className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
+                      Mobile Number <span className="text-slate-400 font-normal">(Optional)</span>
+                    </label>
+                    <input
+                      type="tel"
+                      maxLength={10}
+                      value={witness1Mobile}
+                      onChange={(e) => setWitness1Mobile(e.target.value.replace(/\D/g, ''))}
+                      placeholder={showExample ? "Mobile Number" : ""}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
+                      PAN / Aadhaar / Voter ID <span className="text-slate-400 font-normal">(Optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={witness1Id}
+                      onChange={(e) => setWitness1Id(e.target.value)}
+                      placeholder={showExample ? "PAN / Aadhaar / Voter ID" : ""}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
+                    />
+                  </div>
                 </div>
               </div>
 
               {/* Witness 2 */}
-              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
-                <span className="text-xs font-bold text-slate-800">Witness 2 Details</span>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                <span className="text-xs font-bold text-slate-800 block">Witness 2 Details</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
+                      Full Legal Name <span className="text-slate-400 font-normal">(Optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={witness2Name}
+                      onChange={(e) => setWitness2Name(e.target.value)}
+                      placeholder={showExample ? "Full Legal Name" : ""}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
+                      Profession / Job Title <span className="text-slate-400 font-normal">(Optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={witness2Profession}
+                      onChange={(e) => setWitness2Profession(e.target.value)}
+                      placeholder={showExample ? "Profession / Job Title" : ""}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
+                    Complete Residential Address <span className="text-slate-400 font-normal">(Optional)</span>
+                  </label>
                   <input
                     type="text"
-                    value={witness2Name}
-                    onChange={(e) => setWitness2Name(e.target.value)}
-                    placeholder={showExample ? "Full Legal Name" : ""}
-                    className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
-                  />
-                  <input
-                    type="text"
-                    value={witness2Profession}
-                    onChange={(e) => setWitness2Profession(e.target.value)}
-                    placeholder={showExample ? "Profession / Job Title" : ""}
-                    className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
+                    value={witness2Address}
+                    onChange={(e) => setWitness2Address(e.target.value)}
+                    placeholder={showExample ? "Complete Residential Address" : ""}
+                    className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
                   />
                 </div>
-                <input
-                  type="text"
-                  value={witness2Address}
-                  onChange={(e) => setWitness2Address(e.target.value)}
-                  placeholder={showExample ? "Complete Residential Address" : ""}
-                  className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
-                />
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <input
-                    type="tel"
-                    maxLength={10}
-                    value={witness2Mobile}
-                    onChange={(e) => setWitness2Mobile(e.target.value.replace(/\D/g, ''))}
-                    placeholder={showExample ? "Mobile Number" : ""}
-                    className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
-                  />
-                  <input
-                    type="text"
-                    value={witness2Id}
-                    onChange={(e) => setWitness2Id(e.target.value)}
-                    placeholder={showExample ? "PAN / Aadhaar / Voter ID" : ""}
-                    className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
+                      Mobile Number <span className="text-slate-400 font-normal">(Optional)</span>
+                    </label>
+                    <input
+                      type="tel"
+                      maxLength={10}
+                      value={witness2Mobile}
+                      onChange={(e) => setWitness2Mobile(e.target.value.replace(/\D/g, ''))}
+                      placeholder={showExample ? "Mobile Number" : ""}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
+                      PAN / Aadhaar / Voter ID <span className="text-slate-400 font-normal">(Optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={witness2Id}
+                      onChange={(e) => setWitness2Id(e.target.value)}
+                      placeholder={showExample ? "PAN / Aadhaar / Voter ID" : ""}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -1982,32 +2074,47 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
                   <div className="text-xs text-amber-900">
                     <strong>Physical Shipping Details:</strong> Speed Post dispatch in 2 business days.
                   </div>
-                  <input
-                    type="text"
-                    required
-                    value={shippingAddress}
-                    onChange={(e) => setShippingAddress(e.target.value)}
-                    placeholder={showExample ? "Shipping Postal Address *" : ""}
-                    className="w-full bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
-                  />
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[11px] font-bold text-amber-900 mb-0.5">
+                      Shipping Postal Address <span className="text-red-500">*</span>
+                    </label>
                     <input
                       type="text"
-                      maxLength={6}
                       required
-                      value={shippingPincode}
-                      onChange={(e) => setShippingPincode(e.target.value.replace(/\D/g, ''))}
-                      placeholder={showExample ? "6-Digit PIN Code *" : ""}
-                      className="bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-xs font-mono text-slate-900"
+                      value={shippingAddress}
+                      onChange={(e) => setShippingAddress(e.target.value)}
+                      placeholder={showExample ? "Shipping Postal Address *" : ""}
+                      className="w-full bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
                     />
-                    <input
-                      type="tel"
-                      required
-                      value={shippingPhone}
-                      onChange={(e) => setShippingPhone(e.target.value)}
-                      placeholder={showExample ? "Contact Phone *" : ""}
-                      className="bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
-                    />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-bold text-amber-900 mb-0.5">
+                        6-Digit PIN Code <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        maxLength={6}
+                        required
+                        value={shippingPincode}
+                        onChange={(e) => setShippingPincode(e.target.value.replace(/\D/g, ''))}
+                        placeholder={showExample ? "6-Digit PIN Code *" : ""}
+                        className="w-full bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-xs font-mono text-slate-900"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-amber-900 mb-0.5">
+                        Contact Phone Number <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="tel"
+                        required
+                        value={shippingPhone}
+                        onChange={(e) => setShippingPhone(e.target.value)}
+                        placeholder={showExample ? "Contact Phone *" : ""}
+                        className="w-full bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
+                      />
+                    </div>
                   </div>
                 </div>
               )}

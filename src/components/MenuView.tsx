@@ -10,6 +10,7 @@ import { ServiceFormView } from './ServiceFormView';
 import { GstRegistrationWizard } from './GstRegistrationWizard';
 import { UdyamRegistrationWizard } from './UdyamRegistrationWizard';
 import { playServiceVoice } from '../services/googleVoiceGuidance';
+import { VoiceGuidanceButton } from './VoiceGuidanceButton';
 
 export const MenuView: React.FC = () => {
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
@@ -94,7 +95,11 @@ export const MenuView: React.FC = () => {
           <button
             type="button"
             aria-expanded={isSupportExpanded}
-            onClick={() => setIsSupportExpanded(!isSupportExpanded)}
+            onClick={() => {
+              const next = !isSupportExpanded;
+              setIsSupportExpanded(next);
+              if (next) playServiceVoice('Call Support');
+            }}
             className="w-full px-4 py-4 flex items-center justify-between text-left hover:bg-blue-50/30 cursor-pointer transition-colors"
           >
             <span className="flex items-center gap-3">
@@ -112,12 +117,15 @@ export const MenuView: React.FC = () => {
           {isSupportExpanded && (
             <div className="border-t border-slate-200 p-4 bg-slate-50/70 space-y-3">
               <div className="bg-white border border-slate-200 rounded-xl p-3.5 space-y-2">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
                   <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Dedicated Legal Representative</span>
-                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
-                    Online 24/7
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <VoiceGuidanceButton serviceTitle="Call Support" />
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
+                      Online 24/7
+                    </span>
+                  </div>
                 </div>
                 <h4 className="text-base font-black text-slate-900">
                   Speak Directly with Harshit

@@ -33,6 +33,9 @@ import {
   postEncryptedPayloadToWebsiteB,
   playConfirmationChime,
   generateSequentialOrderId,
+  buildSubmissionOverview,
+  fieldEntry,
+  DossierSection,
   ServerBSyncResult
 } from '../services/encryptionService';
 import { ServerBSyncStatusCard } from './ServerBSyncStatusCard';
@@ -161,34 +164,194 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
     ptinOrShopAct: '',
   });
 
-  const handleRequestSubmit = (e: React.FormEvent) => {
+  const handleRequestSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const orderId = generateSequentialOrderId();
+    const now = new Date();
+    setArnNumber(orderId);
+
+    const registrationServices = SERVICE_CATEGORIES.find((c) => c.id === 'registrations')?.services || [];
+    const submissionOverview = buildSubmissionOverview({
+      orderId,
+      requestType: 'Registration Callback Request (1-Hour)',
+      mainCategory: 'Registrations',
+      subCategory: requestData.service || 'GST Registration',
+      availableCategories: SERVICE_CATEGORIES.map((c) => c.title),
+      availableSubCategories: registrationServices,
+      documentTitle: `${requestData.service || 'GST Registration'} (1-Hour Callback Request)`,
+      date: now
+    });
+
+    const sections: DossierSection[] = [
+      {
+        pageNumber: 1,
+        sectionTitle: '1-Hour Callback Request Details',
+        fields: [
+          fieldEntry('Applicant Name', requestData.name, false),
+          fieldEntry('10-Digit Mobile Number', requestData.phone, false),
+          fieldEntry('Email Address', requestData.email, true),
+          fieldEntry('Service Selected', requestData.service, false, registrationServices)
+        ]
+      }
+    ];
+
+    const sensitiveData = {
+      orderId,
+      submissionOverview,
+      sections,
+      mode: 'Quick Callback Request',
+      service: requestData.service || 'GST Registration',
+      category: 'Registrations',
+      clientName: requestData.name,
+      clientPhone: requestData.phone,
+      clientEmail: requestData.email || 'Not Filled (Optional)',
+      requestData,
+      timestamp: now.toISOString()
+    };
+
+    const encResult = encryptFormDataAndSign(sensitiveData);
+    const metadata = {
+      firstPartyName: requestData.name || 'GST Callback Applicant',
+      formName: `${requestData.service || 'GST Registration'} (Callback Request)`,
+      timestamp: now.toISOString(),
+      totalPrice: '0',
+      orderId
+    };
+    await saveLightweightMetadata(metadata);
+    const syncRes = await postEncryptedPayloadToWebsiteB(encResult, metadata);
+    setServerBSyncResult(syncRes);
+    setCachedEncPayload({ result: encResult, metadata });
+    setSubmissionSecurityDetails({
+      encryptedPayload: encResult.encryptedPayload,
+      signature: encResult.signature,
+      websiteBUrl: encResult.websiteBUrl
+    });
     setRequestSubmitted(true);
+    try {
+      playConfirmationChime();
+    } catch {}
   };
 
   const handleFinalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const orderId = generateSequentialOrderId();
+    const now = new Date();
     setArnNumber(orderId);
+
+    const registrationServices = SERVICE_CATEGORIES.find((c) => c.id === 'registrations')?.services || [];
+    const constitutionOptions = ['Sole Proprietorship', 'Partnership', 'Private Limited Company', 'LLP', 'HUF / Society / Trust / Others'];
+
+    const submissionOverview = buildSubmissionOverview({
+      orderId,
+      requestType: 'Registration Request (Full 4-Step GST Form)',
+      mainCategory: 'Registrations',
+      subCategory: 'GST Registration',
+      availableCategories: SERVICE_CATEGORIES.map((c) => c.title),
+      availableSubCategories: registrationServices,
+      documentTitle: 'GST Registration',
+      date: now
+    });
+
+    const isSole = step1.constitution === 'Sole Proprietorship';
+    const sections: DossierSection[] = [
+      {
+        pageNumber: 1,
+        sectionTitle: 'Step 1: Basic Business Details',
+        fields: [
+          fieldEntry('State', step1.state, false, INDIAN_STATES),
+          fieldEntry('District', step1.district, false),
+          fieldEntry('Legal Name of Business (As per PAN)', step1.legalName, false),
+          fieldEntry('Business PAN Number', step1.pan, false),
+          fieldEntry('Business Email Address', step1.email, false),
+          fieldEntry('Business Mobile Number', step1.phone, false),
+          fieldEntry('Constitution of Business', step1.constitution, false, constitutionOptions)
+        ]
+      },
+      {
+        pageNumber: 2,
+        sectionTitle: isSole ? 'Step 2: Sole Proprietor Details' : 'Step 2: Partners / Directors Details',
+        fields: isSole
+          ? [
+              fieldEntry('Proprietor Full Name', proprietor.fullName, false),
+              fieldEntry("Proprietor Father's Name", proprietor.fatherName, false),
+              fieldEntry('Date of Birth', proprietor.dob, false),
+              fieldEntry('Gender', proprietor.gender, false, ['Male', 'Female', 'Other']),
+              fieldEntry('Proprietor Mobile', proprietor.mobile, false),
+              fieldEntry('Proprietor Email', proprietor.email, true),
+              fieldEntry('Proprietor PAN', proprietor.pan, false),
+              fieldEntry('Proprietor Aadhaar', proprietor.aadhaar, false),
+              fieldEntry('Residential Address', proprietor.address, false),
+              fieldEntry('Residential PIN Code', proprietor.pinCode, false),
+              fieldEntry('Address Proof Type', proprietor.addressProofType, false),
+              fieldEntry('Proprietor is Authorized Signatory?', proprietor.isAuthorizedSignatory ? 'Yes' : 'No', false),
+              fieldEntry('Separate Authorized Signatory Name', proprietor.isAuthorizedSignatory ? '' : proprietor.authSignatoryName, proprietor.isAuthorizedSignatory),
+              fieldEntry('Separate Authorized Signatory PAN', proprietor.isAuthorizedSignatory ? '' : proprietor.authSignatoryPan, proprietor.isAuthorizedSignatory)
+            ]
+          : partners.flatMap((p, idx) => [
+              fieldEntry(`Partner/Director #${idx + 1} Full Name`, p.fullName, false),
+              fieldEntry(`Partner/Director #${idx + 1} Designation`, p.designation, false),
+              fieldEntry(`Partner/Director #${idx + 1} DIN / PAN`, p.dinPan, false),
+              fieldEntry(`Partner/Director #${idx + 1} Aadhaar`, p.aadhaar, false),
+              fieldEntry(`Partner/Director #${idx + 1} Mobile`, p.mobile, false),
+              fieldEntry(`Partner/Director #${idx + 1} Email`, p.email, true),
+              fieldEntry(`Partner/Director #${idx + 1} Is Authorized Signatory?`, p.isAuthorizedSignatory ? 'Yes' : 'No', false)
+            ])
+      },
+      {
+        pageNumber: 3,
+        sectionTitle: 'Step 3: Principal & Additional Place of Business',
+        fields: [
+          fieldEntry('Building / Flat / Premises No.', step3.buildingNo, false),
+          fieldEntry('Road / Street / Lane', step3.street, false),
+          fieldEntry('Locality / Sub-Locality', step3.locality, false),
+          fieldEntry('City / Town / Village', step3.city, false),
+          fieldEntry('Premises PIN Code', step3.pinCode, false),
+          fieldEntry('Office Landline', step3.officeLandline, true),
+          fieldEntry('Office Email', step3.officeEmail, true),
+          fieldEntry('Nature of Possession', step3.natureOfPossession, false),
+          fieldEntry('Business Activities Selected', step3.activities.join(', '), false),
+          fieldEntry('Has Additional Place of Business?', step3.hasAdditionalPlace ? 'Yes' : 'No', true),
+          fieldEntry('Additional Place Address', step3.hasAdditionalPlace ? step3.additionalAddress : '', !step3.hasAdditionalPlace),
+          fieldEntry('Additional Place Possession Nature', step3.hasAdditionalPlace ? step3.additionalPossession : '', !step3.hasAdditionalPlace)
+        ]
+      },
+      {
+        pageNumber: 4,
+        sectionTitle: 'Step 4: Goods/Services & Bank Account',
+        fields: [
+          fieldEntry('Top Commodities / HSN / SAC Description', step4.topCommoditiesDescription, false),
+          fieldEntry('Bank Account Number', step4.accountNumber, true),
+          fieldEntry('IFSC Code', step4.ifscCode, true),
+          fieldEntry('Bank Name', step4.bankName, true),
+          fieldEntry('Branch Name', step4.branchName, true),
+          fieldEntry('Professional Tax / Shop & Establishment Act Reg. No.', step4.ptinOrShopAct, true)
+        ]
+      }
+    ];
 
     // 1. Zero-Database Client-Side Encryption
     const sensitiveData = {
       orderId,
+      submissionOverview,
+      sections,
       service: 'GST Registration',
+      category: 'Registrations',
       step1,
-      step2: partners,
+      proprietor: isSole ? proprietor : undefined,
+      partners: !isSole ? partners : undefined,
+      step2: isSole ? proprietor : partners,
       step3,
       step4,
-      timestamp: new Date().toISOString()
+      timestamp: now.toISOString()
     };
     const encResult = encryptFormDataAndSign(sensitiveData);
     const { encryptedPayload, signature, websiteBUrl } = encResult;
 
     // 2. Save ONLY 4 lightweight metadata fields in Supabase
     const metadata = {
-      firstPartyName: step1.legalName || 'GST Applicant',
+      firstPartyName: step1.legalName || proprietor.fullName || 'GST Applicant',
       formName: 'GST Registration',
-      timestamp: new Date().toISOString(),
+      timestamp: now.toISOString(),
       totalPrice: '0',
       orderId
     };
@@ -360,19 +523,28 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
       {activeTab === 'request' && (
         <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-sm">
           {requestSubmitted ? (
-            <div className="text-center py-8">
-              <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-3">
+            <div className="text-center py-8 space-y-4">
+              <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
                 <CheckCircle2 className="w-7 h-7" />
               </div>
-              <h3 className="text-lg font-bold text-slate-900">Request Submitted Successfully!</h3>
-              <p className="text-sm text-slate-600 mt-1 max-w-md mx-auto">
-                Our GST registration specialist will call you on <strong>{requestData.phone}</strong> within 1 hour to complete your GST application.
-              </p>
-              <div className="mt-5 flex justify-center gap-3">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Request Submitted Successfully!</h3>
+                <p className="text-sm text-slate-600 mt-1 max-w-md mx-auto">
+                  Reference <strong>{arnNumber}</strong>: Our GST registration specialist will call you on <strong>{requestData.phone}</strong> within 1 hour to complete your GST application.
+                </p>
+              </div>
+              <div className="max-w-md mx-auto text-left">
+                <ServerBSyncStatusCard
+                  syncResult={serverBSyncResult}
+                  isRetrying={isRetryingSync}
+                  onRetry={handleRetryServerBSync}
+                />
+              </div>
+              <div className="pt-2 flex justify-center gap-3">
                 <button
                   type="button"
                   onClick={onBack}
-                  className="px-5 py-2 bg-blue-600 text-white font-bold rounded-xl text-xs"
+                  className="px-5 py-2 bg-blue-600 text-white font-bold rounded-xl text-xs cursor-pointer"
                 >
                   Back to Services
                 </button>

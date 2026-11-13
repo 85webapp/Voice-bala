@@ -1,5 +1,5 @@
 import React, { lazy, Suspense, useState, useEffect } from 'react';
-import { ArrowRight, FileText, Building2, ShieldCheck, FileCheck2, BellRing, Globe2, Landmark, Headphones, Phone, MessageCircle, X, ListChecks } from 'lucide-react';
+import { ArrowRight, FileText, Building2, ShieldCheck, FileCheck2, BellRing, Globe2, Landmark, Headphones, ListChecks } from 'lucide-react';
 import { Header } from './components/Header';
 import { HeroBanner } from './components/HeroBanner';
 import { SearchBar } from './components/SearchBar';
@@ -7,6 +7,7 @@ import { DocumentRow } from './components/DocumentRow';
 import { PoliciesSection } from './components/PoliciesSection';
 import { PolicyPageView } from './components/PolicyPageView';
 import { CheckStepsView } from './components/CheckStepsView';
+import { SupportPageView } from './components/SupportPageView';
 import { BottomNav, TabType } from './components/BottomNav';
 import { DashboardView } from './components/DashboardView';
 import { AgreementsView } from './components/AgreementsView';
@@ -72,11 +73,11 @@ export default function App() {
   const [homeCategory, setHomeCategory] = useState<HomeCategory>('agreements');
   const [activeService, setActiveService] = useState<{ category: ServiceCategory; title: string } | null>(null);
 
-  // Modals state
+  // Modals & dedicated full pages state
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
-  const [showSupportModal, setShowSupportModal] = useState(false);
+  const [isSupportPageOpen, setIsSupportPageOpen] = useState(false);
   const [isCheckStepsOpen, setIsCheckStepsOpen] = useState(false);
 
   // User Profile
@@ -184,6 +185,8 @@ export default function App() {
           setActiveWizardDoc(null);
           setActivePolicyPage(null);
           setActiveService(null);
+          setIsSupportPageOpen(false);
+          setIsCheckStepsOpen(false);
           setActiveTab('home');
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }}
@@ -234,6 +237,16 @@ export default function App() {
             // 4. All Other Master Agreements & Affidavits
             return <DocumentWizardView {...commonProps} />;
           })()
+        ) : isSupportPageOpen ? (
+          /* Dedicated Full Page for 24/7 Call & Support */
+          <SupportPageView
+            onBack={() => setIsSupportPageOpen(false)}
+            onOpenCheckSteps={() => {
+              setIsSupportPageOpen(false);
+              setIsCheckStepsOpen(true);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+          />
         ) : isCheckStepsOpen ? (
           /* Check Steps (Cotrix Tcg) Dedicated View */
           <CheckStepsView
@@ -341,7 +354,6 @@ export default function App() {
                         key={doc.id}
                         document={doc}
                         onClick={(d) => {
-                          playServiceVoice(d.title);
                           setActiveWizardDoc(d);
                           window.scrollTo({ top: 0, behavior: 'smooth' });
                         }}
@@ -369,15 +381,19 @@ export default function App() {
               ) : homeCategory === 'support' ? (
                 /* Contact Support Section mirroring other categories */
                 <div className="space-y-3 mb-8">
-                  {/* 1. Contact Support Row */}
+                  {/* 1. Contact Support Row -> Opens Dedicated Support Full Page */}
                   <div
-                    onClick={() => setShowSupportModal(true)}
+                    onClick={() => {
+                      setIsSupportPageOpen(true);
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
                     role="button"
                     tabIndex={0}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
-                        setShowSupportModal(true);
+                        setIsSupportPageOpen(true);
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
                       }
                     }}
                     className="group w-full bg-white hover:bg-blue-50/40 active:bg-blue-100/50 border border-slate-200/90 hover:border-blue-300 rounded-xl px-4 py-3.5 shadow-2xs hover:shadow-xs transition-all duration-200 flex items-center justify-between cursor-pointer select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
@@ -399,7 +415,8 @@ export default function App() {
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setShowSupportModal(true);
+                          setIsSupportPageOpen(true);
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
                         }}
                         className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#15803d] group-hover:bg-[#166534] hover:bg-[#166534] text-white font-bold text-xs shadow-xs transition-all cursor-pointer"
                       >
@@ -458,7 +475,10 @@ export default function App() {
                   <div className="flex justify-center pt-1">
                     <button
                       type="button"
-                      onClick={() => setShowSupportModal(true)}
+                      onClick={() => {
+                        setIsSupportPageOpen(true);
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
                       className="w-full sm:w-auto min-w-[200px] inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-[#15803d] hover:bg-[#166534] active:bg-[#14532d] text-white font-bold text-sm shadow-sm transition-all cursor-pointer"
                     >
                       <span>Go</span>
@@ -580,6 +600,8 @@ export default function App() {
           setActiveWizardDoc(null);
           setActivePolicyPage(null);
           setActiveService(null);
+          setIsSupportPageOpen(false);
+          setIsCheckStepsOpen(false);
           setActiveTab(tab);
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }}
@@ -622,63 +644,6 @@ export default function App() {
           onClose={() => setIsAuthOpen(false)}
           onLoginSuccess={handleLoginSuccess}
         />
-      )}
-
-      {/* Deciding Contact Support Modal */}
-      {showSupportModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fadeIn">
-          <div
-            className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-slate-200 relative animate-scaleUp"
-            role="dialog"
-            aria-modal="true"
-          >
-            {/* Close button */}
-            <button
-              type="button"
-              onClick={() => setShowSupportModal(false)}
-              className="absolute top-4 right-4 p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
-              aria-label="Close"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <div className="flex items-center gap-3 mb-3 pr-6">
-              <div className="w-10 h-10 rounded-xl bg-emerald-50 text-[#15803d] flex items-center justify-center shrink-0">
-                <Headphones className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-slate-900">Deciding Contact Support</h3>
-                <p className="text-xs text-slate-500 font-medium">Call or WhatsApp</p>
-              </div>
-            </div>
-
-            <p className="text-xs text-slate-600 leading-relaxed mb-5">
-              Connect directly with our senior executive for immediate assistance with agreements, registrations, notices, e-Stamp paper, and compliance filings.
-            </p>
-
-            <div className="grid grid-cols-1 gap-2.5">
-              <a
-                href="tel:+919286596391"
-                onClick={() => setShowSupportModal(false)}
-                className="inline-flex items-center justify-center gap-2 py-3 px-4 bg-[#15803d] hover:bg-[#166534] active:bg-[#14532d] text-white font-bold text-sm rounded-xl shadow-xs transition-all cursor-pointer"
-              >
-                <Phone className="w-4 h-4" />
-                <span>Direct Call</span>
-              </a>
-
-              <a
-                href="https://wa.me/919286596391?text=Hello%20Harshit,%20I%20need%20assistance%20regarding%20CTC%20Legal%20Services."
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => setShowSupportModal(false)}
-                className="inline-flex items-center justify-center gap-2 py-3 px-4 bg-[#25D366] hover:bg-[#20bd5a] active:bg-[#1da851] text-white font-bold text-sm rounded-xl shadow-xs transition-all cursor-pointer"
-              >
-                <MessageCircle className="w-4 h-4 fill-current" />
-                <span>WhatsApp Message</span>
-              </a>
-            </div>
-          </div>
-        </div>
       )}
     </div>
   );

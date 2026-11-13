@@ -4,8 +4,6 @@ import {
   Mic,
   MicOff,
   X,
-  Volume2,
-  VolumeX,
   AlertTriangle,
   Sparkles,
   ArrowRight,
@@ -16,7 +14,6 @@ import {
   SUPPORTED_LANGUAGES,
   SupportedLanguage,
   getStoredAudioLanguage,
-  speechController,
   searchDocumentIntent,
   SearchIntentResult
 } from '../data/voiceNarrationData';
@@ -51,7 +48,6 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   const [isSearchingAI, setIsSearchingAI] = useState(false);
   const [aiResult, setAiResult] = useState<SearchIntentResult | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
-  const [isSpeaking, setIsSpeaking] = useState(false);
 
   const recognitionRef = useRef<any>(null);
   const searchTimeoutRef = useRef<any>(null);
@@ -70,14 +66,6 @@ export const SearchBar: React.FC<SearchBarProps> = ({
     return () => window.removeEventListener('ctc_audio_language_changed', handleLangChange);
   }, []);
 
-  // Sync speech controller state
-  useEffect(() => {
-    const unsub = speechController.subscribe((speaking) => {
-      setIsSpeaking(speaking);
-    });
-    return () => unsub();
-  }, []);
-
   const activeLangConfig = SUPPORTED_LANGUAGES.find((l) => l.code === audioLang) || SUPPORTED_LANGUAGES[0];
 
   // Initialize Speech Recognition with selected language
@@ -92,7 +80,6 @@ export const SearchBar: React.FC<SearchBarProps> = ({
       recognition.onstart = () => {
         setIsListening(true);
         setSpeechError(null);
-        speechController.stop();
       };
 
       recognition.onresult = (event: any) => {
@@ -179,11 +166,6 @@ export const SearchBar: React.FC<SearchBarProps> = ({
         if (requestId !== searchRequestIdRef.current) return;
         if (result) {
           setAiResult(result);
-          // Play spoken readout if present
-          if (result.spokenText) {
-            const speechCode = SUPPORTED_LANGUAGES.find((item) => item.code === language)?.speechCode || activeLangConfig.speechCode;
-            speechController.speak(result.spokenText, speechCode);
-          }
         } else {
           setAiError('AI search is temporarily unavailable. Please check the server Gemini configuration and try again.');
         }
@@ -206,7 +188,6 @@ export const SearchBar: React.FC<SearchBarProps> = ({
       setIsSearchingAI(false);
       setAiResult(null);
       setAiError(null);
-      speechController.stop();
     } else {
       setAiResult(null);
       setAiError(null);
@@ -221,12 +202,9 @@ export const SearchBar: React.FC<SearchBarProps> = ({
     onChange('');
     setAiResult(null);
     setAiError(null);
-    speechController.stop();
   };
 
   const toggleListening = () => {
-    speechController.stop();
-
     if (!recognitionRef.current) {
       setSpeechError('Voice input is not supported by this browser. Please type your query or use a supported browser.');
       return;
@@ -250,16 +228,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
     }
   };
 
-  const toggleSpeechAudio = () => {
-    if (isSpeaking) {
-      speechController.stop();
-    } else if (aiResult?.spokenText) {
-      speechController.speak(aiResult.spokenText, activeLangConfig.speechCode);
-    }
-  };
-
   const handleCardClick = (docId: string, title: string) => {
-    speechController.stop();
     const existing = INITIAL_FRONT_DOCUMENTS.find(
       (d) => d.id === docId || d.title.toLowerCase() === title.toLowerCase()
     );
@@ -322,23 +291,6 @@ export const SearchBar: React.FC<SearchBarProps> = ({
             </button>
           )}
 
-          {/* Glowing Speaker Audio Indicator if speech is available/playing */}
-          {aiResult?.spokenText && (
-            <button
-              type="button"
-              onClick={toggleSpeechAudio}
-              className={`p-2 rounded-lg transition-all duration-200 cursor-pointer flex items-center justify-center ${
-                isSpeaking
-                  ? 'bg-amber-500 text-white animate-pulse shadow-md shadow-amber-500/30 ring-2 ring-amber-400'
-                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
-              title={isSpeaking ? 'Stop Spoken Audio' : 'Listen Explanation'}
-              aria-label={isSpeaking ? 'Stop speaking' : 'Listen explanation'}
-            >
-              {isSpeaking ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4 text-blue-600" />}
-            </button>
-          )}
-
           {/* Microphone Voice Button */}
           <button
             type="button"
@@ -384,18 +336,6 @@ export const SearchBar: React.FC<SearchBarProps> = ({
                 <span className="text-xs font-bold uppercase tracking-wider text-rose-700 bg-rose-100 px-2 py-0.5 rounded">
                   Service Not Available
                 </span>
-                {aiResult.spokenText && (
-                  <button
-                    type="button"
-                    onClick={toggleSpeechAudio}
-                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer transition-all ${
-                      isSpeaking ? 'bg-rose-600 text-white animate-pulse' : 'bg-rose-200 text-rose-800 hover:bg-rose-300'
-                    }`}
-                  >
-                    {isSpeaking ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
-                    <span>{isSpeaking ? 'Stop Audio' : 'Listen Advisory'}</span>
-                  </button>
-                )}
               </div>
 
               <h3 className="text-sm sm:text-base font-bold text-rose-950 mt-1">
@@ -422,19 +362,6 @@ export const SearchBar: React.FC<SearchBarProps> = ({
               <Sparkles className="w-4 h-4 text-blue-600" />
               <span>AI Legal Recommendation</span>
             </div>
-
-            {aiResult.spokenText && (
-              <button
-                type="button"
-                onClick={toggleSpeechAudio}
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer transition-all ${
-                  isSpeaking ? 'bg-blue-600 text-white animate-pulse shadow-sm' : 'bg-white text-blue-700 border border-blue-200 hover:bg-blue-100'
-                }`}
-              >
-                {isSpeaking ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
-                <span>{isSpeaking ? 'Stop Voice' : 'Listen Voice'}</span>
-              </button>
-            )}
           </div>
 
           {/* Spoken summary text display */}

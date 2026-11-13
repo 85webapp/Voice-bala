@@ -230,72 +230,120 @@ export const allServiceVoiceTexts: Record<string, ServiceVoiceTexts> = {
     kn: "ನಮಸ್ಕಾರ! ಬಿಬಿಂಗೋ ಮತ್ತು ಸಿಟಿಸಿ ಲೀಗಲ್ ಪೋರ್ಟಲ್‌ಗೆ ಸುಸ್ವಾಗತ. ಯಾವುದೇ ಕಾನೂನುಬದ್ಧ ಒಪ್ಪಂದ ಅಥವಾ ನೋಂದಣಿಗೆ ನೀವು ತಕ್ಷಣ ಅರ್ಜಿ ಸಲ್ಲಿಸಬಹುದು."
   },
 
-  // 16. Rent & Tenancy Agreement
-  rent_agreement: {
-    hi: "नमस्कार! रेंट एग्रीमेंट बनाने के लिए आप आवश्यक विवरण भरकर आगे बढ़ सकते हैं। सरकारी ई-स्टाम्प और कानूनी सत्यापन के साथ आपका लीगल ड्राफ्ट तैयार किया जाएगा।",
-    en: "Hello! To prepare your Rent Agreement, please fill in the required tenancy details. Your official draft will be created with government e-stamp and legal compliance.",
-    mr: "नमस्कार! रेंट ॲग्रीमेंट तयार करण्यासाठी तुम्ही आवश्यक माहिती भरून पुढे जाऊ शकता. सरकारी ई-स्टॅम्पसह तुमचा मसुदा तयार केला जाईल.",
-    gu: "નમસ્તે! ભાડા કરાર બનાવવા માટે તમે જરૂરી વિગતો ભરીને આગળ વધી શકો છો. સરકારી ઈ-સ્ટેમ્પ સાથે તમારો ડ્રાફ્ટ તૈયાર કરવામાં આવશે.",
-    pa: "ਸਤਿ ਸ੍ਰੀ ਅਕਾਲ! ਰੈਂਟ ਐਗਰੀਮੈਂਟ ਬਣਾਉਣ ਲਈ ਤੁਸੀਂ ਜ਼ਰੂਰੀ ਜਾਣਕਾਰੀ ਭਰ ਕੇ ਅੱਗੇ ਵੱਧ ਸਕਦੇ ਹੋ। ਸਰਕਾਰੀ ਈ-ਸਟੈਂਪ ਨਾਲ ਤੁਹਾਡਾ ਡਰਾਫਟ ਤਿਆਰ ਕੀਤਾ ਜਾਵੇਗਾ।",
-    ml: "നമസ്കാരം! വാടകക്കരാർ തയ്യാറാക്കുന്നതിനായി ആവശ്യമായ വിവരങ്ങൾ നൽകി മുന്നോട്ട് പോകാം. സർക്കാർ ഇ-സ്റ്റാമ്പ് സഹിതം ഔദ്യോഗിക കരട് തയ്യാറാക്കുന്നതാണ്.",
-    ta: "வணக்கம்! வாடகை ஒப்பந்தம் தயாரிக்க தேவையான விவரங்களை பூர்த்தி செய்து தொடரலாம். அரசு இ-ஸ்டாம்புடன் உங்கள் வரைவு தயாராகும்.",
-    te: "నమస్కారం! రెంటల్ ఒప్పందం రూపొందించడానికి అవసరమైన వివరాలు నింపి ముందుకు సాగండి. ప్రభుత్వ ఈ-స్టాంపుతో మీ ముసాయిదా సిద్ధమవుతుంది.",
-    bn: "নমস্কার! ভাড়া চুক্তি তৈরির জন্য আপনি প্রয়োজনীয় বিবরণ পূরণ করে এগিয়ে যেতে পারেন। সরকারী ই-স্ট্যাম্প সহ আপনার ড্রাফট প্রস্তুত হবে।",
-    kn: "ನಮಸ್ಕಾರ! ಬಾಡಿಗೆ ಒಪ್ಪಂದವನ್ನು ಸಿದ್ಧಪಡಿಸಲು ಅಗತ್ಯ ವಿವರಗಳನ್ನು ಭರ್ತಿ ಮಾಡಿ ಮುಂದುವರಿಯಿರಿ. ಸರ್ಕಾರಿ ಇ-ಸ್ಟ್ಯಾಂಪ್‌ನೊಂದಿಗೆ ನಿಮ್ಮ ಕರಡು ಸಿದ್ಧವಾಗುತ್ತದೆ."
+  // 16. Notice Handling (Income Tax / GST / Legal Notice)
+  notice: {
+    hi: "नोटिस हैंडलिंग के लिए आप अपनी बेसिक जानकारी भरकर यह फॉर्म सबमिट कर सकते हैं। फॉर्म सबमिट होने के एक घंटे के भीतर हमारे सीए और लीगल एक्सपर्ट्स आपसे संपर्क करेंगे। तुरंत सहायता के लिए आप कॉल या व्हाट्सएप बटन का उपयोग कर सकते हैं।",
+    en: "For Notice handling, please submit this form with your notice details. Within one hour, our tax and legal experts will contact you to review and prepare a reply. For urgent help, you can use the Call or WhatsApp button.",
+    mr: "नोटीस हाताळणीसाठी तुमची माहिती भरून हा फॉर्म सबमिट करा. एका तासाच्या आत आमचे तज्ज्ञ तुमच्याशी संपर्क साधतील. तात्काळ मदतीसाठी कॉल किंवा व्हॉट्सॲप वापरा.",
+    gu: "નોટિસ હેન્ડલિંગ માટે તમારી વિગતો ભરીને આ ફોર્મ સબમિટ કરો. એક કલાકની અંદર અમારા એક્સપર્ટ તમારો સંપર્ક કરશે. તાત્કાલિક મદદ માટે કૉલ અથવા વ્હૉટ્સએપ બટનનો ઉપયોગ કરો.",
+    pa: "ਨੋਟਿਸ ਹੈਂਡਲਿੰਗ ਲਈ ਆਪਣੀ ਜਾਣਕਾਰੀ ਭਰ ਕੇ ਇਹ ਫਾਰਮ ਸਬਮਿਟ ਕਰੋ। ਇੱਕ ਘੰਟੇ ਦੇ ਅੰਦਰ ਸਾਡੇ ਮਾਹਰ ਤੁਹਾਡੇ ਨਾਲ ਸੰਪਰਕ ਕਰਨਗੇ। ਤੁਰੰਤ ਸਹਾਇਤਾ ਲਈ ਕਾਲ ਜਾਂ ਵਟਸਐਪ ਬਟਨ ਵਰਤੋ।",
+    ml: "നോട്ടീസ് കൈകാര്യം ചെയ്യുന്നതിനായി വിവരങ്ങൾ നൽകി ഫോം സമർപ്പിക്കുക. ഒരു മണിക്കൂറിനുള്ളിൽ ഞങ്ങളുടെ വിദഗ്ദ്ധർ നിങ്ങളെ ബന്ധപ്പെടും. അടിയന്തര സഹായത്തിന് കോൾ അല്ലെങ്കിൽ വാട്സ്ആപ്പ് ഉപയോഗിക്കാം.",
+    ta: "நோட்டீஸ் கையாளுவதற்கு உங்கள் விவரங்களை நிரப்பி படிவத்தை சமர்ப்பிக்கவும். ஒரு மணி நேரத்திற்குள் எங்கள் நிபுணர்கள் உங்களைத் தொடர்புகொள்வார்கள். உடனடி உதவிக்கு கால் அல்லது வாட்ஸ்அப்பைப் பயன்படுத்தவும்.",
+    te: "నోటీస్ హ్యాండ్లింగ్ కోసం మీ వివరాలతో ఫారమ్ సబ్మిట్ చేయండి. ఒక గంటలోపు మా నిపుణులు మిమ్మల్ని సంప్రదిస్తారు. తక్షణ సహాయం కోసం కాల్ లేదా వాట్సాప్ ఉపయోగించండి.",
+    bn: "নোটিশ হ্যান্ডলিংয়ের জন্য আপনার বিবরণ দিয়ে ফর্ম জমা দিন। এক ঘণ্টার মধ্যে আমাদের বিশেষজ্ঞরা আপনার সাথে যোগাযোগ করবেন। দ্রুত সহায়তার জন্য কল বা হোয়াটসঅ্যাপ ব্যবহার করুন।",
+    kn: "ನೋಟಿಸ್ ನಿರ್ವಹಣೆಗಾಗಿ ನಿಮ್ಮ ವಿವರಗಳನ್ನು ಭರ್ತಿ ಮಾಡಿ ಫಾರ್ಮ್ ಸಲ್ಲಿಸಿ. ಒಂದು ಗಂಟೆಯೊಳಗೆ ನಮ್ಮ ತಜ್ಞರು ನಿಮ್ಮನ್ನು ಸಂಪರ್ಕಿಸುತ್ತಾರೆ. ತಕ್ಷಣದ ಸಹಾಯಕ್ಕಾಗಿ ಕಾಲ್ ಅಥವಾ ವಾಟ್ಸಾಪ್ ಬಳಸಿ."
   },
 
-  // 17. Landlord NOC
-  landlord_noc: {
-    hi: "नमस्कार! मकान मालिक एनओसी यानी नो ऑब्जेक्शन सर्टिफिकेट के लिए विवरण भरें। यह जीएसटी और बिज़नेस रजिस्ट्रेशन के लिए पूरी तरह वैध है।",
-    en: "Hello! Please fill in details for the Landlord No Objection Certificate. This is fully accepted for GST and company trade licensing.",
-    mr: "नमस्कार! घरमालक एनओसी प्रमाणपत्रासाठी माहिती भरा. हे जीएसटी आणि बिझनेस नोंदणीसाठी पूर्णपणे वैध आहे.",
-    gu: "નમસ્તે! મકાનમાલિક એનઓસી પ્રમાણપત્ર માટે વિગતો ભરો. આ જીએસટી અને વ્યવસાય નોંધણી માટે સંપૂર્ણ માન્ય છે.",
-    pa: "ਸਤਿ ਸ੍ਰੀ ਅਕਾਲ! ਮਕਾਨ ਮਾਲਕ ਐਨ.ਓ.ਸੀ. ਸਰਟੀਫਿਕੇਟ ਲਈ ਵੇਰਵੇ ਭਰੋ। ਇਹ ਜੀਐਸਟੀ ਅਤੇ ਬਿਜ਼ਨਸ ਰਜਿਸਟ੍ਰੇਸ਼ਨ ਲਈ ਪੂਰੀ ਤਰ੍ਹਾਂ ਮਾਨਤਾ ਪ੍ਰਾਪਤ ਹੈ।",
-    ml: "നമസ്കാരം! ഉടമസ്ഥന്റെ എൻഒസി സർട്ടിഫിക്കറ്റിനായി വിവരങ്ങൾ നൽകുക. ജിഎസ്ടി, ബിസിനസ്സ് രജിസ്ട്രേഷൻ എന്നിവയ്ക്ക് ഇത് പൂർണ്ണമായും സാധുവാണ്.",
-    ta: "வணக்கம்! வீட்டு உரிமையாளர் என்ஓசி சான்றிதழுக்கான விவரங்களை உள்ளிடவும். இது ஜிஎஸ்டி மற்றும் வணிகப் பதிவிற்கு செல்லுபடியாகும்.",
-    te: "నమస్కారం! యజమాని ఎన్ఓసి సర్టిఫికేట్ కోసం వివరాలు నింపండి. ఇది జిఎస్టి మరియు వ్యాపార రిజిస్ట్రేషన్ కోసం పూర్తిగా చెల్లుతుంది.",
-    bn: "নমস্কার! বাড়িওয়ালার এনওসি সার্টিফিকেটের জন্য বিবরণ পূরণ করুন। এটি জিএসটি এবং ব্যবসায়িক নিবন্ধনের জন্য সম্পূর্ণ বৈধ।",
-    kn: "ನಮಸ್ಕಾರ! ಜಮೀನುದಾರರ ಎನ್‌ಒಸಿ ಪ್ರಮಾಣಪತ್ರಕ್ಕಾಗಿ ವಿವರಗಳನ್ನು ಭರ್ತಿ ಮಾಡಿ. ಇದು ಜಿಎಸ್‌ಟಿ ಮತ್ತು ವ್ಯವಹಾರ ನೋಂದಣಿಗೆ ಸಂಪೂರ್ಣವಾಗಿ ಮಾನ್ಯವಾಗಿದೆ."
+  // 17. Website & Digital Branding
+  website: {
+    hi: "वेबसाइट डेवलपमेंट, लोगो, डोमेन या होस्टिंग के लिए आप यह फॉर्म भरकर रिक्वेस्ट भेज सकते हैं। एक घंटे के अंदर हमारी टेक्निकल टीम आपसे संपर्क करके आपका प्रोजेक्ट शुरू करेगी। सीधे बात करने के लिए कॉल या व्हाट्सएप बटन पर क्लिक करें।",
+    en: "For website development, logo design, domain, or hosting, submit this form with your requirements. Our technical team will contact you within an hour to start your project. You can also use Call or WhatsApp directly.",
+    mr: "वेबसाइट डेव्हलपमेंट, लोगो, डोमेन किंवा होस्टिंगसाठी हा फॉर्म सबमिट करा. एका तासाच्या आत आमची टेक्निकल टीम तुमच्याशी संपर्क साधेल. थेट बोलण्यासाठी कॉल किंवा व्हॉट्सॲप वापरा.",
+    gu: "વેબસાઇટ ડેવલપમેન્ટ, લોગો, ડોમેન અથવા હોસ્ટિંગ માટે આ ફોર્મ સબમિટ કરો. એક કલાકની અંદર અમારી ટેકનિકલ ટીમ તમારો સંપર્ક કરશે.",
+    pa: "ਵੈੱਬਸਾਈਟ, ਲੋਗੋ, ਡੋਮੇਨ ਜਾਂ ਹੋਸਟਿੰਗ ਲਈ ਇਹ ਫਾਰਮ ਸਬਮਿਟ ਕਰੋ। ਇੱਕ ਘੰਟੇ ਦੇ ਅੰਦਰ ਸਾਡੀ ਟੀਮ ਤੁਹਾਡੇ ਨਾਲ ਸੰਪਰਕ ਕਰੇਗੀ।",
+    ml: "വെബ്സൈറ്റ്, ലോഗോ, ഡൊമെയ്ൻ, ഹോസ്റ്റിംഗ് എന്നിവയ്ക്കായി ഈ ഫോം സമർപ്പിക്കുക. ഒരു മണിക്കൂറിനകം ഞങ്ങളുടെ ടീം ബന്ധപ്പെടും.",
+    ta: "இணையதளம், லோகோ, டொமைன் அல்லது ஹோஸ்டிங்கிற்கு இந்தப் படிவத்தை சமர்ப்பிக்கவும். ஒரு மணி நேரத்திற்குள் எங்கள் குழு தொடர்புகொள்ளும்.",
+    te: "వెబ్‌సైట్, లోగో, డొమైన్ లేదా హోస్టింగ్ కోసం ఈ ఫారమ్ సబ్మిట్ చేయండి. ఒక గంటలోపు మా బృందం మిమ్మల్ని సంప్రదిస్తుంది.",
+    bn: "ওয়েবসাইট, লোগো, ডোমেইন বা হোস্টিংয়ের জন্য এই ফর্মটি জমা দিন। এক ঘণ্টার মধ্যে আমাদের টিম যোগাযোগ করবে।",
+    kn: "ವೆಬ್‌ಸೈಟ್, ಲೋಗೋ, ಡೊಮೇನ್ ಅಥವಾ ಹೋಸ್ಟಿಂಗ್‌ಗಾಗಿ ಈ ಫಾರ್ಮ್ ಸಲ್ಲಿಸಿ. ಒಂದು ಗಂಟೆಯೊಳಗೆ ನಮ್ಮ ತಂಡ ಸಂಪರ್ಕಿಸುತ್ತದೆ."
   },
 
-  // 18. Affidavits
-  affidavit: {
-    hi: "नमस्कार! शपथपत्र यानी एफिडेविट तैयार करने के लिए आप फॉर्म भर सकते हैं। नोटरी और सरकारी ई-स्टाम्प के साथ आपका शपथपत्र तुरंत तैयार किया जाएगा।",
-    en: "Hello! To prepare your official notarized affidavit, please submit your details. It will be drafted under statutory compliance.",
-    mr: "नमस्कार! प्रतिज्ञापत्र तयार करण्यासाठी तुम्ही माहिती भरा. नोटरी आणि सरकारी ई-स्टॅम्पसह तुमचे प्रतिज्ञापत्र तयार केले जाईल.",
-    gu: "નમસ્તે! સોગંદનામું તૈયાર કરવા માટે તમે ફોર્મ ભરી શકો છો. નોટરી અને સરકારી ઈ-સ્ટેમ્પ સાથે તમારું સોગંદનામું તૈયાર થશે.",
-    pa: "ਸਤਿ ਸ੍ਰੀ ਅਕਾਲ! ਹਲਫ਼ਨਾਮਾ ਤਿਆਰ ਕਰਨ ਲਈ ਤੁਸੀਂ ਫਾਰਮ ਭਰ ਸਕਦੇ ਹੋ। ਨੋਟਰੀ ਅਤੇ ਸਰਕਾਰੀ ਈ-ਸਟੈਂਪ ਨਾਲ ਤੁਹਾਡਾ ਹਲਫ਼ਨਾਮਾ ਤਿਆਰ ਕੀਤਾ ਜਾਵੇਗਾ।",
-    ml: "നമസ്കാരം! സത്യവാങ്മൂലം തയ്യാറാക്കുന്നതിനായി ഫോം പൂരിപ്പിക്കുക. നോട്ടറിയും സർക്കാർ ഇ-സ്റ്റാമ്പും സഹിതം തയ്യാറാക്കുന്നതാണ്.",
-    ta: "வணக்கம்! பிரமாணப் பத்திரம் தயாரிக்க படிவத்தை நிரப்பவும். நோட்டரி மற்றும் அரசு இ-ஸ்டாம்புடன் இது தயாராகும்.",
-    te: "నమస్కారం! అఫిడవిట్ రూపొందించడానికి ఫారమ్ నింపండి. నోటరీ మరియు ప్రభుత్వ ఈ-స్టాంపుతో ఇది సిద్ధమవుతుంది.",
-    bn: "নমস্কার! হলফনামা প্রস্তুত করতে ফর্ম পূরণ করুন। নোটারি এবং সরকারী ই-স্ট্যাম্প সহ আপনার হলফনামা তৈরি করা হবে।",
-    kn: "ನಮಸ್ಕಾರ! ಅಫಿಡವಿಟ್ ಸಿದ್ಧಪಡಿಸಲು ಫಾರ್ಮ್ ಅನ್ನು ಭರ್ತಿ ಮಾಡಿ. ನೋಟರಿ ಮತ್ತು ಸರ್ಕಾರಿ ಇ-ಸ್ಟ್ಯಾಂಪ್‌ನೊಂದಿಗೆ ಇದು ಸಿದ್ಧಗೊಳ್ಳುತ್ತದೆ."
+  // 18. Bank Loan & Finance Files
+  bank_loan: {
+    hi: "मुद्रा लोन या करंट अकाउंट फाइल बनवाने के लिए अपनी बेसिक जानकारी भरकर यह फॉर्म सबमिट करें। एक घंटे के भीतर हमारी बैंकिंग और फाइनेंस टीम आपसे संपर्क करके पूरी फाइल तैयार करवा देगी। तुरंत बात करने के लिए कॉल या व्हाट्सएप बटन का उपयोग करें।",
+    en: "For Mudra loan or current account file preparation, fill in your details and submit this form. Within one hour, our finance team will call you to prepare your complete bank file. Tap Call or WhatsApp for immediate support.",
+    mr: "मुद्रा लोन किंवा करंट अकाउंट फाईलसाठी माहिती भरून फॉर्म सबमिट करा. एका तासाच्या आत आमची फायनान्स टीम तुमच्याशी संपर्क साधेल.",
+    gu: "મુદ્રા લોન અથવા કરંટ એકાઉન્ટ ફાઇલ માટે માહિતી ભરીને ફોર્મ સબમિટ કરો. એક કલાકની અંદર અમારી ફાઇનાન્સ ટીમ તમારો સંપર્ક કરશે.",
+    pa: "ਮੁਦਰਾ ਲੋਨ ਜਾਂ ਕਰੰਟ ਅਕਾਊਂਟ ਫਾਈਲ ਲਈ ਜਾਣਕਾਰੀ ਭਰ ਕੇ ਫਾਰਮ ਸਬਮਿਟ ਕਰੋ। ਇੱਕ ਘੰਟੇ ਦੇ ਅੰਦਰ ਸਾਡੀ ਟੀਮ ਤੁਹਾਡੇ ਨਾਲ ਸੰਪਰਕ ਕਰੇਗੀ।",
+    ml: "മുദ്ര ലോൺ അല്ലെങ്കിൽ കറന്റ് അക്കൗണ്ട് ഫയലിനായി വിവരങ്ങൾ നൽകി സമർപ്പിക്കുക. ഒരു മണിക്കൂറിനകം ഞങ്ങളുടെ ഫിനാൻസ് ടീം വിളിക്കും.",
+    ta: "முத்ரா கடன் அல்லது நடப்புக் கணக்கு கோப்பிற்கு உங்கள் விவரங்களை சமர்ப்பிக்கவும். ஒரு மணி நேரத்திற்குள் எங்கள் நிதி குழு உங்களைத் தொடர்புகொள்ளும்.",
+    te: "ముద్రా లోన్ లేదా కరెంట్ అకౌంట్ ఫైల్ కోసం మీ వివరాలను సబ్మిట్ చేయండి. ఒక గంటలోపు మా ఫైనాన్స్ టీమ్ మిమ్మల్ని సంప్రదిస్తుంది.",
+    bn: "মুদ্রা লোন বা কারেন্ট অ্যাকাউন্ট ফাইলের জন্য তথ্য দিয়ে ফর্ম জমা দিন। এক ঘণ্টার মধ্যে আমাদের ফাইন্যান্স টিম যোগাযোগ করবে।",
+    kn: "ಮುದ್ರಾ ಸಾಲ ಅಥವಾ ಕರೆಂಟ್ ಅಕೌಂಟ್ ಫೈಲ್‌ಗಾಗಿ ವಿವರಗಳನ್ನು ಸಲ್ಲಿಸಿ. ಒಂದು ಗಂಟೆಯೊಳಗೆ ನಮ್ಮ ಹಣಕಾಸು ತಂಡ ನಿಮ್ಮನ್ನು ಸಂಪರ್ಕಿಸುತ್ತದೆ."
+  },
+
+  // 19. Call Support (Dedicated 24/7 Support Page)
+  call_support: {
+    hi: "नमस्कार! 24 घंटे सहायता केंद्र में आपका स्वागत है। किसी भी रजिस्ट्रेशन, टैक्स फाइलिंग, नोटिस, वेबसाइट या बैंक लोन की तुरंत जानकारी के लिए आप सीधे कॉल या व्हाट्सएप मैसेज बटन पर क्लिक करके हमारे प्रतिनिधि हर्षित से बात कर सकते हैं।",
+    en: "Hello! Welcome to our 24/7 Dedicated Contact Support. Tap Direct Call or WhatsApp Message below to speak immediately with our senior representative Harshit for registrations, filings, notices, websites, or bank loans.",
+    mr: "नमस्कार! आमच्या 24/7 ग्राहक सहाय्य केंद्रात आपले स्वागत आहे. त्वरित मदतीसाठी खालील डायरेक्ट कॉल किंवा व्हॉट्सॲप बटणावर क्लिक करा.",
+    gu: "નમસ્તે! અમારા 24/7 સપોર્ટ સેન્ટરમાં આપનું સ્વાગત છે. તુરંત મદદ માટે નીચે આપેલા ડાયરેક્ટ કૉલ અથવા વ્હૉટ્સએપ બટન પર ક્લિક કરો.",
+    pa: "ਸਤਿ ਸ੍ਰੀ ਅਕਾਲ! ਸਾਡੇ 24/7 ਸਹਾਇਤਾ ਕੇਂਦਰ ਵਿੱਚ ਤੁਹਾਡਾ ਸੁਆਗਤ ਹੈ। ਤੁਰੰਤ ਮਦਦ ਲਈ ਸਿੱਧਾ ਕਾਲ ਜਾਂ ਵਟਸਐਪ ਬਟਨ ਦਬਾਓ।",
+    ml: "നമസ്കാരം! ഞങ്ങളുടെ 24/7 സപ്പോർട്ട് സെന്ററിലേക്ക് സ്വാഗതം. ഉടൻ സഹായത്തിനായി കോൾ അല്ലെങ്കിൽ വാട്സ്ആപ്പ് ബട്ടൺ അമർത്തുക.",
+    ta: "வணக்கம்! எங்கள் 24/7 ஆதரவு மையத்திற்கு வரவேற்கிறோம். உடனடி உதவிக்கு நேரடி கால் அல்லது வாட்ஸ்அப் பொத்தானை அழுத்தவும்.",
+    te: "నమస్కారం! మా 24/7 సపోర్ట్ సెంటర్‌కు స్వాగతం. తక్షణ సహాయం కోసం డైరెక్ట్ కాల్ లేదా వాట్సాప్ బటన్‌పై క్లిక్ చేయండి.",
+    bn: "নমস্কার! আমাদের ২৪/৭ সাপোর্ট সেন্টারে আপনাকে স্বাগতম। তাৎক্ষণিক সহায়তার জন্য সরাসরি কল বা হোয়াটসঅ্যাপ বোতামে ক্লিক করুন।",
+    kn: "ನಮಸ್ಕಾರ! ನಮ್ಮ 24/7 ಬೆಂಬಲ ಕೇಂದ್ರಕ್ಕೆ ಸುಸ್ವಾಗತ. ತಕ್ಷಣದ ಸಹಾಯಕ್ಕಾಗಿ ಡೈರೆಕ್ಟ್ ಕಾಲ್ ಅಥವಾ ವಾಟ್ಸಾಪ್ ಬಟನ್ ಒತ್ತಿರಿ."
   }
 };
 
-// Map service titles and aliases to canonical service keys
-export function resolveServiceKey(keyOrTitle: string): string {
+// Map service titles and aliases ONLY for the 7 allowed sections:
+// 1. Registrations, 2. Insurance, 3. Filing, 4. Notice, 5. Website, 6. Bank Loan, 7. Call Support
+// Agreements, Affidavits, NOCs, Leases, and Documents strictly return null (Voice disabled).
+export function resolveServiceKey(keyOrTitle: string): string | null {
   const lower = (keyOrTitle || '').toLowerCase().trim();
-  
+  if (!lower) return null;
+
+  // Hard block for Agreements & Affidavits domain
+  if (
+    lower.includes('rent') ||
+    lower.includes('lease') ||
+    lower.includes('tenancy') ||
+    lower.includes('affidavit') ||
+    lower.includes('agreement') ||
+    lower.includes('noc') ||
+    lower.includes('deed') ||
+    lower.includes('contract') ||
+    lower.includes('nda') ||
+    lower.includes('release form') ||
+    lower.includes('consent & declaration') ||
+    lower.includes('शपथपत्र') ||
+    lower.includes('किराया') ||
+    lower.includes('एनओसी')
+  ) {
+    return null;
+  }
+
   if (allServiceVoiceTexts[keyOrTitle]) return keyOrTitle;
   if (allServiceVoiceTexts[lower]) return lower;
 
-  // BBingo / Bingo aliases
-  if (lower.includes('bbingo') || lower.includes('bingo') || lower.includes('बीबींगो') || lower.includes('बिंगो') || lower.includes('bibingo') || lower.includes('b-bingo')) {
-    return 'bbingo';
+  // 7. Call Support
+  if (lower.includes('support') || lower.includes('call') || lower.includes('harshit') || lower.includes('helpline')) {
+    return 'call_support';
   }
 
-  // Agreements & Affidavits aliases
-  if (lower.includes('rent') || lower.includes('lease') || lower.includes('tenancy') || lower.includes('किराया')) {
-    return 'rent_agreement';
-  }
-  if (lower.includes('noc') || lower.includes('एनओसी') || lower.includes('objection')) {
-    return 'landlord_noc';
-  }
-  if (lower.includes('affidavit') || lower.includes('शपथपत्र') || lower.includes('name change') || lower.includes('loss of document')) {
-    return 'affidavit';
+  // 4. Notice
+  if (lower.includes('notice') || lower.includes('नोटिस')) {
+    return 'notice';
   }
 
+  // 5. Website
+  if (
+    lower.includes('website') ||
+    lower.includes('logo') ||
+    lower.includes('domain') ||
+    lower.includes('hosting') ||
+    lower.includes('banner')
+  ) {
+    return 'website';
+  }
+
+  // 6. Bank Loan
+  if (lower.includes('loan') || lower.includes('mudra') || lower.includes('current account') || lower.includes('bank')) {
+    return 'bank_loan';
+  }
+
+  // 1. Registrations
   if (lower.includes('gst reg') || (lower.includes('gst') && (lower.includes('registration') || lower.includes('नोंदणी') || lower.includes('રજીસ્ટ્રેશન') || lower.includes('രജിസ്ട്രേഷൻ') || lower.includes('பதிவு') || lower.includes('ਰਜਿਸਟਰੇਸ਼ਨ') || lower.includes('రిజిస్ట్రేషన్') || lower.includes('রেজিস্ট্রেশন') || lower.includes('ನೋಂದಣಿ')))) {
     return 'gst_registration';
   }
@@ -314,6 +362,8 @@ export function resolveServiceKey(keyOrTitle: string): string {
   if (lower.includes('fssai') || lower.includes('food') || lower.includes('एफएसएसएआई') || lower.includes('એફએસએસએઆઈ')) {
     return 'fssai';
   }
+
+  // 2. Insurance
   if (lower.includes('car') || lower.includes('कार') || lower.includes('કાર્') || lower.includes('കാർ') || lower.includes('கார்') || lower.includes('ಕಾರ್')) {
     return 'car_insurance';
   }
@@ -326,21 +376,22 @@ export function resolveServiceKey(keyOrTitle: string): string {
   if (lower.includes('misc') || lower.includes('miscellaneous') || lower.includes('मिसलेनियस')) {
     return 'misc_insurance';
   }
-  if (lower.includes('other insurance') || (lower.includes('insurance') && lower.includes('other')) || lower.includes('इतर विमा') || lower.includes('અન્ય ઇન્શ્યોરન્સ')) {
+  if (lower.includes('other insurance') || (lower.includes('insurance') && lower.includes('other')) || lower.includes('इतर विमा') || lower.includes('અન્ય ઇન્શ્યોરન્સ') || lower.includes('insurance')) {
     return 'other_insurance';
   }
+
+  // 3. Filing
   if (lower.includes('gst filing') || (lower.includes('gst') && (lower.includes('filing') || lower.includes('फाइलिंग') || lower.includes('ફાઇલિંગ')))) {
     return 'gst_filing';
   }
   if (lower.includes('income tax') || lower.includes('itr') || lower.includes('आयकर') || lower.includes('ઇન્કમ ટેક્સ') || lower.includes('ആദായ നികുതി')) {
     return 'income_tax_filing';
   }
-  if (lower.includes('other filing') || (lower.includes('filing') && lower.includes('other')) || lower.includes('इतर फायलिंग') || lower.includes('અન્ય ફાઇલિંગ')) {
+  if (lower.includes('other filing') || lower.includes('filing') || lower.includes('इतर फायलिंग') || lower.includes('અન્ય ફાઇલિંગ')) {
     return 'other_filing';
   }
 
-  // Default fallback to first service key
-  return 'gst_registration';
+  return null;
 }
 
 // 2. NATIVE NATURAL SPEECH SYNTHESIS ENGINE (Edge / Google / Native TTS)
@@ -404,7 +455,9 @@ export function isServiceVoicePlaying(serviceKey?: string): boolean {
   );
   if (!isSpeaking) return false;
   if (!serviceKey) return true;
-  return resolveServiceKey(serviceKey) === currentPlayingServiceKey;
+  const resolved = resolveServiceKey(serviceKey);
+  if (!resolved) return false;
+  return resolved === currentPlayingServiceKey;
 }
 
 /**
@@ -525,8 +578,13 @@ export function playServiceVoice(serviceKey: string) {
     } catch {}
   }
 
-  const thisSession = ++currentPlaySessionId;
   const canonicalKey = resolveServiceKey(serviceKey);
+  if (!canonicalKey) {
+    // Voice strictly disabled outside the 7 allowed sections
+    return;
+  }
+
+  const thisSession = ++currentPlaySessionId;
   const userLang = (localStorage.getItem('userAudioLanguage') || localStorage.getItem('ctc_audio_language_v2') || 'hi') as VoiceLanguageCode;
   const bcp47 = VOICE_LANGUAGE_TAGS[userLang] || 'hi-IN';
 
@@ -537,7 +595,10 @@ export function playServiceVoice(serviceKey: string) {
     bcp47
   });
 
-  const serviceData = allServiceVoiceTexts[canonicalKey] || allServiceVoiceTexts['gst_registration'];
+  const serviceData = allServiceVoiceTexts[canonicalKey];
+  if (!serviceData) {
+    return;
+  }
   const rawText = serviceData[userLang] || serviceData['hi'] || '';
 
   if (!rawText) {
@@ -672,6 +733,10 @@ function fallbackToSpeechSynthesis(textToSpeak: string, userLang: VoiceLanguageC
  */
 export function toggleServiceVoice(serviceKey: string) {
   const canonicalKey = resolveServiceKey(serviceKey);
+  if (!canonicalKey) {
+    stopServiceVoice();
+    return;
+  }
   if (isServiceVoicePlaying(canonicalKey)) {
     stopServiceVoice();
   } else {

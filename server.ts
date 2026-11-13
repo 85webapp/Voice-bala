@@ -12,6 +12,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const port = process.env.PORT || 3000;
 
+app.use('/api/website-b/relay', express.json({ limit: '10mb' }));
 app.use(express.json({ limit: '32kb' }));
 
 // Initialize Google GenAI
@@ -575,24 +576,71 @@ app.post('/api/orders/metadata', async (req, res) => {
   }
 });
 
-// Website B Incoming Endpoint Relay & Local Verification
-app.post('/api/website-b/relay', (req, res) => {
-  const { encryptedPayload, signature, metadata, timestamp } = req.body || {};
-  console.log('[Website B Relay] Secure encrypted payload received successfully:', {
-    orderId: metadata?.orderId,
-    formName: metadata?.formName,
-    payloadSizeChars: (encryptedPayload || '').length,
-    hmacSignature: (signature || '').slice(0, 16) + '...',
-    timestamp: timestamp || new Date().toISOString()
+// Website B Incoming Endpoint Relay & Forwarding
+function getWebsiteBUrl(): string {
+  const envUrl =
+    process.env.WEBSITE_B_URL ||
+    process.env.VITE_WEBSITE_B_URL ||
+    process.env.NEXT_PUBLIC_WEBSITE_B_URL;
+  if (envUrl && typeof envUrl === 'string' && !envUrl.includes('your-backend.vercel.app') && envUrl.startsWith('http')) {
+    return envUrl;
+  }
+  return 'https://2nd-bew.vercel.app/api/receive-order';
+}
+
+app.post('/api/website-b/relay', async (req, res) => {
+  const payload = req.body || {};
+  const targetUrl = getWebsiteBUrl();
+  const secretKey =
+    process.env.WEBSITE_SECRET_KEY ||
+    process.env.VITE_SUBMISSION_HMAC_SECRET ||
+    'ctc-legal-hmac-sha256-authenticity-key-2026';
+
+  console.log('[Website B Relay] Forwarding order to Website 2 (POST ' + targetUrl + '):', {
+    orderId: payload.orderId || payload.metadata?.orderId,
+    clientName: payload.clientName || payload.metadata?.firstPartyName,
+    formName: payload.formName || payload.metadata?.formName,
+    timestamp: payload.timestamp || new Date().toISOString()
   });
 
-  return res.json({
-    success: true,
-    deliveredToWebsiteB: true,
-    message: 'Encrypted ciphertext and HMAC signature received by Website B backend.',
-    orderId: metadata?.orderId,
-    timestamp: timestamp || new Date().toISOString()
-  });
+  try {
+    const upstreamRes = await fetch(targetUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'website_secret_key': secretKey,
+        'x-hmac-signature': payload.signature || '',
+        'x-submission-signature': payload.signature || ''
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const upstreamData = await upstreamRes.json().catch(() => null);
+
+    console.log('[Website B Relay Response]:', {
+      status: upstreamRes.status,
+      ok: upstreamRes.ok,
+      data: upstreamData
+    });
+
+    return res.status(upstreamRes.status).json({
+      success: upstreamRes.ok,
+      deliveredToWebsiteB: upstreamRes.ok,
+      status: upstreamRes.status,
+      targetUrl,
+      upstreamResponse: upstreamData,
+      orderId: payload.orderId || payload.metadata?.orderId,
+      timestamp: payload.timestamp || new Date().toISOString()
+    });
+  } catch (err: any) {
+    console.error('[Website B Relay Error]', err);
+    return res.status(502).json({
+      success: false,
+      deliveredToWebsiteB: false,
+      targetUrl,
+      error: err?.message || 'Failed to relay to Website B'
+    });
+  }
 });
 
 app.use('/api', (_req, res) => {
