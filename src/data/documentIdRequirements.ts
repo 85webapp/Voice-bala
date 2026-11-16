@@ -136,18 +136,6 @@ export const DOCUMENT_ID_RULES: Record<string, DocumentIdRule> = {
     rationale: 'व्यावसायिक चालान और सप्लाई अनुपालन के लिए दोनों पक्षों का आधार, पैन व गवाह अनिवार्य हैं।'
   },
 
-  // 11. Software & IT Service Agreement
-  'software-it-service-agreement': {
-    id: 'software-it-service-agreement',
-    title: 'Software & IT Service Agreement',
-    pan: 'mandatory',
-    aadhaar: 'mandatory',
-    secondPartyPan: 'mandatory',
-    secondPartyAadhaar: 'mandatory',
-    requireWitnesses: true,
-    rationale: 'सॉफ्टवेयर व आईटी सेवा अनुबंध के लिए दोनों पक्षों का आधार, पैन व गवाह अनिवार्य हैं।'
-  },
-
   // 12. Name Change Affidavit (Aadhaar Mandatory, PAN Mandatory if Age >= 18, No 2nd Party, No Witnesses)
   'name-change-affidavit': {
     id: 'name-change-affidavit',
@@ -269,18 +257,6 @@ export const DOCUMENT_ID_RULES: Record<string, DocumentIdRule> = {
     rationale: 'सिंगल गर्ल चाइल्ड शपथ पत्र में आधार कार्ड अनिवार्य है; पैन कार्ड वैकल्पिक है।'
   },
 
-  // 22. Employment Contract & Offer Letter
-  'employment-contract-offer-letter': {
-    id: 'employment-contract-offer-letter',
-    title: 'Employment Contract & Offer Letter',
-    pan: 'mandatory',
-    aadhaar: 'mandatory',
-    secondPartyPan: 'mandatory',
-    secondPartyAadhaar: 'mandatory',
-    requireWitnesses: true,
-    rationale: 'पेरोल, ईपीएफ और टैक्स अनुपालन के लिए नियोक्ता व कर्मचारी दोनों के आधार, पैन व गवाह अनिवार्य हैं।'
-  },
-
   // 23. General Consent Agreement
   'general-consent-agreement': {
     id: 'general-consent-agreement',
@@ -365,18 +341,6 @@ export const DOCUMENT_ID_RULES: Record<string, DocumentIdRule> = {
     rationale: 'व्यावसायिक एनओसी के लिए प्रथम व द्वितीय पक्ष दोनों का आधार व पैन तथा दोनों गवाह अनिवार्य हैं।'
   },
 
-  // 30. Partnership Deed
-  'partnership-deed': {
-    id: 'partnership-deed',
-    title: 'Partnership Deed',
-    pan: 'mandatory',
-    aadhaar: 'mandatory',
-    secondPartyPan: 'mandatory',
-    secondPartyAadhaar: 'mandatory',
-    requireWitnesses: true,
-    rationale: 'पार्टनरशिप डीड और करंट अकाउंट खोलने के लिए सभी पार्टनर्स के पैन, आधार व गवाह अनिवार्य हैं।'
-  },
-
   // 31. Equipment & Machinery Lease Agreement
   'equipments-machinery-lease': {
     id: 'equipments-machinery-lease',
@@ -451,17 +415,11 @@ export function getDocumentIdRule(documentTitleOrId: string): DocumentIdRule {
   if (clean.includes('vendor') || clean.includes('supplier')) {
     return DOCUMENT_ID_RULES['vendor-supplier-agreement'];
   }
-  if (clean.includes('software') || clean.includes('it service')) {
-    return DOCUMENT_ID_RULES['software-it-service-agreement'];
-  }
   if (clean.includes('vehicle') && clean.includes('declaration')) {
     return DOCUMENT_ID_RULES['old-vehicle-sales-declaration'];
   }
   if (clean.includes('vehicle') || clean.includes('car sale')) {
     return DOCUMENT_ID_RULES['old-vehicle-sales-agreement'];
-  }
-  if (clean.includes('employment') || clean.includes('offer letter')) {
-    return DOCUMENT_ID_RULES['employment-contract-offer-letter'];
   }
   if (clean.includes('unemployment')) {
     return DOCUMENT_ID_RULES['unemployment-affidavit'];
@@ -498,9 +456,6 @@ export function getDocumentIdRule(documentTitleOrId: string): DocumentIdRule {
   }
   if (clean.includes('consent')) {
     return DOCUMENT_ID_RULES['general-consent-agreement'];
-  }
-  if (clean.includes('partnership')) {
-    return DOCUMENT_ID_RULES['partnership-deed'];
   }
   if (clean.includes('affidavit')) {
     return DOCUMENT_ID_RULES['name-change-affidavit'];

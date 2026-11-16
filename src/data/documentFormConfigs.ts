@@ -116,16 +116,6 @@ export const DOCUMENT_CONFIGS: Record<string, DocumentFormConfig> = {
     defaultCustomTermTitle: 'Trade Name Disclaimer',
     defaultCustomTermDesc: 'The declarant states that the chosen trade name does not knowingly infringe upon any registered trademark operating in the same locality.'
   },
-  'software-it-agreement': {
-    id: 'software-it-agreement',
-    title: 'Software & IT Service Agreement',
-    isUnilateral: false,
-    firstPartyRole: 'The Client / Customer / Service Receiver',
-    secondPartyRole: 'The IT Service Provider / Software Developer / Agency',
-    coreSectionTitle: 'Core Software Development & SLA Specifications',
-    defaultCustomTermTitle: 'Post-Launch Support',
-    defaultCustomTermDesc: 'The provider will deliver 30 days of complimentary bug-fixing and technical support post-production launch, after which standard AMC rates apply.'
-  },
   'vendor-supplier': {
     id: 'vendor-supplier',
     title: 'Vendor & Supplier Agreement',
@@ -255,16 +245,6 @@ export const DOCUMENT_CONFIGS: Record<string, DocumentFormConfig> = {
     coreSectionTitle: 'Core Unemployment Verification & Undertaking',
     defaultCustomTermTitle: 'Competitive Phase',
     defaultCustomTermDesc: 'The deponent clarifies that they are presently dedicating full-time hours to civil service exam preparations.'
-  },
-  'employment-contract-offer-letter': {
-    id: 'employment-contract-offer-letter',
-    title: 'Employment Contract & Offer Letter',
-    isUnilateral: false,
-    firstPartyRole: 'The Employer / Company / Organization',
-    secondPartyRole: 'The Employee / Selected Candidate',
-    coreSectionTitle: 'Core Employment Terms, CTC & Working Conditions',
-    defaultCustomTermTitle: 'Training Bond',
-    defaultCustomTermDesc: 'The employee agrees to serve a minimum duration of 12 months post specialized software training, failing which a recovery cost applies.'
   },
   'general-consent': {
     id: 'general-consent',

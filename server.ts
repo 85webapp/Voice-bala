@@ -32,12 +32,10 @@ const ALLOWED_DOCUMENTS = [
   { id: 'freelancer-client-contract', title: 'Freelancer & Client Service Contract', category: 'Creators and Freelancers' },
   { id: 'nda-agreement', title: 'Non-Disclosure Agreement (NDA)', category: 'Creators and Freelancers' },
   { id: 'video-audio-release-form', title: 'Video/Audio Release Form', category: 'Creators and Freelancers' },
-  { id: 'partnership-deed', title: 'Partnership Deed', category: 'Business and Partnerships' },
   { id: 'proprietorship-declaration-deed', title: 'Proprietorship Declaration Deed', category: 'Business and Partnerships' },
   { id: 'founder-co-founder-agreement', title: 'Founder and Co-Founder Agreement', category: 'Business and Partnerships' },
   { id: 'equipments-machinery-lease', title: 'Equipment & Machinery Lease Agreement', category: 'Business and Partnerships' },
   { id: 'vendor-supplier-agreement', title: 'Vendor & Supplier Agreement', category: 'Vendor, Supplier & IT' },
-  { id: 'software-it-service-agreement', title: 'Software & IT Service Agreement', category: 'Vendor, Supplier & IT' },
   { id: 'name-change-affidavit', title: 'Name Change Affidavit', category: 'Personal Affidavits' },
   { id: 'address-proof-affidavit', title: 'Address Proof Correction Affidavit', category: 'Personal Affidavits' },
   { id: 'dob-correction-affidavit', title: 'Date of Birth & Age Correction Affidavit', category: 'Personal Affidavits' },
@@ -48,7 +46,6 @@ const ALLOWED_DOCUMENTS = [
   { id: 'unemployment-affidavit', title: 'Unemployment Affidavit', category: 'Education, Job & Government' },
   { id: 'first-child-affidavit', title: 'First Child Affidavit', category: 'Education, Job & Government' },
   { id: 'single-girl-child-affidavit', title: 'Single Girl Child Affidavit', category: 'Education, Job & Government' },
-  { id: 'employment-contract-offer-letter', title: 'Employment Contract & Offer Letter', category: 'Finance, HR & Vehicle' },
   { id: 'general-consent-agreement', title: 'General Consent Agreement', category: 'Finance, HR & Vehicle' },
   { id: 'declaration-letter', title: 'Declaration Letter', category: 'Finance, HR & Vehicle' },
   { id: 'old-vehicle-sales-declaration', title: 'Old Vehicle Sales and Purchase Declaration', category: 'Finance, HR & Vehicle' },
@@ -199,7 +196,7 @@ app.post('/api/gemini/search', async (req, res) => {
       });
     }
 
-    // Call Gemini API to match against the 28 allowed documents
+    // Call Gemini API to match against the allowed master documents
     const docInventorySummary = ALLOWED_DOCUMENTS.map(
       (d) => `- ID: "${d.id}", Title: "${d.title}", Category: "${d.category}"`
     ).join('\n');
@@ -210,7 +207,7 @@ A citizen has spoken or typed the following request in an Indian regional langua
 
 TARGET AUDIO LANGUAGE FOR SPOKEN EXPLANATION: "${audioLanguage}" (e.g. hi=Hindi, en=Hinglish/Conversational English, mr=Marathi, gu=Gujarati, ml=Malayalam, te=Telugu, bn=Bengali, pa=Punjabi, ta=Tamil, kn=Kannada).
 
-ALLOWED 28 MASTER LEGAL DOCUMENTS INVENTORY:
+ALLOWED MASTER LEGAL DOCUMENTS INVENTORY:
 ${docInventorySummary}
 
 FORBIDDEN CATEGORIES (Strict Refusal):

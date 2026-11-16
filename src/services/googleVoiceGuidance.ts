@@ -506,13 +506,16 @@ const SILENT_WAV_DATA_URI =
 export let currentAudioPlayer: HTMLAudioElement | null = null;
 let sharedAudioElement: HTMLAudioElement | null = null;
 let sharedAudioContext: AudioContext | null = null;
+let currentAudioBufferSource: AudioBufferSourceNode | null = null;
 let isAudioElementUnlocked = false;
-let isSpeechSynthesisUnlocked = false;
+let isWebAudioBufferPrimed = false;
 let currentBlobUrl: string | null = null;
 let currentFetchAbortController: AbortController | null = null;
 let currentPlayingServiceKey: string | null = null;
 let currentUtterance: SpeechSynthesisUtterance | null = null;
 let speechHeartbeatTimer: any = null;
+let ttsBackendStatus: 'unknown' | 'available' | 'unavailable' = 'unknown';
+let ttsProbeStarted = false;
 
 type MicPermissionState = 'unknown' | 'prompt' | 'granted' | 'denied' | 'unsupported';
 let micPermissionStatus: MicPermissionState = 'unknown';
@@ -584,13 +587,13 @@ export function getMicrophonePermissionState(): MicPermissionState {
 }
 
 /**
- * Unlocks AudioContext, persistent HTMLAudioElement, and SpeechSynthesis synchronously inside a user gesture.
- * Required by Chrome Mobile, iOS Safari, and Desktop Safari before async TTS playback.
+ * Unlocks AudioContext (with 1-sample silent buffer) & persistent HTMLAudioElement synchronously inside a user gesture.
+ * Required by Chrome Mobile, iOS Safari, and Desktop browsers before async TTS playback.
  */
 export function unlockAudioForPlayback() {
   if (typeof window === 'undefined') return;
 
-  // 1. Unlock Web Audio API Context
+  // 1. Unlock Web Audio API Context + play 1-sample silent buffer synchronously
   try {
     const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
     if (AudioCtx) {
@@ -600,10 +603,18 @@ export function unlockAudioForPlayback() {
       if (sharedAudioContext.state === 'suspended') {
         void sharedAudioContext.resume().catch(() => {});
       }
+      if (!isWebAudioBufferPrimed) {
+        isWebAudioBufferPrimed = true;
+        const silentBuffer = sharedAudioContext.createBuffer(1, 1, 22050);
+        const source = sharedAudioContext.createBufferSource();
+        source.buffer = silentBuffer;
+        source.connect(sharedAudioContext.destination);
+        source.start(0);
+      }
     }
   } catch {}
 
-  // 2. Unlock persistent HTMLAudioElement synchronously using a tiny silent WAV
+  // 2. Unlock persistent HTMLAudioElement synchronously using a tiny silent WAV backup
   try {
     if (!sharedAudioElement) {
       sharedAudioElement = new Audio();
@@ -634,27 +645,43 @@ export function unlockAudioForPlayback() {
       }
     }
   } catch {}
+}
 
-  // 3. Unlock SpeechSynthesis once per session so fallback speech never gets silently blocked
-  try {
-    if (!isSpeechSynthesisUnlocked && 'speechSynthesis' in window && typeof SpeechSynthesisUtterance !== 'undefined') {
-      isSpeechSynthesisUnlocked = true;
-      if (!window.speechSynthesis.speaking && !window.speechSynthesis.pending) {
-        const primer = new SpeechSynthesisUtterance('');
-        primer.volume = 0;
-        window.speechSynthesis.speak(primer);
+/**
+ * Silently probes & warms up /api/tts-audio on app mount so Vercel serverless lambdas
+ * respond fast on first click and unavailability is known ahead of clicks.
+ */
+function probeTtsBackend() {
+  if (ttsProbeStarted || typeof window === 'undefined') return;
+  ttsProbeStarted = true;
+  fetch('/api/tts-audio', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tl: 'hi', q: 'नमस्ते' })
+  })
+    .then((res) => {
+      const ct = (res.headers.get('content-type') || '').toLowerCase();
+      if (res.ok && ct.includes('audio')) {
+        ttsBackendStatus = 'available';
+      } else if (res.status === 404 || res.status === 405) {
+        ttsBackendStatus = 'unavailable';
       }
-    }
-  } catch {}
+    })
+    .catch(() => {
+      // Keep status 'unknown' on transient offline error so real click still attempts TTS
+    });
 }
 
 /**
  * Called on initial app mount:
- * 1. Requests microphone permission immediately upon visiting the site/domain.
+ * 1. Requests microphone permission cleanly upon visiting the site/domain.
  * 2. Binds first-gesture audio unlock across all browsers.
+ * 3. Warms up /api/tts-audio backend endpoint.
  */
 export function initVoiceAndMicPermissions() {
   if (typeof window === 'undefined') return;
+
+  probeTtsBackend();
 
   if (!initialMicPromptAttempted) {
     initialMicPromptAttempted = true;
@@ -665,6 +692,9 @@ export function initVoiceAndMicPermissions() {
     globalUnlockBound = true;
     const handleFirstInteraction = () => {
       unlockAudioForPlayback();
+      if (micPermissionStatus === 'unknown' || micPermissionStatus === 'prompt') {
+        void requestMicrophonePermission(false);
+      }
       window.removeEventListener('pointerdown', handleFirstInteraction, true);
       window.removeEventListener('touchstart', handleFirstInteraction, true);
       window.removeEventListener('click', handleFirstInteraction, true);
@@ -683,6 +713,7 @@ const listeners = new Set<VoiceListener>();
 function notifyListeners() {
   const isSpeaking = Boolean(
     currentPlayingServiceKey !== null ||
+    currentAudioBufferSource !== null ||
     (typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis.speaking) ||
     (currentAudioPlayer && !currentAudioPlayer.paused && Boolean(currentAudioPlayer.src) && currentAudioPlayer.src !== SILENT_WAV_DATA_URI)
   );
@@ -699,6 +730,7 @@ export function subscribeVoiceState(listener: VoiceListener): () => void {
   listeners.add(listener);
   const isSpeaking = Boolean(
     currentPlayingServiceKey !== null ||
+    currentAudioBufferSource !== null ||
     (typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis.speaking) ||
     (currentAudioPlayer && !currentAudioPlayer.paused && Boolean(currentAudioPlayer.src) && currentAudioPlayer.src !== SILENT_WAV_DATA_URI)
   );
@@ -711,6 +743,7 @@ export function subscribeVoiceState(listener: VoiceListener): () => void {
 export function isServiceVoicePlaying(serviceKey?: string): boolean {
   const isSpeaking = Boolean(
     currentPlayingServiceKey !== null ||
+    currentAudioBufferSource !== null ||
     (typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis.speaking) ||
     (currentAudioPlayer && !currentAudioPlayer.paused && Boolean(currentAudioPlayer.src) && currentAudioPlayer.src !== SILENT_WAV_DATA_URI)
   );
@@ -784,7 +817,7 @@ function cleanupAudioElementHandlers(audio: HTMLAudioElement | null) {
 
 /**
  * 4. MUTE / STOP CONTROLS:
- * Stops any playing speech or audio immediately without triggering stale error callbacks
+ * Stops any playing speech, Web Audio buffer, or HTMLAudioElement immediately without stale error callbacks
  */
 export function stopServiceVoice() {
   currentPlaySessionId++;
@@ -809,13 +842,20 @@ export function stopServiceVoice() {
     } catch {}
   }
 
+  if (currentAudioBufferSource) {
+    try {
+      currentAudioBufferSource.onended = null;
+      currentAudioBufferSource.stop();
+      currentAudioBufferSource.disconnect();
+    } catch {}
+    currentAudioBufferSource = null;
+  }
+
   if (currentAudioPlayer) {
     cleanupAudioElementHandlers(currentAudioPlayer);
     try {
       currentAudioPlayer.pause();
       currentAudioPlayer.currentTime = 0;
-      currentAudioPlayer.removeAttribute('src');
-      currentAudioPlayer.load();
     } catch {}
     currentAudioPlayer = null;
   }
@@ -832,12 +872,148 @@ export function stopServiceVoice() {
   notifyListeners();
 }
 
+async function playBufferWithWebAudioFallback(
+  audioBuffer: ArrayBuffer,
+  textToSpeak: string,
+  userLang: VoiceLanguageCode,
+  canonicalKey: string,
+  thisSession: number
+) {
+  if (thisSession !== currentPlaySessionId) return;
+
+  if (!sharedAudioContext) {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (AudioCtx) {
+      sharedAudioContext = new AudioCtx();
+    }
+  }
+
+  if (!sharedAudioContext) {
+    fallbackToSpeechSynthesis(textToSpeak, userLang, canonicalKey, thisSession);
+    return;
+  }
+
+  try {
+    if (sharedAudioContext.state === 'suspended') {
+      await sharedAudioContext.resume();
+    }
+    if (thisSession !== currentPlaySessionId) return;
+
+    const decoded = await sharedAudioContext.decodeAudioData(audioBuffer.slice(0));
+    if (thisSession !== currentPlaySessionId) return;
+
+    const source = sharedAudioContext.createBufferSource();
+    source.buffer = decoded;
+    source.playbackRate.value = 1.3;
+    source.connect(sharedAudioContext.destination);
+
+    source.onended = () => {
+      if (currentAudioBufferSource === source) {
+        currentAudioBufferSource = null;
+      }
+      if (thisSession === currentPlaySessionId) {
+        stopServiceVoice();
+      }
+    };
+
+    currentAudioBufferSource = source;
+    currentPlayingServiceKey = canonicalKey;
+    source.start(0);
+    notifyListeners();
+  } catch (err) {
+    if (thisSession !== currentPlaySessionId) return;
+    console.warn('[VoiceGuidance] Web Audio fallback failed, using SpeechSynthesis:', err);
+    fallbackToSpeechSynthesis(textToSpeak, userLang, canonicalKey, thisSession);
+  }
+}
+
+function playBufferWithHtmlAudioFirst(
+  audioBuffer: ArrayBuffer,
+  textToSpeak: string,
+  userLang: VoiceLanguageCode,
+  canonicalKey: string,
+  thisSession: number
+) {
+  if (thisSession !== currentPlaySessionId) return;
+
+  const blob = new Blob([audioBuffer], { type: 'audio/mpeg' });
+  const blobUrl = URL.createObjectURL(blob);
+  if (thisSession !== currentPlaySessionId) {
+    URL.revokeObjectURL(blobUrl);
+    return;
+  }
+
+  if (currentBlobUrl) {
+    try { URL.revokeObjectURL(currentBlobUrl); } catch {}
+  }
+  currentBlobUrl = blobUrl;
+
+  const audio = sharedAudioElement || new Audio();
+  sharedAudioElement = audio;
+  currentAudioPlayer = audio;
+  cleanupAudioElementHandlers(audio);
+
+  audio.muted = false;
+  audio.volume = 1.0;
+  audio.src = blobUrl;
+  audio.defaultPlaybackRate = 1.3;
+  audio.playbackRate = 1.3;
+  (audio as any).preservesPitch = true;
+
+  audio.onloadedmetadata = () => {
+    if (thisSession !== currentPlaySessionId) return;
+    audio.playbackRate = 1.3;
+  };
+
+  audio.onplay = () => {
+    if (thisSession !== currentPlaySessionId) {
+      audio.pause();
+      return;
+    }
+    audio.muted = false;
+    audio.playbackRate = 1.3;
+    currentPlayingServiceKey = canonicalKey;
+    notifyListeners();
+  };
+
+  audio.onended = () => {
+    if (thisSession !== currentPlaySessionId) return;
+    stopServiceVoice();
+  };
+
+  audio.onerror = () => {
+    if (thisSession !== currentPlaySessionId) return;
+    console.warn('[VoiceGuidance] HTML5 Blob audio failed, trying Web Audio API...');
+    void playBufferWithWebAudioFallback(audioBuffer, textToSpeak, userLang, canonicalKey, thisSession);
+  };
+
+  const playPromise = audio.play();
+  if (playPromise !== undefined) {
+    playPromise
+      .then(() => {
+        if (thisSession !== currentPlaySessionId) {
+          audio.pause();
+          return;
+        }
+        audio.muted = false;
+        audio.playbackRate = 1.3;
+        currentPlayingServiceKey = canonicalKey;
+        notifyListeners();
+      })
+      .catch((playErr) => {
+        if (thisSession !== currentPlaySessionId) return;
+        console.warn('[VoiceGuidance] HTMLAudio play interrupted/blocked, trying Web Audio API:', playErr);
+        void playBufferWithWebAudioFallback(audioBuffer, textToSpeak, userLang, canonicalKey, thisSession);
+      });
+  }
+}
+
 /**
  * Plays the voice guidance for the requested service.
- * 1. Synchronously unlocks audio playback in the browser.
- * 2. If microphone access was previously disallowed/dismissed, re-prompts cleanly on click without blocking playback.
- * 3. Fetches audio via POST /api/tts-audio (no URL length limit) -> plays on unlocked HTMLAudioElement at 1.3x.
- * 4. Falls back cleanly to chunked Web SpeechSynthesis if offline or proxy unavailable.
+ * 1. Synchronously unlocks Web Audio API Context + HTMLAudioElement in the click gesture.
+ * 2. If TTS backend was probed unavailable, runs SpeechSynthesis synchronously to preserve user activation.
+ * 3. Fetches MP3 audio via POST /api/tts-audio -> plays via HTMLAudioElement (1.3x preservesPitch),
+ *    falling back cleanly to Web Audio API AudioContext, then Web SpeechSynthesis.
  */
 export function playServiceVoice(serviceKey: string) {
   stopServiceVoice();
@@ -871,9 +1047,10 @@ export function playServiceVoice(serviceKey: string) {
   notifyListeners();
   unlockAudioForPlayback();
 
-  // If mic permission was disallowed/dismissed earlier, re-request cleanly without blocking voice output
-  if (micPermissionStatus !== 'granted') {
-    void requestMicrophonePermission(true);
+  // If /api/tts-audio is known unavailable (404/405), run SpeechSynthesis synchronously while user gesture is valid
+  if (ttsBackendStatus === 'unavailable') {
+    fallbackToSpeechSynthesis(textToSpeak, userLang, canonicalKey, thisSession);
+    return;
   }
 
   const abortController = new AbortController();
@@ -889,87 +1066,25 @@ export function playServiceVoice(serviceKey: string) {
       if (thisSession !== currentPlaySessionId) return;
       const contentType = (res.headers.get('content-type') || '').toLowerCase();
       if (!res.ok || !contentType.includes('audio')) {
+        if (res.status === 404 || res.status === 405) {
+          ttsBackendStatus = 'unavailable';
+        }
         throw new Error(`TTS proxy unavailable (${res.status} ${contentType})`);
       }
-      const blob = await res.blob();
+      ttsBackendStatus = 'available';
+      const arrayBuffer = await res.arrayBuffer();
       if (thisSession !== currentPlaySessionId) return;
-      if (!blob || blob.size === 0) {
-        throw new Error('Empty TTS audio blob');
+      if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+        throw new Error('Empty TTS audio buffer');
       }
 
-      const blobUrl = URL.createObjectURL(blob);
-      if (thisSession !== currentPlaySessionId) {
-        URL.revokeObjectURL(blobUrl);
-        return;
-      }
-
-      if (currentBlobUrl) {
-        try { URL.revokeObjectURL(currentBlobUrl); } catch {}
-      }
-      currentBlobUrl = blobUrl;
-
-      const audio = sharedAudioElement || new Audio();
-      sharedAudioElement = audio;
-      currentAudioPlayer = audio;
-      cleanupAudioElementHandlers(audio);
-
-      audio.muted = false;
-      audio.volume = 1.0;
-      audio.src = blobUrl;
-      audio.defaultPlaybackRate = 1.3;
-      audio.playbackRate = 1.3;
-      (audio as any).preservesPitch = true;
-
-      audio.onloadedmetadata = () => {
-        if (thisSession !== currentPlaySessionId) return;
-        audio.playbackRate = 1.3;
-      };
-
-      audio.onplay = () => {
-        if (thisSession !== currentPlaySessionId) {
-          audio.pause();
-          return;
-        }
-        audio.playbackRate = 1.3;
-        currentPlayingServiceKey = canonicalKey;
-        notifyListeners();
-      };
-
-      audio.onended = () => {
-        if (thisSession !== currentPlaySessionId) return;
-        stopServiceVoice();
-      };
-
-      audio.onerror = () => {
-        if (thisSession !== currentPlaySessionId) return;
-        console.warn('[VoiceGuidance] HTML5 Blob audio failed, trying SpeechSynthesis fallback...');
-        fallbackToSpeechSynthesis(textToSpeak, userLang, canonicalKey, thisSession);
-      };
-
-      const playPromise = audio.play();
-      if (playPromise !== undefined) {
-        playPromise
-          .then(() => {
-            if (thisSession !== currentPlaySessionId) {
-              audio.pause();
-              return;
-            }
-            audio.playbackRate = 1.3;
-            currentPlayingServiceKey = canonicalKey;
-            notifyListeners();
-          })
-          .catch((playErr) => {
-            if (thisSession !== currentPlaySessionId) return;
-            console.warn('[VoiceGuidance] Audio play interrupted/blocked, falling back to speech synthesis:', playErr);
-            fallbackToSpeechSynthesis(textToSpeak, userLang, canonicalKey, thisSession);
-          });
-      }
+      playBufferWithHtmlAudioFirst(arrayBuffer, textToSpeak, userLang, canonicalKey, thisSession);
     })
     .catch((err) => {
       if (err?.name === 'AbortError' || thisSession !== currentPlaySessionId) {
         return;
       }
-      console.warn('[VoiceGuidance] POST /api/tts-audio failed, trying GET/SpeechSynthesis fallback:', err);
+      console.warn('[VoiceGuidance] POST /api/tts-audio failed, falling back to SpeechSynthesis:', err);
       fallbackToSpeechSynthesis(textToSpeak, userLang, canonicalKey, thisSession);
     });
 }

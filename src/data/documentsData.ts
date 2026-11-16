@@ -105,17 +105,7 @@ export const INITIAL_FRONT_DOCUMENTS: LegalDocument[] = [
     stampDutyRecommended: '₹50 / ₹100'
   },
 
-  // 3. Business and Partnerships (4)
-  {
-    id: 'partnership-deed',
-    title: 'Partnership Deed',
-    category: 'Business and Partnerships',
-    description: 'Indian Partnership Act compliant deed fixing capital, profit/loss ratio, and banking powers.',
-    standardHours: 24,
-    basePrice: 499,
-    requiredFields: ['Partner 1 Details', 'Partner 2 Details', 'Firm Name', 'Profit Ratio'],
-    stampDutyRecommended: '₹500 / ₹1000'
-  },
+  // 3. Business and Partnerships (3)
   {
     id: 'proprietorship-declaration-deed',
     title: 'Proprietorship Declaration Deed',
@@ -147,7 +137,7 @@ export const INITIAL_FRONT_DOCUMENTS: LegalDocument[] = [
     stampDutyRecommended: '₹100 / ₹500'
   },
 
-  // 4. Vendor, Supplier & IT (2)
+  // 4. Vendor, Supplier & IT (1)
   {
     id: 'vendor-supplier-agreement',
     title: 'Vendor & Supplier Agreement',
@@ -156,16 +146,6 @@ export const INITIAL_FRONT_DOCUMENTS: LegalDocument[] = [
     standardHours: 24,
     basePrice: 399,
     requiredFields: ['Buyer Company', 'Supplier Firm', 'Goods Specifications'],
-    stampDutyRecommended: '₹100 / ₹200'
-  },
-  {
-    id: 'software-it-service-agreement',
-    title: 'Software & IT Service Agreement',
-    category: 'Vendor, Supplier & IT',
-    description: 'IT development and SaaS maintenance master agreement covering bug fixes, uptime SLA, and code delivery.',
-    standardHours: 24,
-    basePrice: 449,
-    requiredFields: ['Client Name', 'Developer / IT Vendor', 'Scope of Modules', 'Warranty Period'],
     stampDutyRecommended: '₹100 / ₹200'
   },
 
@@ -273,17 +253,7 @@ export const INITIAL_FRONT_DOCUMENTS: LegalDocument[] = [
     stampDutyRecommended: '₹10 / ₹20 / ₹50'
   },
 
-  // 7. Finance, HR & Vehicle (5) — Old Vehicle Sales and Purchase Agreement strictly LAST
-  {
-    id: 'employment-contract-offer-letter',
-    title: 'Employment Contract & Offer Letter',
-    category: 'Finance, HR & Vehicle',
-    description: 'Comprehensive hiring contract covering compensation, notice period, non-compete, and confidentiality.',
-    standardHours: 24,
-    basePrice: 299,
-    requiredFields: ['Employer Name', 'Employee Name', 'Designation', 'Annual CTC', 'Notice Period'],
-    stampDutyRecommended: '₹100'
-  },
+  // 7. Finance, HR & Vehicle (4) — Old Vehicle Sales and Purchase Agreement strictly LAST
   {
     id: 'general-consent-agreement',
     title: 'General Consent Agreement',
@@ -374,9 +344,8 @@ export const MASTER_CATEGORIES: DocumentCategory[] = [
     id: 'business-partnerships',
     name: 'Business and Partnerships',
     iconName: 'Briefcase',
-    description: 'Partnership deeds, founder covenants, proprietorship declarations, and machinery leases.',
+    description: 'Founder covenants, proprietorship declarations, and machinery leases.',
     items: [
-      'Partnership Deed',
       'Proprietorship Declaration Deed',
       'Founder and Co-Founder Agreement',
       'Equipment & Machinery Lease Agreement'
@@ -386,10 +355,9 @@ export const MASTER_CATEGORIES: DocumentCategory[] = [
     id: 'vendor-supplier-it',
     name: 'Vendor, Supplier & IT',
     iconName: 'Cpu',
-    description: 'Procurement contracts and software development service agreements.',
+    description: 'Commercial procurement and supply chain contracts.',
     items: [
-      'Vendor & Supplier Agreement',
-      'Software & IT Service Agreement'
+      'Vendor & Supplier Agreement'
     ]
   },
   {
@@ -422,9 +390,8 @@ export const MASTER_CATEGORIES: DocumentCategory[] = [
     id: 'finance-hr-vehicle',
     name: 'Finance, HR & Vehicle',
     iconName: 'Car',
-    description: 'Employment contracts, declaration letters, and vehicle sale transfer contracts.',
+    description: 'Consent agreements, declaration letters, and vehicle sale transfer contracts.',
     items: [
-      'Employment Contract & Offer Letter',
       'General Consent Agreement',
       'Declaration Letter',
       'Old Vehicle Sales and Purchase Declaration',
