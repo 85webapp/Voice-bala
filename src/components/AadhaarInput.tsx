@@ -1,5 +1,4 @@
 import React from 'react';
-import { ShieldCheck } from 'lucide-react';
 
 interface AadhaarInputProps {
   value: string; // 12-digit raw string or formatted
@@ -45,22 +44,13 @@ export const AadhaarInput: React.FC<AadhaarInputProps> = ({
   };
 
   const displayValue = formatDisplay(rawDigits);
-  const isValid = rawDigits.length === 12;
 
   return (
     <div className={`space-y-1 ${className}`}>
       {label && (
-        <div className="flex items-center justify-between">
-          <label htmlFor={id} className="block text-xs font-bold text-slate-700">
-            {label} {required && <span className="text-red-500 font-bold">*</span>}
-          </label>
-          {isValid && (
-            <span className="text-[11px] font-semibold text-emerald-600 flex items-center gap-1">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>12 Digits Valid</span>
-            </span>
-          )}
-        </div>
+        <label htmlFor={id} className="block text-xs font-bold text-slate-700">
+          {label} {required && <span className="text-red-500 font-bold">*</span>}
+        </label>
       )}
 
       <div className="relative">

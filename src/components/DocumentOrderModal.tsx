@@ -59,6 +59,10 @@ export const DocumentOrderModal: React.FC<DocumentOrderModalProps> = ({
       showToast('Please enter Primary Party Name & Mobile Number.', 'warning');
       return;
     }
+    if (phone.replace(/\D/g, '').length !== 10) {
+      showToast('Please enter a valid 10-digit mobile number.', 'warning');
+      return;
+    }
 
     setIsSubmitting(true);
 

@@ -224,12 +224,11 @@ export default function App() {
               return <CommercialNocWizardView {...commonProps} />;
             }
 
-            // 3. Rent & Lease Agreements (11th Month, Commercial Lease, Sub-Lease - MTA Compliant)
+            // 3. Rent & Lease Agreements (Rent Agreement, Commercial/Equipment Lease - MTA Compliant)
             if (
               lowerTitle.includes('rent') ||
               lowerTitle.includes('lease') ||
-              lowerTitle.includes('tenancy') ||
-              lowerTitle.includes('sub-lease')
+              lowerTitle.includes('tenancy')
             ) {
               return <RentLeaseWizardView {...commonProps} />;
             }

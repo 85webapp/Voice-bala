@@ -1,4 +1,4 @@
-// Master Document ID Requirements (PAN & Aadhaar: Mandatory vs Optional vs N/A)
+// Master Document ID Requirements (PAN & Aadhaar per Party + Witness Mandate)
 // Grounded strictly in Indian statutory compliance and user specifications
 
 export type RequirementType = 'mandatory' | 'optional' | 'not_applicable';
@@ -8,17 +8,24 @@ export interface DocumentIdRule {
   title: string;
   pan: RequirementType;
   aadhaar: RequirementType;
+  secondPartyPan?: RequirementType;
+  secondPartyAadhaar?: RequirementType;
+  requireWitnesses: boolean;
+  panMandatoryMinAge?: number;
   rationale: string;
 }
 
 export const DOCUMENT_ID_RULES: Record<string, DocumentIdRule> = {
-  // 1. Founder & Co-Founder Agreement
+  // 1. Founder and Co-Founder Agreement
   'founder-co-founder-agreement': {
     id: 'founder-co-founder-agreement',
-    title: 'Founder & Co-Founder Agreement',
+    title: 'Founder and Co-Founder Agreement',
     pan: 'mandatory',
     aadhaar: 'mandatory',
-    rationale: 'भविष्य के कानूनी विवादों और हिस्सेदारी (Equity) के स्वामित्व को स्पष्ट करने के लिए दोनों की कानूनी पहचान जरूरी है।'
+    secondPartyPan: 'mandatory',
+    secondPartyAadhaar: 'mandatory',
+    requireWitnesses: true,
+    rationale: 'भविष्य के कानूनी विवादों और हिस्सेदारी (Equity) के स्वामित्व को स्पष्ट करने के लिए दोनों की कानूनी पहचान व गवाह अनिवार्य हैं।'
   },
 
   // 2. Brand Sponsorship & Promotion Agreement
@@ -27,7 +34,10 @@ export const DOCUMENT_ID_RULES: Record<string, DocumentIdRule> = {
     title: 'Brand Sponsorship & Promotion Agreement',
     pan: 'mandatory',
     aadhaar: 'mandatory',
-    rationale: 'टीडीएस (TDS) कटौती और जीएसटी अनुपालन के लिए ब्रांड्स और इन्फ्लुएंसर्स दोनों का पैन कार्ड आवश्यक है।'
+    secondPartyPan: 'mandatory',
+    secondPartyAadhaar: 'mandatory',
+    requireWitnesses: true,
+    rationale: 'टीडीएस (TDS) कटौती और जीएसटी अनुपालन के लिए दोनों पक्षों का पैन, आधार व गवाह आवश्यक हैं।'
   },
 
   // 3. Influencer Collaboration Agreement
@@ -36,237 +46,352 @@ export const DOCUMENT_ID_RULES: Record<string, DocumentIdRule> = {
     title: 'Influencer Collaboration Agreement',
     pan: 'mandatory',
     aadhaar: 'mandatory',
-    rationale: 'भुगतान और वित्तीय लेन-देन पर टैक्स रिपोर्टिंग के लिए पैन कार्ड जरूरी है।'
+    secondPartyPan: 'mandatory',
+    secondPartyAadhaar: 'mandatory',
+    requireWitnesses: true,
+    rationale: 'भुगतान और वित्तीय लेन-देन पर टैक्स रिपोर्टिंग के लिए दोनों पक्षों का पैन, आधार व गवाह अनिवार्य हैं।'
   },
 
-  // 4. Content Right & Copyright Transfer Agreement
-  'content-rights-copyright': {
-    id: 'content-rights-copyright',
-    title: 'Content Right & Copyright Transfer Agreement',
+  // 4. Content Rights Agreement
+  'content-rights-agreement': {
+    id: 'content-rights-agreement',
+    title: 'Content Rights Agreement',
     pan: 'mandatory',
     aadhaar: 'mandatory',
-    rationale: 'बौद्धिक संपदा (Intellectual Property) के स्थायी हस्तांतरण और कानूनी स्वामित्व के लिए पहचान सत्यापित होना अनिवार्य है।'
+    secondPartyPan: 'mandatory',
+    secondPartyAadhaar: 'mandatory',
+    requireWitnesses: true,
+    rationale: 'कंटेंट लाइसेंसिंग और बौद्धिक संपदा अधिकारों के लिए दोनों पक्षों का आधार, पैन व गवाह अनिवार्य हैं।'
   },
 
-  // 5. Freelancer & Client Service Contract
+  // 5. Copyright Transfer Agreement
+  'copyright-transfer-agreement': {
+    id: 'copyright-transfer-agreement',
+    title: 'Copyright Transfer Agreement',
+    pan: 'mandatory',
+    aadhaar: 'mandatory',
+    secondPartyPan: 'mandatory',
+    secondPartyAadhaar: 'mandatory',
+    requireWitnesses: true,
+    rationale: 'कॉपीराइट के स्थायी हस्तांतरण और स्वामित्व सत्यापन के लिए दोनों पक्षों का आधार, पैन व गवाह अनिवार्य हैं।'
+  },
+
+  // 6. Freelancer & Client Service Contract
   'freelancer-client-contract': {
     id: 'freelancer-client-contract',
     title: 'Freelancer & Client Service Contract',
-    pan: 'optional',
-    aadhaar: 'optional',
-    rationale: 'सामान्य सेवाओं के लिए वैकल्पिक है, लेकिन बड़ी राशि या टीडीएस कटौती के समय पैन अनिवार्य हो जाता है।'
+    pan: 'mandatory',
+    aadhaar: 'mandatory',
+    secondPartyPan: 'mandatory',
+    secondPartyAadhaar: 'mandatory',
+    requireWitnesses: true,
+    rationale: 'फ्रीलांस अनुबंध और भुगतान सुरक्षा के लिए दोनों पक्षों का पैन, आधार व गवाह अनिवार्य हैं।'
   },
 
-  // 6. Non-Disclosure Agreement (NDA)
+  // 7. Non-Disclosure Agreement (NDA)
   'nda-agreement': {
     id: 'nda-agreement',
     title: 'Non-Disclosure Agreement (NDA)',
-    pan: 'optional',
-    aadhaar: 'optional',
-    rationale: 'गोपनीयता बनाए रखने के लिए केवल नाम और हस्ताक्षर पर्याप्त होते हैं, हालांकि पहचान के लिए आईडी जोड़ना सुरक्षित है।'
+    pan: 'mandatory',
+    aadhaar: 'mandatory',
+    secondPartyPan: 'mandatory',
+    secondPartyAadhaar: 'mandatory',
+    requireWitnesses: true,
+    rationale: 'गोपनीयता अनुबंध की कानूनी वैधता के लिए दोनों पक्षों का आधार, पैन व गवाह अनिवार्य हैं।'
   },
 
-  // 7. Video/Audio Release Form
+  // 8. Video/Audio Release Form (Aadhaar Mandatory, PAN Optional, Witnesses Mandatory)
   'video-audio-release-form': {
     id: 'video-audio-release-form',
     title: 'Video/Audio Release Form',
     pan: 'optional',
-    aadhaar: 'optional',
-    rationale: 'मीडिया और शूट्स के लिए केवल कंसेंट और हस्ताक्षर की आवश्यकता होती है, आईडी वैकल्पिक है।'
+    aadhaar: 'mandatory',
+    secondPartyPan: 'optional',
+    secondPartyAadhaar: 'mandatory',
+    requireWitnesses: true,
+    rationale: 'वीडियो/ऑडियो रिलीज फॉर्म में दोनों पक्षों का आधार कार्ड और गवाह अनिवार्य हैं; पैन कार्ड वैकल्पिक है।'
   },
 
-  // 8. Proprietorship Declaration Deed
+  // 9. Proprietorship Declaration Deed (Unilateral, No 2nd Party, No Witnesses)
   'proprietorship-declaration-deed': {
     id: 'proprietorship-declaration-deed',
     title: 'Proprietorship Declaration Deed',
     pan: 'mandatory',
     aadhaar: 'mandatory',
-    rationale: 'बैंक खाते खोलने और जीएसटी/टैक्स रजिस्ट्रेशन के लिए प्रोप्राइटर का पैन और आधार अनिवार्य है।'
+    secondPartyPan: 'not_applicable',
+    secondPartyAadhaar: 'not_applicable',
+    requireWitnesses: false,
+    rationale: 'बैंक खाते खोलने और जीएसटी/टैक्स रजिस्ट्रेशन के लिए प्रोप्राइटर का पैन और आधार अनिवार्य है (द्वितीय पक्ष या गवाह की आवश्यकता नहीं)।'
   },
 
-  // 9. Vendor & Supplier Agreement
+  // 10. Vendor & Supplier Agreement
   'vendor-supplier-agreement': {
     id: 'vendor-supplier-agreement',
     title: 'Vendor & Supplier Agreement',
     pan: 'mandatory',
     aadhaar: 'mandatory',
-    rationale: 'व्यावसायिक चालान (Invoicing) और टैक्स अनुपालन के लिए वेंडर का पैन जरूरी है।'
+    secondPartyPan: 'mandatory',
+    secondPartyAadhaar: 'mandatory',
+    requireWitnesses: true,
+    rationale: 'व्यावसायिक चालान और सप्लाई अनुपालन के लिए दोनों पक्षों का आधार, पैन व गवाह अनिवार्य हैं।'
   },
 
-  // 10. Software & IT Service Agreement
+  // 11. Software & IT Service Agreement
   'software-it-service-agreement': {
     id: 'software-it-service-agreement',
     title: 'Software & IT Service Agreement',
-    pan: 'optional',
-    aadhaar: 'optional',
-    rationale: 'बी2बी या कमर्शियल कॉन्ट्रैक्ट्स में टैक्स के लिए जरूरत पड़ सकती है, अन्यथा सॉफ्टवेयर शर्तों के लिए वैकल्पिक है।'
+    pan: 'mandatory',
+    aadhaar: 'mandatory',
+    secondPartyPan: 'mandatory',
+    secondPartyAadhaar: 'mandatory',
+    requireWitnesses: true,
+    rationale: 'सॉफ्टवेयर व आईटी सेवा अनुबंध के लिए दोनों पक्षों का आधार, पैन व गवाह अनिवार्य हैं।'
   },
 
-  // 11. Website & App Terms of Service and Privacy Policy
-  'website-app-terms-privacy': {
-    id: 'website-app-terms-privacy',
-    title: 'Website & App Terms of Service and Privacy Policy',
-    pan: 'not_applicable',
-    aadhaar: 'not_applicable',
-    rationale: 'यह वेबसाइट विजिटर्स और ऐप यूजर्स के लिए सार्वजनिक नियम पृष्ठ होता है, इसमें व्यक्तिगत आईडी लागू नहीं है।'
-  },
-
-  // 12. Name Change Affidavit
+  // 12. Name Change Affidavit (Aadhaar Mandatory, PAN Mandatory if Age >= 18, No 2nd Party, No Witnesses)
   'name-change-affidavit': {
     id: 'name-change-affidavit',
     title: 'Name Change Affidavit',
     pan: 'optional',
     aadhaar: 'mandatory',
-    rationale: 'नाम परिवर्तन कानूनी दस्तावेज और गजट नोटिफिकेशन है, इसलिए शपथकर्ता का आधार कार्ड अनिवार्य है।'
+    secondPartyPan: 'not_applicable',
+    secondPartyAadhaar: 'not_applicable',
+    requireWitnesses: false,
+    panMandatoryMinAge: 18,
+    rationale: 'नाम परिवर्तन शपथ पत्र में आधार अनिवार्य है और 18 वर्ष या उससे अधिक आयु होने पर पैन कार्ड भी अनिवार्य है।'
   },
 
-  // 13. Address Proof Correction Affidavit
+  // 13. Address Proof Correction Affidavit (Aadhaar Mandatory, PAN Optional, No 2nd Party, No Witnesses)
   'address-proof-affidavit': {
     id: 'address-proof-affidavit',
     title: 'Address Proof Correction Affidavit',
-    pan: 'mandatory',
+    pan: 'optional',
     aadhaar: 'mandatory',
-    rationale: 'पते के सत्यापन के लिए आधार कार्ड और पहचान के लिए पैन दोनों जरूरी हैं।'
+    secondPartyPan: 'not_applicable',
+    secondPartyAadhaar: 'not_applicable',
+    requireWitnesses: false,
+    rationale: 'पते के सत्यापन के लिए आधार कार्ड अनिवार्य है; पैन कार्ड वैकल्पिक है।'
   },
 
-  // 14. Date of Birth & Age Correction Affidavit
+  // 14. Date of Birth & Age Correction Affidavit (Aadhaar Mandatory, PAN Mandatory, No 2nd Party, No Witnesses)
   'dob-correction-affidavit': {
     id: 'dob-correction-affidavit',
     title: 'Date of Birth & Age Correction Affidavit',
-    pan: 'optional',
+    pan: 'mandatory',
     aadhaar: 'mandatory',
-    rationale: 'जन्म तिथि सुधारने के लिए आधार कार्ड प्राथमिक सरकारी पहचान प्रमाण होता है।'
+    secondPartyPan: 'not_applicable',
+    secondPartyAadhaar: 'not_applicable',
+    requireWitnesses: false,
+    rationale: 'जन्म तिथि और आयु सुधार शपथ पत्र के लिए आधार कार्ड और पैन कार्ड दोनों अनिवार्य हैं।'
   },
 
-  // 15. Loss of Document Affidavit
+  // 15. Loss of Document Affidavit (Aadhaar Mandatory, PAN Optional, No 2nd Party, No Witnesses)
   'loss-of-document-affidavit': {
     id: 'loss-of-document-affidavit',
     title: 'Loss of Document Affidavit',
     pan: 'optional',
     aadhaar: 'mandatory',
-    rationale: 'खोए हुए कानूनी/शैक्षणिक दस्तावेजों की रिपोर्ट और शपथ के लिए पहचान प्रमाण अनिवार्य है।'
+    secondPartyPan: 'not_applicable',
+    secondPartyAadhaar: 'not_applicable',
+    requireWitnesses: false,
+    rationale: 'खोए हुए दस्तावेजों की रिपोर्ट के लिए आधार कार्ड अनिवार्य है; पैन कार्ड वैकल्पिक है।'
   },
 
-  // 16. Anti-Ragging & Gap Year Affidavit
-  'anti-ragging-gap-year-affidavit': {
-    id: 'anti-ragging-gap-year-affidavit',
-    title: 'Anti-Ragging & Gap Year Affidavit',
+  // 16. Anti-Ragging Affidavit (Aadhaar Mandatory, PAN Optional, No 2nd Party, No Witnesses)
+  'anti-ragging-affidavit': {
+    id: 'anti-ragging-affidavit',
+    title: 'Anti-Ragging Affidavit',
     pan: 'optional',
     aadhaar: 'mandatory',
-    rationale: 'शैक्षणिक संस्थानों और विश्वविद्यालयों में जमा होने वाले एफिडेविट्स में छात्र/अभिभावक का आधार अनिवार्य होता है।'
+    secondPartyPan: 'not_applicable',
+    secondPartyAadhaar: 'not_applicable',
+    requireWitnesses: false,
+    rationale: 'एंटी-रैगिंग शपथ पत्र में छात्र/अभिभावक का आधार अनिवार्य है; पैन वैकल्पिक है।'
   },
 
-  // 17. Income & Unemployment Affidavit
-  'income-unemployment-affidavit': {
-    id: 'income-unemployment-affidavit',
-    title: 'Income & Unemployment Affidavit',
+  // 17. Gap Year Affidavit (Aadhaar Mandatory, PAN Optional, No 2nd Party, No Witnesses)
+  'gap-year-affidavit': {
+    id: 'gap-year-affidavit',
+    title: 'Gap Year Affidavit',
+    pan: 'optional',
+    aadhaar: 'mandatory',
+    secondPartyPan: 'not_applicable',
+    secondPartyAadhaar: 'not_applicable',
+    requireWitnesses: false,
+    rationale: 'गैप ईयर शपथ पत्र में आधार कार्ड अनिवार्य है; पैन कार्ड वैकल्पिक है।'
+  },
+
+  // 18. Income Affidavit (Aadhaar Mandatory, PAN Mandatory, No 2nd Party, No Witnesses)
+  'income-affidavit': {
+    id: 'income-affidavit',
+    title: 'Income Affidavit',
     pan: 'mandatory',
     aadhaar: 'mandatory',
-    rationale: 'आय और वित्तीय स्थिति के सत्यापन के लिए पैन और आधार दोनों जरूरी हैं।'
+    secondPartyPan: 'not_applicable',
+    secondPartyAadhaar: 'not_applicable',
+    requireWitnesses: false,
+    rationale: 'आय सत्यापन शपथ पत्र के लिए आधार कार्ड और पैन कार्ड दोनों अनिवार्य हैं।'
   },
 
-  // 18. First Child / Single Child Affidavit
-  'first-child-single-child-affidavit': {
-    id: 'first-child-single-child-affidavit',
-    title: 'First Child / Single Child Affidavit',
+  // 19. Unemployment Affidavit (Both Aadhaar & PAN Optional, No 2nd Party, No Witnesses)
+  'unemployment-affidavit': {
+    id: 'unemployment-affidavit',
+    title: 'Unemployment Affidavit',
+    pan: 'optional',
+    aadhaar: 'optional',
+    secondPartyPan: 'not_applicable',
+    secondPartyAadhaar: 'not_applicable',
+    requireWitnesses: false,
+    rationale: 'बेरोजगारी शपथ पत्र में आधार कार्ड और पैन कार्ड दोनों वैकल्पिक हैं।'
+  },
+
+  // 20. First Child Affidavit (Aadhaar Mandatory, PAN Optional, No 2nd Party, No Witnesses)
+  'first-child-affidavit': {
+    id: 'first-child-affidavit',
+    title: 'First Child Affidavit',
     pan: 'optional',
     aadhaar: 'mandatory',
-    rationale: 'सरकारी योजनाओं, छात्रवृत्ति या दाखिलों के लिए माता-पिता और बच्चे की पहचान सत्यापित करनी होती है।'
+    secondPartyPan: 'not_applicable',
+    secondPartyAadhaar: 'not_applicable',
+    requireWitnesses: false,
+    rationale: 'फर्स्ट चाइल्ड शपथ पत्र में आधार कार्ड अनिवार्य है; पैन कार्ड वैकल्पिक है।'
   },
 
-  // 19. Employment Contract & Offer Letter
+  // 21. Single Girl Child Affidavit (Aadhaar Mandatory, PAN Optional, No 2nd Party, No Witnesses)
+  'single-girl-child-affidavit': {
+    id: 'single-girl-child-affidavit',
+    title: 'Single Girl Child Affidavit',
+    pan: 'optional',
+    aadhaar: 'mandatory',
+    secondPartyPan: 'not_applicable',
+    secondPartyAadhaar: 'not_applicable',
+    requireWitnesses: false,
+    rationale: 'सिंगल गर्ल चाइल्ड शपथ पत्र में आधार कार्ड अनिवार्य है; पैन कार्ड वैकल्पिक है।'
+  },
+
+  // 22. Employment Contract & Offer Letter
   'employment-contract-offer-letter': {
     id: 'employment-contract-offer-letter',
     title: 'Employment Contract & Offer Letter',
     pan: 'mandatory',
     aadhaar: 'mandatory',
-    rationale: 'पेरोल, ईपीएफ (PF), ईएसआईसी और टैक्स कटौती (TDS) के लिए कर्मचारी का पैन और आधार अनिवार्य है।'
+    secondPartyPan: 'mandatory',
+    secondPartyAadhaar: 'mandatory',
+    requireWitnesses: true,
+    rationale: 'पेरोल, ईपीएफ और टैक्स अनुपालन के लिए नियोक्ता व कर्मचारी दोनों के आधार, पैन व गवाह अनिवार्य हैं।'
   },
 
-  // 20. General Consent & Declaration Letter
-  'general-consent-declaration-letter': {
-    id: 'general-consent-declaration-letter',
-    title: 'General Consent & Declaration Letter',
-    pan: 'optional',
-    aadhaar: 'optional',
-    rationale: 'सामान्य औपचारिक घोषणा पत्रों में यह वैकल्पिक हो सकता है।'
-  },
-
-  // 21. Old Vehicle Sales & Purchase Agreement
-  'old-vehicle-sales-agreement': {
-    id: 'old-vehicle-sales-agreement',
-    title: 'Vehicle Sales & Purchase Agreement',
+  // 23. General Consent Agreement
+  'general-consent-agreement': {
+    id: 'general-consent-agreement',
+    title: 'General Consent Agreement',
     pan: 'mandatory',
     aadhaar: 'mandatory',
-    rationale: 'आरटीओ (RTO) ट्रांसफर और कानूनी स्वामित्व बदलने के लिए खरीदार और विक्रेता दोनों के पैन और आधार अनिवार्य हैं।'
+    secondPartyPan: 'mandatory',
+    secondPartyAadhaar: 'mandatory',
+    requireWitnesses: true,
+    rationale: 'सहमति अनुबंध के लिए दोनों पक्षों का आधार, पैन व गवाह अनिवार्य हैं।'
   },
 
-  // 22. 11th Month Rent Agreement
+  // 24. Declaration Letter (P1 Aadhaar & PAN Mandatory; P2 Aadhaar Mandatory & PAN Optional; Witnesses Mandatory)
+  'declaration-letter': {
+    id: 'declaration-letter',
+    title: 'Declaration Letter',
+    pan: 'mandatory',
+    aadhaar: 'mandatory',
+    secondPartyPan: 'optional',
+    secondPartyAadhaar: 'mandatory',
+    requireWitnesses: true,
+    rationale: 'घोषणा पत्र में प्रथम पक्ष के लिए आधार व पैन दोनों अनिवार्य हैं, द्वितीय पक्ष के लिए आधार अनिवार्य व पैन वैकल्पिक है, तथा गवाह अनिवार्य हैं।'
+  },
+
+  // 25. Old Vehicle Sales and Purchase Declaration
+  'old-vehicle-sales-declaration': {
+    id: 'old-vehicle-sales-declaration',
+    title: 'Old Vehicle Sales and Purchase Declaration',
+    pan: 'mandatory',
+    aadhaar: 'mandatory',
+    secondPartyPan: 'mandatory',
+    secondPartyAadhaar: 'mandatory',
+    requireWitnesses: true,
+    rationale: 'वाहन बिक्री घोषणा पत्र के लिए क्रेता व विक्रेता दोनों का आधार, पैन व गवाह अनिवार्य हैं।'
+  },
+
+  // 26. Old Vehicle Sales and Purchase Agreement
+  'old-vehicle-sales-agreement': {
+    id: 'old-vehicle-sales-agreement',
+    title: 'Old Vehicle Sales and Purchase Agreement',
+    pan: 'mandatory',
+    aadhaar: 'mandatory',
+    secondPartyPan: 'mandatory',
+    secondPartyAadhaar: 'mandatory',
+    requireWitnesses: true,
+    rationale: 'आरटीओ ट्रांसफर और स्वामित्व हस्तांतरण के लिए क्रेता व विक्रेता दोनों के पैन, आधार व गवाह अनिवार्य हैं।'
+  },
+
+  // 27. 11th Month Rent Agreement
   'rent-11-month': {
     id: 'rent-11-month',
     title: '11th Month Rent Agreement',
     pan: 'mandatory',
     aadhaar: 'mandatory',
-    rationale: 'किरायेदारी अनुबंध, पुलिस सत्यापन (Police Verification) और ई-स्टाम्प पंजीकरण के लिए दोनों पक्षों का पैन व आधार अनिवार्य है।'
+    secondPartyPan: 'mandatory',
+    secondPartyAadhaar: 'mandatory',
+    requireWitnesses: true,
+    rationale: 'किरायेदारी अनुबंध और ई-स्टाम्प पंजीकरण के लिए दोनों पक्षों का आधार व पैन तथा दोनों गवाह अनिवार्य हैं।'
   },
 
-  // 23. Sublease Agreement
-  'sub-lease-agreement': {
-    id: 'sub-lease-agreement',
-    title: 'Sublease Agreement',
-    pan: 'mandatory',
-    aadhaar: 'mandatory',
-    rationale: 'सब-टेनेंसी अनुबंध और हेड लैंडलॉर्ड रिकॉर्ड के लिए मुख्य किरायेदार और उप-किरायेदार का पैन व आधार अनिवार्य है।'
-  },
-
-  // 24. Landlord NOC for GST
+  // 28. Landlord NOC for GST
   'landlord-noc-gst': {
     id: 'landlord-noc-gst',
     title: 'Landlord NOC for GST',
     pan: 'mandatory',
     aadhaar: 'mandatory',
-    rationale: 'जीएसटी विभाग (GST REG-01) द्वारा परिसर के मालिकाना हक की जांच के लिए मकान मालिक का पैन व आधार अनिवार्य है।'
+    secondPartyPan: 'mandatory',
+    secondPartyAadhaar: 'optional',
+    requireWitnesses: false,
+    rationale: 'जीएसटी विभाग द्वारा परिसर के मालिकाना हक की जांच के लिए मकान मालिक का पैन व आधार अनिवार्य है।'
   },
 
-  // 25. Landlord NOC for Business
+  // 29. Landlord NOC for Business
   'landlord-noc-business': {
     id: 'landlord-noc-business',
     title: 'Landlord NOC for Business',
     pan: 'mandatory',
     aadhaar: 'mandatory',
-    rationale: 'कंपनी निगमन (MCA), ट्रेड लाइसेंस और नगर निगम सत्यापन के लिए संपत्ति स्वामी का पैन व आधार अनिवार्य है।'
+    secondPartyPan: 'mandatory',
+    secondPartyAadhaar: 'mandatory',
+    requireWitnesses: true,
+    rationale: 'व्यावसायिक एनओसी के लिए प्रथम व द्वितीय पक्ष दोनों का आधार व पैन तथा दोनों गवाह अनिवार्य हैं।'
   },
 
-  // 26. Partnership Deed
+  // 30. Partnership Deed
   'partnership-deed': {
     id: 'partnership-deed',
     title: 'Partnership Deed',
     pan: 'mandatory',
     aadhaar: 'mandatory',
-    rationale: 'पार्टनरशिप फर्म पैन आवेदन और बैंक करंट अकाउंट खोलने के लिए सभी पार्टनर्स का पैन व आधार अनिवार्य है।'
+    secondPartyPan: 'mandatory',
+    secondPartyAadhaar: 'mandatory',
+    requireWitnesses: true,
+    rationale: 'पार्टनरशिप डीड और करंट अकाउंट खोलने के लिए सभी पार्टनर्स के पैन, आधार व गवाह अनिवार्य हैं।'
   },
 
-  // 27. Equipment & Machinery Lease Agreement
+  // 31. Equipment & Machinery Lease Agreement
   'equipments-machinery-lease': {
     id: 'equipments-machinery-lease',
     title: 'Equipment & Machinery Lease Agreement',
     pan: 'mandatory',
-    aadhaar: 'optional',
-    rationale: 'मशीनरी पट्टा, जीएसटी बिलिंग और उपकरण स्वामित्व सत्यापन के लिए पैन अनिवार्य है।'
-  },
-
-  // 28. Job Work & Manufacturing Agreement
-  'job-work-manufacturing-agreement': {
-    id: 'job-work-manufacturing-agreement',
-    title: 'Job Work & Manufacturing Agreement',
-    pan: 'mandatory',
-    aadhaar: 'optional',
-    rationale: 'जीएसटी धारा 143 के तहत जॉब वर्क चालान और कच्चे माल के हस्तांतरण के लिए पैन अनिवार्य है।'
+    aadhaar: 'mandatory',
+    secondPartyPan: 'mandatory',
+    secondPartyAadhaar: 'mandatory',
+    requireWitnesses: true,
+    rationale: 'मशीनरी लीज अनुबंध के लिए दोनों पक्षों का पैन, आधार व गवाह अनिवार्य हैं।'
   }
 };
 
 /**
- * Returns the PAN and Aadhaar requirements for any document title or alias
+ * Returns the PAN, Aadhaar, and Witness requirements for any document title or alias
  */
 export function getDocumentIdRule(documentTitleOrId: string): DocumentIdRule {
   const clean = (documentTitleOrId || '').toLowerCase().trim();
@@ -276,16 +401,18 @@ export function getDocumentIdRule(documentTitleOrId: string): DocumentIdRule {
     return DOCUMENT_ID_RULES[clean];
   }
 
-  // Title match
+  // Exact title match first to avoid substring collisions
   for (const rule of Object.values(DOCUMENT_ID_RULES)) {
-    const ruleTitle = rule.title.toLowerCase();
-    if (clean.includes(ruleTitle) || ruleTitle.includes(clean)) {
+    if (rule.title.toLowerCase() === clean) {
       return rule;
     }
   }
 
-  // Keyword-based heuristics
+  // Keyword-based heuristics (specific splits ordered carefully)
   if (clean.includes('rent') || clean.includes('lease') || clean.includes('tenancy')) {
+    if (clean.includes('machinery') || clean.includes('equipment')) {
+      return DOCUMENT_ID_RULES['equipments-machinery-lease'];
+    }
     return DOCUMENT_ID_RULES['rent-11-month'];
   }
   if (clean.includes('gst') && clean.includes('noc')) {
@@ -303,8 +430,11 @@ export function getDocumentIdRule(documentTitleOrId: string): DocumentIdRule {
   if (clean.includes('influencer') || clean.includes('collab')) {
     return DOCUMENT_ID_RULES['influencer-collab-agreement'];
   }
-  if (clean.includes('copyright') || clean.includes('content right')) {
-    return DOCUMENT_ID_RULES['content-rights-copyright'];
+  if (clean.includes('copyright')) {
+    return DOCUMENT_ID_RULES['copyright-transfer-agreement'];
+  }
+  if (clean.includes('content right')) {
+    return DOCUMENT_ID_RULES['content-rights-agreement'];
   }
   if (clean.includes('freelancer')) {
     return DOCUMENT_ID_RULES['freelancer-client-contract'];
@@ -324,8 +454,8 @@ export function getDocumentIdRule(documentTitleOrId: string): DocumentIdRule {
   if (clean.includes('software') || clean.includes('it service')) {
     return DOCUMENT_ID_RULES['software-it-service-agreement'];
   }
-  if (clean.includes('terms') || clean.includes('privacy')) {
-    return DOCUMENT_ID_RULES['website-app-terms-privacy'];
+  if (clean.includes('vehicle') && clean.includes('declaration')) {
+    return DOCUMENT_ID_RULES['old-vehicle-sales-declaration'];
   }
   if (clean.includes('vehicle') || clean.includes('car sale')) {
     return DOCUMENT_ID_RULES['old-vehicle-sales-agreement'];
@@ -333,17 +463,29 @@ export function getDocumentIdRule(documentTitleOrId: string): DocumentIdRule {
   if (clean.includes('employment') || clean.includes('offer letter')) {
     return DOCUMENT_ID_RULES['employment-contract-offer-letter'];
   }
-  if (clean.includes('income') || clean.includes('unemployment')) {
-    return DOCUMENT_ID_RULES['income-unemployment-affidavit'];
+  if (clean.includes('unemployment')) {
+    return DOCUMENT_ID_RULES['unemployment-affidavit'];
   }
-  if (clean.includes('ragging') || clean.includes('gap year')) {
-    return DOCUMENT_ID_RULES['anti-ragging-gap-year-affidavit'];
+  if (clean.includes('income')) {
+    return DOCUMENT_ID_RULES['income-affidavit'];
   }
-  if (clean.includes('child')) {
-    return DOCUMENT_ID_RULES['first-child-single-child-affidavit'];
+  if (clean.includes('gap year')) {
+    return DOCUMENT_ID_RULES['gap-year-affidavit'];
+  }
+  if (clean.includes('ragging')) {
+    return DOCUMENT_ID_RULES['anti-ragging-affidavit'];
+  }
+  if (clean.includes('single girl child') || clean.includes('single child')) {
+    return DOCUMENT_ID_RULES['single-girl-child-affidavit'];
+  }
+  if (clean.includes('first child')) {
+    return DOCUMENT_ID_RULES['first-child-affidavit'];
   }
   if (clean.includes('name change')) {
     return DOCUMENT_ID_RULES['name-change-affidavit'];
+  }
+  if (clean.includes('address proof')) {
+    return DOCUMENT_ID_RULES['address-proof-affidavit'];
   }
   if (clean.includes('dob') || clean.includes('birth') || clean.includes('age')) {
     return DOCUMENT_ID_RULES['dob-correction-affidavit'];
@@ -351,8 +493,11 @@ export function getDocumentIdRule(documentTitleOrId: string): DocumentIdRule {
   if (clean.includes('loss')) {
     return DOCUMENT_ID_RULES['loss-of-document-affidavit'];
   }
-  if (clean.includes('consent') || clean.includes('declaration')) {
-    return DOCUMENT_ID_RULES['general-consent-declaration-letter'];
+  if (clean.includes('declaration letter')) {
+    return DOCUMENT_ID_RULES['declaration-letter'];
+  }
+  if (clean.includes('consent')) {
+    return DOCUMENT_ID_RULES['general-consent-agreement'];
   }
   if (clean.includes('partnership')) {
     return DOCUMENT_ID_RULES['partnership-deed'];
@@ -367,6 +512,9 @@ export function getDocumentIdRule(documentTitleOrId: string): DocumentIdRule {
     title: documentTitleOrId,
     pan: 'mandatory',
     aadhaar: 'mandatory',
-    rationale: 'मानक भारतीय अनुबंध कानून के अनुसार दोनों पक्षों की पहचान सत्यापन अनिवार्य है।'
+    secondPartyPan: 'mandatory',
+    secondPartyAadhaar: 'mandatory',
+    requireWitnesses: true,
+    rationale: 'मानक भारतीय अनुबंध कानून के अनुसार दोनों पक्षों की पहचान सत्यापन और गवाह अनिवार्य हैं।'
   };
 }

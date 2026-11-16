@@ -230,6 +230,14 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
 
   const handleRequestSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!requestData.name.trim()) {
+      showToast('Please enter your full name.', 'warning');
+      return;
+    }
+    if (requestData.phone.replace(/\D/g, '').length !== 10) {
+      showToast('Please enter a valid 10-digit mobile number.', 'warning');
+      return;
+    }
     const orderId = generateSequentialOrderId();
     const urn = `UDYAM-REQ-${orderId}`;
     const now = new Date();
@@ -300,6 +308,16 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
 
   const handleFinalUdyamSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (step1.aadhaarNumber.replace(/\D/g, '').length !== 12) {
+      showToast('Please enter a valid 12-digit Aadhaar number in Step 1.', 'warning');
+      setCurrentStep(1);
+      return;
+    }
+    if (step3.officialMobile.replace(/\D/g, '').length !== 10) {
+      showToast('Please enter a valid 10-digit official mobile number in Step 3.', 'warning');
+      setCurrentStep(3);
+      return;
+    }
     const stateCode = 'UP';
     const distCode = '07';
     const orderId = generateSequentialOrderId();
@@ -629,10 +647,12 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
                 </label>
                 <input
                   type="tel"
+                  inputMode="numeric"
+                  maxLength={10}
                   required
                   placeholder={getPlaceholder('10-digit mobile number')}
                   value={requestData.phone}
-                  onChange={(e) => setRequestData({ ...requestData, phone: e.target.value })}
+                  onChange={(e) => setRequestData({ ...requestData, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
               </div>
@@ -985,11 +1005,12 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
                   </label>
                   <input
                     type="tel"
+                    inputMode="numeric"
                     required
                     maxLength={10}
                     placeholder={getPlaceholder('10-digit mobile')}
                     value={step3.officialMobile}
-                    onChange={(e) => setStep3({ ...step3, officialMobile: e.target.value })}
+                    onChange={(e) => setStep3({ ...step3, officialMobile: e.target.value.replace(/\D/g, '').slice(0, 10) })}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
@@ -1167,7 +1188,13 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
                 </button>
                 <button
                   type="button"
-                  onClick={() => setCurrentStep(4)}
+                  onClick={() => {
+                    if (step3.officialMobile.replace(/\D/g, '').length !== 10) {
+                      showToast('Please enter a valid 10-digit official mobile number.', 'warning');
+                      return;
+                    }
+                    setCurrentStep(4);
+                  }}
                   className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm px-6 py-2.5 rounded-xl cursor-pointer shadow-sm"
                 >
                   <span>Next</span>

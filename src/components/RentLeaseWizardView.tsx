@@ -251,6 +251,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
   const [commercialCin, setCommercialCin] = useState('');
   const [commercialCompanyPan, setCommercialCompanyPan] = useState('');
   const [commercialRepName, setCommercialRepName] = useState('');
+  const [commercialRepAadhaar, setCommercialRepAadhaar] = useState('');
   const [commercialRepDesignation, setCommercialRepDesignation] = useState('Authorized Signatory');
   const [commercialRepCustomDesignation, setCommercialRepCustomDesignation] = useState('');
   const [authDocFile, setAuthDocFile] = useState<UploadedDocumentPayload | null>(null);
@@ -328,10 +329,8 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
     }
   }, [docCategory, numericRent, numericDeposit]);
 
-  const isPanMandatoryUnder194IB = useMemo(() => {
-    if (docCategory === 'commercial') return true;
-    return numericRent >= 50000;
-  }, [docCategory, numericRent]);
+  // PAN & Aadhaar strictly mandatory for both Landlord and Tenant in 11th Month Rent / Lease Agreements
+  const isPanMandatoryUnder194IB = true;
 
   // --- PAGE 5: WITNESS DETAILS & EXECUTION FORMAT ---
   const [w1Name, setW1Name] = useState('');
@@ -428,8 +427,8 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
     if (currentPage === 2) {
       const isCorp = landlordEntityType !== 'Individual' && landlordEntityType !== 'Joint Owners';
       if (!isCorp) {
-        if (!landlordName.trim() || !landlordAddress.trim() || !landlordMobile.trim()) {
-          showToast('Please fill mandatory Landlord Name, Address, and Mobile Number.', 'warning');
+        if (!landlordName.trim() || !landlordAddress.trim()) {
+          showToast('Please fill mandatory Landlord Name and Address.', 'warning');
           return;
         }
       } else {
@@ -439,26 +438,49 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
         }
       }
 
-      if (isPanMandatoryUnder194IB && !landlordPan.trim()) {
-        showToast(
-          docCategory === 'commercial'
-            ? 'Commercial lease agreements require a mandatory Landlord PAN for tax audit compliance.'
-            : 'Under Section 194-IB of the Income Tax Act, Monthly Rent is ₹50,000 or above, making Landlord PAN mandatory.',
-          'warning'
-        );
+      if (landlordMobile.replace(/\D/g, '').length !== 10) {
+        showToast('Please enter a valid 10-digit Mobile Number for Landlord.', 'warning');
         return;
       }
 
-      if (hasPoa && (!poaName.trim() || !poaAddress.trim())) {
-        showToast('Please provide Power of Attorney holder name and address.', 'warning');
+      if (landlordAadhaarLast4.replace(/\D/g, '').length !== 12) {
+        showToast('Landlord 12-digit Aadhaar Number is mandatory.', 'warning');
         return;
+      }
+
+      if (landlordPan.trim().length !== 10) {
+        showToast('Landlord 10-character PAN Card Number is mandatory.', 'warning');
+        return;
+      }
+
+      if (hasPoa) {
+        if (!poaName.trim() || !poaAddress.trim()) {
+          showToast('Please provide Power of Attorney holder name and address.', 'warning');
+          return;
+        }
+        if (poaAadhaarLast4.replace(/\D/g, '').length !== 12) {
+          showToast('Please provide POA Holder complete 12-digit Aadhaar Number.', 'warning');
+          return;
+        }
       }
     }
 
     if (currentPage === 3) {
       if (docCategory === 'residential') {
-        if (!tenantName.trim() || !tenantAddress.trim() || !tenantMobile.trim()) {
-          showToast('Please fill mandatory Tenant Name, Address, and Mobile Number.', 'warning');
+        if (!tenantName.trim() || !tenantAddress.trim()) {
+          showToast('Please fill mandatory Tenant Name and Address.', 'warning');
+          return;
+        }
+        if (tenantMobile.replace(/\D/g, '').length !== 10) {
+          showToast('Please enter a valid 10-digit Mobile Number for Tenant.', 'warning');
+          return;
+        }
+        if (tenantAadhaarLast4.replace(/\D/g, '').length !== 12) {
+          showToast('Tenant 12-digit Aadhaar Number is mandatory.', 'warning');
+          return;
+        }
+        if (tenantPan.trim().length !== 10) {
+          showToast('Tenant 10-character PAN Card Number is mandatory.', 'warning');
           return;
         }
       } else {
@@ -466,8 +488,12 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
           showToast('Please fill Commercial Firm Name, Office Address, and Representative details.', 'warning');
           return;
         }
-        if (!commercialCompanyPan.trim()) {
-          showToast('Commercial Tenancy strictly requires the Company/Firm PAN Card number.', 'warning');
+        if (commercialCompanyPan.trim().length !== 10) {
+          showToast('Commercial Tenancy strictly requires a valid 10-character Company/Firm PAN Card number.', 'warning');
+          return;
+        }
+        if (commercialRepAadhaar.replace(/\D/g, '').length !== 12) {
+          showToast('Authorized Representative 12-digit Aadhaar Number is mandatory.', 'warning');
           return;
         }
       }
@@ -491,14 +517,39 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!w1Name.trim() || !w1Mobile.trim() || !w2Name.trim() || !w2Mobile.trim()) {
-      showToast('Please fill complete details for both Witness 1 and Witness 2 (mandatory by law).', 'warning');
+    if (!w1Name.trim() || !w1FatherName.trim() || !w1Address.trim()) {
+      showToast('Please fill Witness 1 Name, Father/Husband Name, and Residential Address.', 'warning');
+      return;
+    }
+    if (w1Mobile.replace(/\D/g, '').length !== 10) {
+      showToast('Please enter a valid 10-digit Mobile Number for Witness 1.', 'warning');
+      return;
+    }
+    if (w1IdNumber.replace(/\D/g, '').length !== 12) {
+      showToast('Witness 1 complete 12-digit Aadhaar Number is mandatory.', 'warning');
+      return;
+    }
+
+    if (!w2Name.trim() || !w2FatherName.trim() || !w2Address.trim()) {
+      showToast('Please fill Witness 2 Name, Father/Husband Name, and Residential Address.', 'warning');
+      return;
+    }
+    if (w2Mobile.replace(/\D/g, '').length !== 10) {
+      showToast('Please enter a valid 10-digit Mobile Number for Witness 2.', 'warning');
+      return;
+    }
+    if (w2IdNumber.replace(/\D/g, '').length !== 12) {
+      showToast('Witness 2 complete 12-digit Aadhaar Number is mandatory.', 'warning');
       return;
     }
 
     if (executionMode !== 'digital') {
-      if (!shippingAddress.trim() || !shippingPincode.trim() || !shippingPhone.trim()) {
-        showToast('Please provide complete physical shipping address, pincode, and contact number.', 'warning');
+      if (!shippingAddress.trim() || shippingPincode.replace(/\D/g, '').length !== 6) {
+        showToast('Please provide complete physical shipping address and 6-digit pincode.', 'warning');
+        return;
+      }
+      if (shippingPhone.replace(/\D/g, '').length !== 10) {
+        showToast('Please provide a valid 10-digit Shipping Contact Number.', 'warning');
         return;
       }
     }
@@ -581,12 +632,12 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                 ]),
             fieldEntry('Current Mobile Number', landlordMobile, false),
             fieldEntry('Email Address', landlordEmail, true),
-            fieldEntry('Aadhaar Number (12 Digits)', landlordAadhaarLast4, true),
-            fieldEntry('PAN Card Number', landlordPan, !isPanMandatoryUnder194IB),
+            fieldEntry('Aadhaar Number (12 Digits)', landlordAadhaarLast4, false),
+            fieldEntry('PAN Card Number', landlordPan, false),
             fieldEntry('Co-Owners / Joint Property Holders', coOwners.length > 0 ? coOwners : '', true),
             fieldEntry('Signing via Power of Attorney (POA)', hasPoa ? 'Yes' : 'No', true),
             fieldEntry('POA Holder Full Name', poaName, !hasPoa),
-            fieldEntry('POA Holder Aadhaar Last 4', poaAadhaarLast4, !hasPoa),
+            fieldEntry('POA Holder Aadhaar (12 Digits)', poaAadhaarLast4, !hasPoa),
             fieldEntry('POA Holder Address', poaAddress, !hasPoa),
             fieldEntry('Certified POA Document Uploaded', poaFile ? poaFile.fileName : '', true),
             fieldEntry('Proof of Property Ownership Type', ownershipProofType, true),
@@ -605,8 +656,8 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                   fieldEntry('Tenant Permanent Native Address', tenantAddress, false),
                   fieldEntry('Tenant Mobile Number', tenantMobile, false),
                   fieldEntry('Tenant Email Address', tenantEmail, true),
-                  fieldEntry('Tenant Aadhaar Number', tenantAadhaarLast4, true),
-                  fieldEntry('Tenant PAN Card Number', tenantPan, true),
+                  fieldEntry('Tenant Aadhaar Number (12 Digits)', tenantAadhaarLast4, false),
+                  fieldEntry('Tenant PAN Card Number', tenantPan, false),
                   fieldEntry('Co-Occupants / Family Members Details', coOccupants.length > 0 ? coOccupants : '', true)
                 ]
               : [
@@ -616,6 +667,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                   fieldEntry('Registered Office Address', commercialOfficeAddress, false),
                   fieldEntry('CIN / LLPIN', commercialCin, commercialEntityType === 'Sole Proprietorship' || commercialEntityType === 'Partnership Firm'),
                   fieldEntry('Authorized Representative Full Legal Name', commercialRepName, false),
+                  fieldEntry('Authorized Representative Aadhaar (12 Digits)', commercialRepAadhaar, false),
                   fieldEntry('Representative Designation', commercialRepDesignation === 'Other' ? commercialRepCustomDesignation : commercialRepDesignation, false),
                   fieldEntry('Board Resolution / Partner Authorization File', authDocFile ? authDocFile.fileName : '', true),
                   fieldEntry('Unregistered Commercial Tenant (No GSTIN)', isUnregisteredGst ? 'Yes' : 'No', true),
@@ -660,13 +712,13 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
             fieldEntry('Witness 1 Residential Address', w1Address, false),
             fieldEntry('Witness 1 Mobile Number', w1Mobile, false),
             fieldEntry('Witness 1 Age / Date of Birth', w1Age, true),
-            fieldEntry('Witness 1 ID Document Number', w1IdNumber, true),
+            fieldEntry('Witness 1 Aadhaar Number (12 Digits)', w1IdNumber, false),
             fieldEntry('Witness 2 Full Legal Name', w2Name, false),
             fieldEntry("Witness 2 Father's / Husband's Name", w2FatherName, false),
             fieldEntry('Witness 2 Residential Address', w2Address, false),
             fieldEntry('Witness 2 Mobile Number', w2Mobile, false),
             fieldEntry('Witness 2 Age / Date of Birth', w2Age, true),
-            fieldEntry('Witness 2 ID Document Number', w2IdNumber, true),
+            fieldEntry('Witness 2 Aadhaar Number (12 Digits)', w2IdNumber, false),
             fieldEntry('Legal Execution Mode', executionMode, false, ['digital', 'physical', 'hybrid']),
             fieldEntry('Shipping Street Address', shippingAddress, executionMode === 'digital'),
             fieldEntry('Shipping Pincode', shippingPincode, executionMode === 'digital'),
@@ -738,6 +790,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
           cin: commercialCin,
           companyPan: commercialCompanyPan,
           repName: commercialRepName,
+          repAadhaar: commercialRepAadhaar,
           repDesignation: commercialRepDesignation === 'Other' ? commercialRepCustomDesignation : commercialRepDesignation,
           authDocUploaded,
           authDocFile,
@@ -1486,7 +1539,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                   inputMode="numeric"
                   pattern="[0-9]*"
                   value={landlordMobile}
-                  onChange={(e) => setLandlordMobile(e.target.value.replace(/\D/g, ''))}
+                  onChange={(e) => setLandlordMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
                   placeholder={getPlaceholder("Enter 10-Digit Mobile Number")}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
@@ -1512,6 +1565,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                 <AadhaarInput
                   value={landlordAadhaarLast4}
                   onChange={(val) => setLandlordAadhaarLast4(val)}
+                  required
                   label="Aadhaar Number (12 Digits)"
                   placeholder={getPlaceholder("1234 - 5678 - 9012")}
                 />
@@ -1519,11 +1573,11 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  PAN Card Number {isPanMandatoryUnder194IB ? <span className="text-red-500 font-bold">*</span> : <span className="text-slate-400 font-normal text-xs">(Optional)</span>}
+                  PAN Card Number <span className="text-red-500 font-bold">*</span>
                 </label>
                 <input
                   type="text"
-                  required={isPanMandatoryUnder194IB}
+                  required
                   maxLength={10}
                   value={landlordPan}
                   onChange={(e) => handlePanInput(e.target.value, setLandlordPan)}
@@ -1590,7 +1644,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                           maxLength={10}
                           inputMode="numeric"
                           value={co.mobile}
-                          onChange={(e) => updateCoOwner(co.id, 'mobile', e.target.value.replace(/\D/g, ''))}
+                          onChange={(e) => updateCoOwner(co.id, 'mobile', e.target.value.replace(/\D/g, '').slice(0, 10))}
                           placeholder={getPlaceholder("Mobile Number")}
                           className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
                         />
@@ -1646,19 +1700,11 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
-                        POA Holder Aadhaar Last 4 <span className="text-red-500 font-bold">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        maxLength={4}
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        required={hasPoa}
+                      <AadhaarInput
+                        label="POA Holder Aadhaar Number (12 Digits)"
                         value={poaAadhaarLast4}
-                        onChange={(e) => setPoaAadhaarLast4(e.target.value.replace(/\D/g, ''))}
-                        placeholder={getPlaceholder("Enter 4 Digits")}
-                        className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-mono text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-600"
+                        onChange={(val) => setPoaAadhaarLast4(val)}
+                        required={hasPoa}
                       />
                     </div>
                   </div>
@@ -1853,7 +1899,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                       inputMode="numeric"
                       pattern="[0-9]*"
                       value={tenantMobile}
-                      onChange={(e) => setTenantMobile(e.target.value.replace(/\D/g, ''))}
+                      onChange={(e) => setTenantMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
                       placeholder={getPlaceholder("Enter 10-Digit Mobile Number")}
                       className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                     />
@@ -1878,6 +1924,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                     <AadhaarInput
                       value={tenantAadhaarLast4}
                       onChange={(val) => setTenantAadhaarLast4(val)}
+                      required
                       label="Aadhaar Number (12 Digits)"
                       placeholder={getPlaceholder("1234 - 5678 - 9012")}
                     />
@@ -1885,10 +1932,11 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
 
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
-                      PAN Card Number <span className="text-slate-400 font-normal text-xs">(Optional)</span>
+                      PAN Card Number <span className="text-red-500 font-bold">*</span>
                     </label>
                     <input
                       type="text"
+                      required
                       maxLength={10}
                       value={tenantPan}
                       onChange={(e) => handlePanInput(e.target.value, setTenantPan)}
@@ -2096,6 +2144,14 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                       )}
                     </div>
                   </div>
+
+                  <AadhaarInput
+                    value={commercialRepAadhaar}
+                    onChange={(val) => setCommercialRepAadhaar(val)}
+                    required
+                    label="Authorized Representative Aadhaar Number (12 Digits)"
+                    placeholder={getPlaceholder("1234 - 5678 - 9012")}
+                  />
 
                   {commercialEntityType !== 'Sole Proprietorship' && (
                     <div className="flex items-center justify-between p-2.5 bg-white border border-slate-200 rounded-lg gap-2 flex-wrap">
@@ -2644,7 +2700,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                       inputMode="numeric"
                       pattern="[0-9]*"
                       value={w1Mobile}
-                      onChange={(e) => setW1Mobile(e.target.value.replace(/\D/g, ''))}
+                      onChange={(e) => setW1Mobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
                       placeholder={getPlaceholder("10-Digit Mobile Number")}
                       className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
                     />
@@ -2657,15 +2713,11 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                     helperText={showExampleDetails ? "Optional" : undefined}
                   />
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      ID Doc Number <span className="text-slate-400 font-normal">(Optional)</span>
-                    </label>
-                    <input
-                      type="text"
+                    <AadhaarInput
+                      label="Aadhaar Number (12 Digits)"
                       value={w1IdNumber}
-                      onChange={(e) => setW1IdNumber(e.target.value)}
-                      placeholder={getPlaceholder("Aadhaar / Voter ID / DL")}
-                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
+                      onChange={(val) => setW1IdNumber(val)}
+                      required
                     />
                   </div>
                 </div>
@@ -2727,7 +2779,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                       inputMode="numeric"
                       pattern="[0-9]*"
                       value={w2Mobile}
-                      onChange={(e) => setW2Mobile(e.target.value.replace(/\D/g, ''))}
+                      onChange={(e) => setW2Mobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
                       placeholder={getPlaceholder("10-Digit Mobile Number")}
                       className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
                     />
@@ -2740,15 +2792,11 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                     helperText={showExampleDetails ? "Optional" : undefined}
                   />
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      ID Doc Number <span className="text-slate-400 font-normal">(Optional)</span>
-                    </label>
-                    <input
-                      type="text"
+                    <AadhaarInput
+                      label="Aadhaar Number (12 Digits)"
                       value={w2IdNumber}
-                      onChange={(e) => setW2IdNumber(e.target.value)}
-                      placeholder={getPlaceholder("Aadhaar / Voter ID / DL")}
-                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
+                      onChange={(val) => setW2IdNumber(val)}
+                      required
                     />
                   </div>
                 </div>
@@ -2898,7 +2946,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                           inputMode="numeric"
                           pattern="[0-9]*"
                           value={shippingPhone}
-                          onChange={(e) => setShippingPhone(e.target.value.replace(/\D/g, ''))}
+                          onChange={(e) => setShippingPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
                           placeholder={getPlaceholder("Recipient 10-Digit Mobile")}
                           className="w-full bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
                         />

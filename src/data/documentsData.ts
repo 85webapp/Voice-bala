@@ -1,7 +1,7 @@
 import { DocumentCategory, LegalDocument } from '../types';
 
 export const INITIAL_FRONT_DOCUMENTS: LegalDocument[] = [
-  // 1. Rent & Property (4)
+  // 1. Rent & Property (3)
   {
     id: 'rent-11-month',
     title: '11th Month Rent Agreement',
@@ -23,16 +23,6 @@ export const INITIAL_FRONT_DOCUMENTS: LegalDocument[] = [
     stampDutyRecommended: '₹50 / ₹100'
   },
   {
-    id: 'sub-lease-agreement',
-    title: 'Sublease Agreement',
-    category: 'Rent & Property',
-    description: 'Secondary tenant contract permitting sub-tenancy with head landlord covenants.',
-    standardHours: 24,
-    basePrice: 349,
-    requiredFields: ['Head Tenant Name', 'Sub-Tenant Name', 'Primary Landlord Details'],
-    stampDutyRecommended: '₹100 / ₹500'
-  },
-  {
     id: 'landlord-noc-gst',
     title: 'Landlord NOC for GST',
     category: 'Rent & Property',
@@ -43,10 +33,10 @@ export const INITIAL_FRONT_DOCUMENTS: LegalDocument[] = [
     stampDutyRecommended: '₹50 / ₹100'
   },
 
-  // 2. Creators and Freelancers (6)
+  // 2. Creators and Freelancers (7)
   {
     id: 'brand-sponsorship-promo',
-    title: 'Brand Sponsorship and Promotion Influencer Collaboration Agreement',
+    title: 'Brand Sponsorship & Promotion Agreement',
     category: 'Creators and Freelancers',
     description: 'Deliverables contract defining compensation, deliverables, media rights, and exclusivity.',
     standardHours: 24,
@@ -65,10 +55,20 @@ export const INITIAL_FRONT_DOCUMENTS: LegalDocument[] = [
     stampDutyRecommended: '₹100'
   },
   {
-    id: 'content-rights-copyright',
-    title: 'Content Right & Copyright Transfer Agreement',
+    id: 'content-rights-agreement',
+    title: 'Content Rights Agreement',
     category: 'Creators and Freelancers',
-    description: 'Deed transferring intellectual property, video, music or written work rights with moral covenants.',
+    description: 'Licensing and usage rights agreement defining digital media distribution, exclusivity, and creator attribution.',
+    standardHours: 24,
+    basePrice: 349,
+    requiredFields: ['Creator / Licensor Name', 'Brand / Licensee Name', 'Content Scope', 'Usage Territory'],
+    stampDutyRecommended: '₹100 / ₹200'
+  },
+  {
+    id: 'copyright-transfer-agreement',
+    title: 'Copyright Transfer Agreement',
+    category: 'Creators and Freelancers',
+    description: 'Deed permanently assigning intellectual property, video, music, code, or written work ownership with moral covenants.',
     standardHours: 24,
     basePrice: 399,
     requiredFields: ['Assignor / Creator Name', 'Assignee / Purchaser Name', 'Work Description', 'Royalty Terms'],
@@ -147,7 +147,7 @@ export const INITIAL_FRONT_DOCUMENTS: LegalDocument[] = [
     stampDutyRecommended: '₹100 / ₹500'
   },
 
-  // 4. Vendor, Supplier & IT (4)
+  // 4. Vendor, Supplier & IT (2)
   {
     id: 'vendor-supplier-agreement',
     title: 'Vendor & Supplier Agreement',
@@ -167,26 +167,6 @@ export const INITIAL_FRONT_DOCUMENTS: LegalDocument[] = [
     basePrice: 449,
     requiredFields: ['Client Name', 'Developer / IT Vendor', 'Scope of Modules', 'Warranty Period'],
     stampDutyRecommended: '₹100 / ₹200'
-  },
-  {
-    id: 'job-work-manufacturing-agreement',
-    title: 'Job Work & Manufacturing Agreement',
-    category: 'Vendor, Supplier & IT',
-    description: 'Subcontracting contract under Section 143 of GST Act for raw material conversion and toll manufacturing.',
-    standardHours: 24,
-    basePrice: 399,
-    requiredFields: ['Principal Manufacturer', 'Job Worker', 'Material Scrap Ratio', 'Delivery Timelines'],
-    stampDutyRecommended: '₹100 / ₹200'
-  },
-  {
-    id: 'website-app-terms-privacy',
-    title: 'Website & App Terms of Service and Privacy Policy',
-    category: 'Vendor, Supplier & IT',
-    description: 'IT Act 2000 and DPDP Act 2023 compliant terms of service, cookies disclosure, and digital privacy policy.',
-    standardHours: 24,
-    basePrice: 299,
-    requiredFields: ['Platform Name', 'Company Legal Name', 'Grievance Officer Details', 'User Age Limit'],
-    stampDutyRecommended: '₹100'
   },
 
   // 5. Personal Affidavits (4)
@@ -212,7 +192,7 @@ export const INITIAL_FRONT_DOCUMENTS: LegalDocument[] = [
   },
   {
     id: 'dob-correction-affidavit',
-    title: 'Date of Birth Correction Affidavit',
+    title: 'Date of Birth & Age Correction Affidavit',
     category: 'Personal Affidavits',
     description: 'Affidavit for resolving birth date discrepancies across educational marksheet, Aadhaar, and PAN.',
     standardHours: 24,
@@ -231,39 +211,69 @@ export const INITIAL_FRONT_DOCUMENTS: LegalDocument[] = [
     stampDutyRecommended: '₹10 / ₹20 / ₹50'
   },
 
-  // 6. Education, Job & Government (3)
+  // 6. Education, Job & Government (6)
   {
-    id: 'anti-ragging-gap-year-affidavit',
-    title: 'Anti-Ragging & Gap Year Affidavit',
+    id: 'anti-ragging-affidavit',
+    title: 'Anti-Ragging Affidavit',
     category: 'Education, Job & Government',
-    description: 'Prescribed anti-ragging undertaking and education gap year declaration sworn before notary.',
+    description: 'UGC prescribed anti-ragging undertaking by student sworn before notary for college admission.',
     standardHours: 24,
     basePrice: 179,
-    requiredFields: ['Student Name', 'Parent Name', 'College Name', 'Gap Duration'],
+    requiredFields: ['Student Name', 'Parent Name', 'College Name', 'Course Details'],
     stampDutyRecommended: '₹10 / ₹20 / ₹50'
   },
   {
-    id: 'income-unemployment-affidavit',
-    title: 'Income & Unemployment Affidavit',
+    id: 'gap-year-affidavit',
+    title: 'Gap Year Affidavit',
     category: 'Education, Job & Government',
-    description: 'Sworn statement verifying gross family earnings or current unemployment status for scholarships/govt schemes.',
+    description: 'Sworn academic gap year justification affidavit explaining study break before college or university admission.',
     standardHours: 24,
-    basePrice: 199,
-    requiredFields: ['Deponent Name', 'Annual Family Income', 'Employment Status', 'Purpose'],
+    basePrice: 179,
+    requiredFields: ['Student Name', 'Last Passed Exam', 'Gap Duration', 'Reason for Gap'],
     stampDutyRecommended: '₹10 / ₹20 / ₹50'
   },
   {
-    id: 'first-child-single-child-affidavit',
-    title: 'First Child / Single Girl Child Affidavit',
+    id: 'income-affidavit',
+    title: 'Income Affidavit',
     category: 'Education, Job & Government',
-    description: 'Statutory affidavit for school admission quota, government maternity subsidies, and Single Girl Child benefits.',
+    description: 'Sworn statement verifying gross annual family earnings for scholarships, EWS, or government schemes.',
     standardHours: 24,
     basePrice: 199,
-    requiredFields: ['Parent Name', 'Child Name', 'Date of Birth', 'Declaration Type'],
+    requiredFields: ['Deponent Name', 'Annual Family Income', 'Occupation', 'Purpose'],
+    stampDutyRecommended: '₹10 / ₹20 / ₹50'
+  },
+  {
+    id: 'unemployment-affidavit',
+    title: 'Unemployment Affidavit',
+    category: 'Education, Job & Government',
+    description: 'Sworn undertaking certifying current unemployment status for government job relaxation, stipend, or loan subsidies.',
+    standardHours: 24,
+    basePrice: 199,
+    requiredFields: ['Deponent Name', 'Qualification', 'Unemployed Since', 'Purpose'],
+    stampDutyRecommended: '₹10 / ₹20 / ₹50'
+  },
+  {
+    id: 'first-child-affidavit',
+    title: 'First Child Affidavit',
+    category: 'Education, Job & Government',
+    description: 'Statutory birth order affidavit confirming first child status for school admission quota or government benefits.',
+    standardHours: 24,
+    basePrice: 199,
+    requiredFields: ['Parent Name', 'Child Name', 'Date of Birth', 'Hospital / Birth Place'],
+    stampDutyRecommended: '₹10 / ₹20 / ₹50'
+  },
+  {
+    id: 'single-girl-child-affidavit',
+    title: 'Single Girl Child Affidavit',
+    category: 'Education, Job & Government',
+    description: 'Statutory Single Girl Child affidavit for CBSE/KVS school fee waiver, admission quota, and government scholarships.',
+    standardHours: 24,
+    basePrice: 199,
+    requiredFields: ['Parent Name', 'Daughter Name', 'Date of Birth', 'School / Board'],
     stampDutyRecommended: '₹10 / ₹20 / ₹50'
   },
 
-  // 7. Finance, HR & Vehicle (3)
+  // 7. Finance, HR & Vehicle (5) — Old Vehicle Sales and Purchase Agreement strictly LAST
   {
     id: 'employment-contract-offer-letter',
     title: 'Employment Contract & Offer Letter',
@@ -275,14 +285,34 @@ export const INITIAL_FRONT_DOCUMENTS: LegalDocument[] = [
     stampDutyRecommended: '₹100'
   },
   {
-    id: 'general-consent-declaration-letter',
-    title: 'General Consent & Declaration Letter',
+    id: 'general-consent-agreement',
+    title: 'General Consent Agreement',
     category: 'Finance, HR & Vehicle',
-    description: 'Unilateral or bilateral written declaration granting explicit consent, authorization, or factual affirmations.',
+    description: 'Bilateral written consent and authorization agreement defining permissions, limits, and validity terms.',
     standardHours: 24,
     basePrice: 199,
-    requiredFields: ['Declarant Name', 'Subject of Consent', 'Authorized Entity', 'Validity Period'],
+    requiredFields: ['Grantor Name', 'Receiver Name', 'Subject of Consent', 'Validity Period'],
     stampDutyRecommended: '₹50 / ₹100'
+  },
+  {
+    id: 'declaration-letter',
+    title: 'Declaration Letter',
+    category: 'Finance, HR & Vehicle',
+    description: 'Formal legal declaration letter affirming key facts, identity details, and counterparty acknowledgement.',
+    standardHours: 24,
+    basePrice: 199,
+    requiredFields: ['Declarant Name', 'Recipient Name', 'Statement of Facts', 'Purpose'],
+    stampDutyRecommended: '₹50 / ₹100'
+  },
+  {
+    id: 'old-vehicle-sales-declaration',
+    title: 'Old Vehicle Sales and Purchase Declaration',
+    category: 'Finance, HR & Vehicle',
+    description: 'Pre-owned vehicle sale & delivery declaration protecting seller and buyer on RTO handover date and time.',
+    standardHours: 24,
+    basePrice: 249,
+    requiredFields: ['Seller Name', 'Buyer Name', 'Vehicle Reg. No.', 'Handover Date & Time'],
+    stampDutyRecommended: '₹100'
   },
   {
     id: 'old-vehicle-sales-agreement',
@@ -296,19 +326,21 @@ export const INITIAL_FRONT_DOCUMENTS: LegalDocument[] = [
   }
 ];
 
-// Master 11 Featured Documents in the exact specified order
+// Master Featured Documents on Home (Old Vehicle Sales and Purchase Declaration included normally; Agreement kept at very end of full catalog)
 export const FEATURED_11_AGREEMENTS_ORDER = [
   '11th Month Rent Agreement',
   'Landlord NOC for Business',
-  'Brand Sponsorship and Promotion Influencer Collaboration Agreement',
+  'Brand Sponsorship & Promotion Agreement',
   'Founder and Co-Founder Agreement',
   'Name Change Affidavit',
   'Address Proof Correction Affidavit',
-  'Date of Birth Correction Affidavit',
+  'Date of Birth & Age Correction Affidavit',
   'Loss of Document Affidavit',
-  'Old Vehicle Sales and Purchase Agreement',
-  'Income and Unemployment Affidavit',
-  'First Child / Single Girl Child Affidavit'
+  'Old Vehicle Sales and Purchase Declaration',
+  'Income Affidavit',
+  'Unemployment Affidavit',
+  'First Child Affidavit',
+  'Single Girl Child Affidavit'
 ];
 
 export const MASTER_CATEGORIES: DocumentCategory[] = [
@@ -316,11 +348,10 @@ export const MASTER_CATEGORIES: DocumentCategory[] = [
     id: 'rent-property',
     name: 'Rent & Property',
     iconName: 'Building2',
-    description: 'Residential & commercial tenancy agreements, landlord consents, and sublease deeds.',
+    description: 'Residential & commercial tenancy agreements and landlord consents.',
     items: [
       '11th Month Rent Agreement',
       'Landlord NOC for Business',
-      'Sublease Agreement',
       'Landlord NOC for GST'
     ]
   },
@@ -332,7 +363,8 @@ export const MASTER_CATEGORIES: DocumentCategory[] = [
     items: [
       'Brand Sponsorship & Promotion Agreement',
       'Influencer Collaboration Agreement',
-      'Content Right & Copyright Transfer Agreement',
+      'Content Rights Agreement',
+      'Copyright Transfer Agreement',
       'Freelancer & Client Service Contract',
       'Non-Disclosure Agreement (NDA)',
       'Video/Audio Release Form'
@@ -346,7 +378,7 @@ export const MASTER_CATEGORIES: DocumentCategory[] = [
     items: [
       'Partnership Deed',
       'Proprietorship Declaration Deed',
-      'Founder & Co-Founder Agreement',
+      'Founder and Co-Founder Agreement',
       'Equipment & Machinery Lease Agreement'
     ]
   },
@@ -354,12 +386,10 @@ export const MASTER_CATEGORIES: DocumentCategory[] = [
     id: 'vendor-supplier-it',
     name: 'Vendor, Supplier & IT',
     iconName: 'Cpu',
-    description: 'Procurement contracts, software development agreements, and website terms.',
+    description: 'Procurement contracts and software development service agreements.',
     items: [
       'Vendor & Supplier Agreement',
-      'Software & IT Service Agreement',
-      'Job Work & Manufacturing Agreement',
-      'Website & App Terms of Service and Privacy Policy'
+      'Software & IT Service Agreement'
     ]
   },
   {
@@ -380,9 +410,12 @@ export const MASTER_CATEGORIES: DocumentCategory[] = [
     iconName: 'GraduationCap',
     description: 'Academic undertakings, career gap justifications, and statutory undertakings.',
     items: [
-      'Anti-Ragging & Gap Year Affidavit',
-      'Income & Unemployment Affidavit',
-      'First Child / Single Child Affidavit'
+      'Anti-Ragging Affidavit',
+      'Gap Year Affidavit',
+      'Income Affidavit',
+      'Unemployment Affidavit',
+      'First Child Affidavit',
+      'Single Girl Child Affidavit'
     ]
   },
   {
@@ -392,8 +425,10 @@ export const MASTER_CATEGORIES: DocumentCategory[] = [
     description: 'Employment contracts, declaration letters, and vehicle sale transfer contracts.',
     items: [
       'Employment Contract & Offer Letter',
-      'General Consent & Declaration Letter',
-      'Vehicle Sales & Purchase Agreement'
+      'General Consent Agreement',
+      'Declaration Letter',
+      'Old Vehicle Sales and Purchase Declaration',
+      'Old Vehicle Sales and Purchase Agreement'
     ]
   }
 ];

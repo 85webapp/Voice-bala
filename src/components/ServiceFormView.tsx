@@ -33,6 +33,7 @@ import {
   ServerBSyncResult
 } from '../services/encryptionService';
 import { ServerBSyncStatusCard } from './ServerBSyncStatusCard';
+import { showToast } from '../services/toastService';
 
 interface ServiceFormViewProps {
   category: ServiceCategory;
@@ -155,6 +156,14 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!name.trim()) {
+      showToast('Please enter your full legal name.', 'warning');
+      return;
+    }
+    if (phone.replace(/\D/g, '').length !== 10) {
+      showToast('Please enter a valid 10-digit mobile number.', 'warning');
+      return;
+    }
     const ref = generateSequentialOrderId();
     setReferenceId(ref);
     const now = new Date();
@@ -526,12 +535,13 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
                     <span className="absolute left-3 top-2 text-sm font-semibold text-slate-400">+91</span>
                     <input
                       type="tel"
+                      inputMode="numeric"
                       required
                       maxLength={10}
-                      pattern="[6-9][0-9]{9}"
+                      pattern="[0-9]{10}"
                       placeholder={getPlaceholder('9876543210')}
                       value={phone}
-                      onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
+                      onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
                       className="w-full bg-white border border-slate-300 rounded-xl pl-12 pr-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                     />
                   </div>
@@ -708,12 +718,13 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
                     <span className="absolute left-3 top-2 text-sm font-semibold text-slate-400">+91</span>
                     <input
                       type="tel"
+                      inputMode="numeric"
                       required
                       maxLength={10}
-                      pattern="[6-9][0-9]{9}"
+                      pattern="[0-9]{10}"
                       placeholder={getPlaceholder('9876543210')}
                       value={phone}
-                      onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
+                      onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
                       className="w-full bg-white border border-slate-300 rounded-xl pl-12 pr-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                     />
                   </div>
@@ -1004,12 +1015,13 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
                     <span className="absolute left-3 top-2 text-sm font-semibold text-slate-400">+91</span>
                     <input
                       type="tel"
+                      inputMode="numeric"
                       required
                       maxLength={10}
-                      pattern="[6-9][0-9]{9}"
+                      pattern="[0-9]{10}"
                       placeholder={getPlaceholder('9876543210')}
                       value={phone}
-                      onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
+                      onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
                       className="w-full bg-white border border-slate-300 rounded-xl pl-12 pr-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                     />
                   </div>
@@ -1101,12 +1113,13 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
                     <span className="absolute left-3 top-2 text-sm font-semibold text-slate-400">+91</span>
                     <input
                       type="tel"
+                      inputMode="numeric"
                       required
                       maxLength={10}
-                      pattern="[6-9][0-9]{9}"
+                      pattern="[0-9]{10}"
                       placeholder={getPlaceholder('9876543210')}
                       value={phone}
-                      onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
+                      onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
                       className="w-full bg-white border border-slate-300 rounded-xl pl-12 pr-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                     />
                   </div>

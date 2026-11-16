@@ -159,6 +159,7 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
   // Signatory Details
   const [granteeSignatoryName, setGranteeSignatoryName] = useState('');
   const [granteeSignatoryFatherName, setGranteeSignatoryFatherName] = useState('');
+  const [granteeAadhaar, setGranteeAadhaar] = useState('');
   const [granteeDesignation, setGranteeDesignation] = useState<string>('Proprietor');
   const [authorizationDocFile, setAuthorizationDocFile] = useState<UploadedDocumentPayload | null>(null);
   const authorizationDocUploaded = Boolean(authorizationDocFile);
@@ -319,8 +320,8 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
     if (currentPage === '2') {
       const isCorp = landlordOwnershipType !== 'Sole Individual' && landlordOwnershipType !== 'Joint Owners';
       if (!isCorp) {
-        if (!landlordName.trim() || !landlordPan.trim() || !landlordMobile.trim()) {
-          showToast('Please fill mandatory Landlord Name, PAN Card, and Mobile Number.', 'warning');
+        if (!landlordName.trim()) {
+          showToast('Please fill mandatory Landlord Legal Name.', 'warning');
           return;
         }
       } else {
@@ -329,6 +330,18 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
           return;
         }
       }
+      if (landlordPan.trim().length !== 10) {
+        showToast('Landlord / Corporate 10-character PAN Card is mandatory.', 'warning');
+        return;
+      }
+      if (landlordAadhaarLast4.replace(/\D/g, '').length !== 12) {
+        showToast('First Party (Landlord) 12-digit Aadhaar Number is mandatory.', 'warning');
+        return;
+      }
+      if (landlordMobile.replace(/\D/g, '').length !== 10) {
+        showToast('Please enter a valid 10-digit Landlord Mobile Number.', 'warning');
+        return;
+      }
       if (!clearTitleDeclared) {
         showToast('Please accept the Title & Clear Encumbrance Declaration.', 'warning');
         return;
@@ -336,8 +349,16 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
     }
 
     if (currentPage === '3') {
-      if (!proposedBusinessName.trim() || !granteePan.trim() || !granteeSignatoryName.trim()) {
-        showToast('Please provide Proposed Business Name, PAN Card, and Signatory details.', 'warning');
+      if (!proposedBusinessName.trim() || !granteeSignatoryName.trim()) {
+        showToast('Please provide Proposed Business Name and Signatory details.', 'warning');
+        return;
+      }
+      if (granteePan.trim().length !== 10) {
+        showToast('Second Party (Grantee) 10-character PAN Card is mandatory.', 'warning');
+        return;
+      }
+      if (granteeAadhaar.replace(/\D/g, '').length !== 12) {
+        showToast('Second Party (Grantee) 12-digit Aadhaar Number is mandatory.', 'warning');
         return;
       }
       if (natureOfOperations === 'Other' && !customNatureOfOperations.trim()) {
@@ -370,9 +391,39 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (!witness1Name.trim() || !witness1Address.trim()) {
+      showToast('Witness 1 Full Legal Name and Residential Address are mandatory.', 'warning');
+      return;
+    }
+    if (witness1Mobile.replace(/\D/g, '').length !== 10) {
+      showToast('Please enter a valid 10-digit Mobile Number for Witness 1.', 'warning');
+      return;
+    }
+    if (witness1Id.replace(/\D/g, '').length !== 12) {
+      showToast('Witness 1 complete 12-digit Aadhaar Number is mandatory.', 'warning');
+      return;
+    }
+
+    if (!witness2Name.trim() || !witness2Address.trim()) {
+      showToast('Witness 2 Full Legal Name and Residential Address are mandatory.', 'warning');
+      return;
+    }
+    if (witness2Mobile.replace(/\D/g, '').length !== 10) {
+      showToast('Please enter a valid 10-digit Mobile Number for Witness 2.', 'warning');
+      return;
+    }
+    if (witness2Id.replace(/\D/g, '').length !== 12) {
+      showToast('Witness 2 complete 12-digit Aadhaar Number is mandatory.', 'warning');
+      return;
+    }
+
     if (deliveryPreference !== 'digital') {
-      if (!shippingAddress.trim() || !shippingPincode.trim() || !shippingPhone.trim()) {
-        showToast('Please provide complete physical shipping address, pincode, and contact number.', 'warning');
+      if (!shippingAddress.trim() || shippingPincode.replace(/\D/g, '').length !== 6) {
+        showToast('Please provide complete physical shipping address and 6-digit pincode.', 'warning');
+        return;
+      }
+      if (shippingPhone.replace(/\D/g, '').length !== 10) {
+        showToast('Please enter a valid 10-digit Contact Phone Number.', 'warning');
         return;
       }
     }
@@ -437,7 +488,7 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
                   fieldEntry("Father's / Husband's Name", landlordFatherName, false)
                 ]),
             fieldEntry('Landlord / Corporate PAN Card', landlordPan, false),
-            fieldEntry('Aadhaar Number (12 Digits)', landlordAadhaarLast4, true),
+            fieldEntry('Aadhaar Number (12 Digits)', landlordAadhaarLast4, false),
             fieldEntry('Official Contact Mobile Number', landlordMobile, false),
             fieldEntry('Contact Email ID', landlordEmail, true),
             fieldEntry('Joint Co-Owners Added', coOwners.length > 0 ? coOwners : '', true),
@@ -451,6 +502,7 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
             fieldEntry('Business Constitution', businessConstitution, false),
             fieldEntry('Proposed Business Name / Trade Name', proposedBusinessName, false),
             fieldEntry('Entity / Proprietor PAN Card', granteePan, false),
+            fieldEntry('Grantee / Signatory Aadhaar Number (12 Digits)', granteeAadhaar, false),
             fieldEntry('CIN / LLPIN', granteeCin, businessConstitution === 'Sole Proprietorship' || businessConstitution === 'Partnership Firm'),
             fieldEntry('Nature of Business Operations', natureOfOperations === 'Other' ? customNatureOfOperations : natureOfOperations, false),
             fieldEntry('Signatory Full Legal Name', granteeSignatoryName, false),
@@ -499,16 +551,16 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
           pageNumber: 5,
           sectionTitle: 'Page 5: Witnesses, Delivery & Pricing',
           fields: [
-            fieldEntry('Witness 1 Full Legal Name', witness1Name, true),
+            fieldEntry('Witness 1 Full Legal Name', witness1Name, false),
             fieldEntry('Witness 1 Profession', witness1Profession, true),
-            fieldEntry('Witness 1 Residential Address', witness1Address, true),
-            fieldEntry('Witness 1 Mobile Number', witness1Mobile, true),
-            fieldEntry('Witness 1 ID (PAN / Aadhaar / Voter)', witness1Id, true),
-            fieldEntry('Witness 2 Full Legal Name', witness2Name, true),
+            fieldEntry('Witness 1 Residential Address', witness1Address, false),
+            fieldEntry('Witness 1 Mobile Number', witness1Mobile, false),
+            fieldEntry('Witness 1 Aadhaar Number (12 Digits)', witness1Id, false),
+            fieldEntry('Witness 2 Full Legal Name', witness2Name, false),
             fieldEntry('Witness 2 Profession', witness2Profession, true),
-            fieldEntry('Witness 2 Residential Address', witness2Address, true),
-            fieldEntry('Witness 2 Mobile Number', witness2Mobile, true),
-            fieldEntry('Witness 2 ID (PAN / Aadhaar / Voter)', witness2Id, true),
+            fieldEntry('Witness 2 Residential Address', witness2Address, false),
+            fieldEntry('Witness 2 Mobile Number', witness2Mobile, false),
+            fieldEntry('Witness 2 Aadhaar Number (12 Digits)', witness2Id, false),
             fieldEntry('Execution & Delivery Mode', deliveryPreference, false, ['digital', 'physical', 'hybrid']),
             fieldEntry('Shipping Postal Address', shippingAddress, deliveryPreference === 'digital'),
             fieldEntry('Shipping PIN Code', shippingPincode, deliveryPreference === 'digital'),
@@ -556,6 +608,7 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
           businessName: proposedBusinessName,
           constitutionType: businessConstitution,
           pan: granteePan,
+          aadhaar: granteeAadhaar,
           cin: granteeCin,
           natureOfOperations: natureOfOperations === 'Other' ? customNatureOfOperations : natureOfOperations,
           authorizedPerson: granteeSignatoryName,
@@ -1187,6 +1240,7 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
                 <AadhaarInput
                   value={landlordAadhaarLast4}
                   onChange={(val) => setLandlordAadhaarLast4(val)}
+                  required
                   label="Aadhaar Number (12 Digits)"
                   placeholder={showExample ? "1234 - 5678 - 9012" : "12-digit Aadhaar number"}
                 />
@@ -1205,7 +1259,7 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
                   inputMode="numeric"
                   pattern="[0-9]*"
                   value={landlordMobile}
-                  onChange={(e) => setLandlordMobile(e.target.value.replace(/\D/g, ''))}
+                  onChange={(e) => setLandlordMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
                   placeholder={showExample ? "9876543210" : ""}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
@@ -1476,6 +1530,14 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
                   </select>
                 </div>
               </div>
+
+              <AadhaarInput
+                value={granteeAadhaar}
+                onChange={(val) => setGranteeAadhaar(val)}
+                required
+                label="Grantee / Signatory Aadhaar Number (12 Digits)"
+                placeholder={showExample ? "1234 - 5678 - 9012" : "12-digit Aadhaar number"}
+              />
 
               <div className="pt-2 border-t border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
@@ -1847,29 +1909,30 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
         {/* ================= PAGE 5: WITNESSES & DELIVERY (NO NOTARY) ================= */}
         {currentPage === '5' && (
           <form onSubmit={handleSubmit} className="space-y-6 animate-fadeIn">
-            {/* Legal Witnesses (Optional for digital) */}
+            {/* Legal Witnesses (Mandatory) */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <div>
                   <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
-                    Witness Details <span className="text-slate-400 font-normal lowercase">(optional for digital)</span>
+                    Witness Details (Both Witnesses Mandatory) <span className="text-red-500">*</span>
                   </span>
                   <span className="text-[11px] text-slate-500">
-                    You can enter details for independent witnesses if desired.
+                    Witness 1 &amp; Witness 2 full details with 12-digit Aadhaar and 10-digit Mobile are mandatory.
                   </span>
                 </div>
               </div>
 
               {/* Witness 1 */}
               <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
-                <span className="text-xs font-bold text-slate-800 block">Witness 1 Details</span>
+                <span className="text-xs font-bold text-slate-800 block">Witness 1 Details <span className="text-red-500">*</span></span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
-                      Full Legal Name <span className="text-slate-400 font-normal">(Optional)</span>
+                      Full Legal Name <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
+                      required
                       value={witness1Name}
                       onChange={(e) => setWitness1Name(e.target.value)}
                       placeholder={showExample ? "Full Legal Name" : ""}
@@ -1891,10 +1954,11 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
                 </div>
                 <div>
                   <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
-                    Complete Residential Address <span className="text-slate-400 font-normal">(Optional)</span>
+                    Complete Residential Address <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
+                    required
                     value={witness1Address}
                     onChange={(e) => setWitness1Address(e.target.value)}
                     placeholder={showExample ? "Complete Residential Address" : ""}
@@ -1904,27 +1968,25 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
-                      Mobile Number <span className="text-slate-400 font-normal">(Optional)</span>
+                      Mobile Number (10 Digits) <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="tel"
+                      inputMode="numeric"
+                      required
                       maxLength={10}
                       value={witness1Mobile}
-                      onChange={(e) => setWitness1Mobile(e.target.value.replace(/\D/g, ''))}
-                      placeholder={showExample ? "Mobile Number" : ""}
+                      onChange={(e) => setWitness1Mobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                      placeholder={showExample ? "9876543210" : ""}
                       className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
-                      PAN / Aadhaar / Voter ID <span className="text-slate-400 font-normal">(Optional)</span>
-                    </label>
-                    <input
-                      type="text"
+                    <AadhaarInput
+                      label="Aadhaar Number (12 Digits)"
                       value={witness1Id}
-                      onChange={(e) => setWitness1Id(e.target.value)}
-                      placeholder={showExample ? "PAN / Aadhaar / Voter ID" : ""}
-                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
+                      onChange={(val) => setWitness1Id(val)}
+                      required
                     />
                   </div>
                 </div>
@@ -1932,14 +1994,15 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
 
               {/* Witness 2 */}
               <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
-                <span className="text-xs font-bold text-slate-800 block">Witness 2 Details</span>
+                <span className="text-xs font-bold text-slate-800 block">Witness 2 Details <span className="text-red-500">*</span></span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
-                      Full Legal Name <span className="text-slate-400 font-normal">(Optional)</span>
+                      Full Legal Name <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
+                      required
                       value={witness2Name}
                       onChange={(e) => setWitness2Name(e.target.value)}
                       placeholder={showExample ? "Full Legal Name" : ""}
@@ -1961,10 +2024,11 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
                 </div>
                 <div>
                   <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
-                    Complete Residential Address <span className="text-slate-400 font-normal">(Optional)</span>
+                    Complete Residential Address <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
+                    required
                     value={witness2Address}
                     onChange={(e) => setWitness2Address(e.target.value)}
                     placeholder={showExample ? "Complete Residential Address" : ""}
@@ -1974,27 +2038,25 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
-                      Mobile Number <span className="text-slate-400 font-normal">(Optional)</span>
+                      Mobile Number (10 Digits) <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="tel"
+                      inputMode="numeric"
+                      required
                       maxLength={10}
                       value={witness2Mobile}
-                      onChange={(e) => setWitness2Mobile(e.target.value.replace(/\D/g, ''))}
-                      placeholder={showExample ? "Mobile Number" : ""}
+                      onChange={(e) => setWitness2Mobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                      placeholder={showExample ? "9876543210" : ""}
                       className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
-                      PAN / Aadhaar / Voter ID <span className="text-slate-400 font-normal">(Optional)</span>
-                    </label>
-                    <input
-                      type="text"
+                    <AadhaarInput
+                      label="Aadhaar Number (12 Digits)"
                       value={witness2Id}
-                      onChange={(e) => setWitness2Id(e.target.value)}
-                      placeholder={showExample ? "PAN / Aadhaar / Voter ID" : ""}
-                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
+                      onChange={(val) => setWitness2Id(val)}
+                      required
                     />
                   </div>
                 </div>
@@ -2108,10 +2170,12 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
                       </label>
                       <input
                         type="tel"
+                        inputMode="numeric"
+                        maxLength={10}
                         required
                         value={shippingPhone}
-                        onChange={(e) => setShippingPhone(e.target.value)}
-                        placeholder={showExample ? "Contact Phone *" : ""}
+                        onChange={(e) => setShippingPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                        placeholder={showExample ? "9876543210" : ""}
                         className="w-full bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
                       />
                     </div>

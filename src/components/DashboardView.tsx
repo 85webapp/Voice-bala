@@ -106,6 +106,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ orders, onUpdateOr
       showToast('Please fill full delivery address, pincode, and contact number.', 'warning');
       return;
     }
+    if (courierPhone.replace(/\D/g, '').length !== 10) {
+      showToast('Please enter a valid 10-digit recipient mobile number.', 'warning');
+      return;
+    }
 
     const updated: OrderItem = {
       ...orderForPhysical,

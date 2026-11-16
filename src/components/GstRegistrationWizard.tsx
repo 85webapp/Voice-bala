@@ -39,6 +39,7 @@ import {
   ServerBSyncResult
 } from '../services/encryptionService';
 import { ServerBSyncStatusCard } from './ServerBSyncStatusCard';
+import { showToast } from '../services/toastService';
 
 interface GstRegistrationWizardProps {
   onBack: () => void;
@@ -166,6 +167,14 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
 
   const handleRequestSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!requestData.name.trim()) {
+      showToast('Please enter your full name.', 'warning');
+      return;
+    }
+    if (requestData.phone.replace(/\D/g, '').length !== 10) {
+      showToast('Please enter a valid 10-digit mobile number.', 'warning');
+      return;
+    }
     const orderId = generateSequentialOrderId();
     const now = new Date();
     setArnNumber(orderId);
@@ -234,6 +243,24 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
 
   const handleFinalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (step1.phone.replace(/\D/g, '').length !== 10) {
+      showToast('Please enter a valid 10-digit business mobile number in Step 1.', 'warning');
+      setCurrentStep(1);
+      return;
+    }
+    if (isSoleProp && proprietor.aadhaar.replace(/\D/g, '').length !== 12) {
+      showToast('Please enter a valid 12-digit Proprietor Aadhaar number in Step 2.', 'warning');
+      setCurrentStep(2);
+      return;
+    }
+    if (!isSoleProp) {
+      const invalidPartner = partners.find((p) => p.mobile.trim().length > 0 && p.mobile.replace(/\D/g, '').length !== 10);
+      if (invalidPartner) {
+        showToast('Each Partner/Director mobile number must be exactly 10 digits.', 'warning');
+        setCurrentStep(2);
+        return;
+      }
+    }
     const orderId = generateSequentialOrderId();
     const now = new Date();
     setArnNumber(orderId);
@@ -576,10 +603,12 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
                 </label>
                 <input
                   type="tel"
+                  inputMode="numeric"
+                  maxLength={10}
                   required
                   placeholder={getPlaceholder('10-digit mobile number')}
                   value={requestData.phone}
-                  onChange={(e) => setRequestData({ ...requestData, phone: e.target.value })}
+                  onChange={(e) => setRequestData({ ...requestData, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
               </div>
@@ -737,11 +766,12 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
                   </label>
                   <input
                     type="tel"
+                    inputMode="numeric"
                     required
                     maxLength={10}
                     placeholder={getPlaceholder('10-digit mobile')}
                     value={step1.phone}
-                    onChange={(e) => setStep1({ ...step1, phone: e.target.value })}
+                    onChange={(e) => setStep1({ ...step1, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
@@ -775,7 +805,13 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
               <div className="pt-4 flex justify-end">
                 <button
                   type="button"
-                  onClick={() => setCurrentStep(2)}
+                  onClick={() => {
+                    if (step1.phone.replace(/\D/g, '').length !== 10) {
+                      showToast('Please enter a valid 10-digit mobile number.', 'warning');
+                      return;
+                    }
+                    setCurrentStep(2);
+                  }}
                   className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm px-6 py-2.5 rounded-xl cursor-pointer shadow-sm"
                 >
                   <span>Next</span>
@@ -984,12 +1020,13 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
                           <label className="block text-[11px] font-bold text-slate-700 mb-1">Mobile</label>
                           <input
                             type="tel"
+                            inputMode="numeric"
                             maxLength={10}
-                            placeholder={getPlaceholder('Mobile')}
+                            placeholder={getPlaceholder('10-digit mobile')}
                             value={partner.mobile}
                             onChange={(e) => {
                               const updated = [...partners];
-                              updated[index].mobile = e.target.value;
+                              updated[index].mobile = e.target.value.replace(/\D/g, '').slice(0, 10);
                               setPartners(updated);
                             }}
                             className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
@@ -1020,7 +1057,20 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
                 </button>
                 <button
                   type="button"
-                  onClick={() => setCurrentStep(3)}
+                  onClick={() => {
+                    if (isSoleProp && proprietor.aadhaar.replace(/\D/g, '').length !== 12) {
+                      showToast('Please enter a valid 12-digit Proprietor Aadhaar number.', 'warning');
+                      return;
+                    }
+                    if (!isSoleProp) {
+                      const invalidPartner = partners.find((p) => p.mobile.trim().length > 0 && p.mobile.replace(/\D/g, '').length !== 10);
+                      if (invalidPartner) {
+                        showToast('Partner/Director mobile number must be exactly 10 digits.', 'warning');
+                        return;
+                      }
+                    }
+                    setCurrentStep(3);
+                  }}
                   className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm px-6 py-2.5 rounded-xl cursor-pointer shadow-sm"
                 >
                   <span>Next</span>

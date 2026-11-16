@@ -38,7 +38,7 @@ export const DOCUMENT_CONFIGS: Record<string, DocumentFormConfig> = {
   },
   'brand-sponsorship': {
     id: 'brand-sponsorship',
-    title: 'Brand Sponsorship and Promotion Agreement',
+    title: 'Brand Sponsorship & Promotion Agreement',
     isUnilateral: false,
     firstPartyRole: 'The Brand / Sponsor',
     secondPartyRole: 'The Creator / Influencer',
@@ -48,7 +48,7 @@ export const DOCUMENT_CONFIGS: Record<string, DocumentFormConfig> = {
   },
   'freelancer-contract': {
     id: 'freelancer-contract',
-    title: 'Freelancer and Client Service Contract',
+    title: 'Freelancer & Client Service Contract',
     isUnilateral: false,
     firstPartyRole: 'The Client / Service Receiver / Employer',
     secondPartyRole: 'The Freelancer / Service Provider / Consultant',
@@ -88,7 +88,7 @@ export const DOCUMENT_CONFIGS: Record<string, DocumentFormConfig> = {
   },
   'nda': {
     id: 'nda',
-    title: 'Non-disclosure Agreement (NDA)',
+    title: 'Non-Disclosure Agreement (NDA)',
     isUnilateral: false,
     firstPartyRole: 'The Disclosing Party',
     secondPartyRole: 'The Receiving Party',
@@ -98,7 +98,7 @@ export const DOCUMENT_CONFIGS: Record<string, DocumentFormConfig> = {
   },
   'founder-agreement': {
     id: 'founder-agreement',
-    title: 'Founder and Co-founder Agreement',
+    title: 'Founder and Co-Founder Agreement',
     isUnilateral: false,
     firstPartyRole: 'Founder 1',
     secondPartyRole: 'Co-Founder 2',
@@ -116,16 +116,6 @@ export const DOCUMENT_CONFIGS: Record<string, DocumentFormConfig> = {
     defaultCustomTermTitle: 'Trade Name Disclaimer',
     defaultCustomTermDesc: 'The declarant states that the chosen trade name does not knowingly infringe upon any registered trademark operating in the same locality.'
   },
-  'website-terms': {
-    id: 'website-terms',
-    title: 'Website & App Terms of Service & Privacy Policy',
-    isUnilateral: true,
-    firstPartyRole: 'The Platform Operator / Website Owner',
-    secondPartyRole: 'Not Applicable',
-    coreSectionTitle: 'Core Website Terms & Privacy Framework (DPDP Act)',
-    defaultCustomTermTitle: 'Subscription Auto-Renewal',
-    defaultCustomTermDesc: 'All premium memberships auto-renew on the 1st of every calendar month unless canceled 48 hours prior.'
-  },
   'software-it-agreement': {
     id: 'software-it-agreement',
     title: 'Software & IT Service Agreement',
@@ -138,7 +128,7 @@ export const DOCUMENT_CONFIGS: Record<string, DocumentFormConfig> = {
   },
   'vendor-supplier': {
     id: 'vendor-supplier',
-    title: 'Vendor and Supplier Agreement',
+    title: 'Vendor & Supplier Agreement',
     isUnilateral: false,
     firstPartyRole: 'The Buyer / Procurement Company',
     secondPartyRole: 'The Vendor / Supplier / Distributor',
@@ -178,7 +168,7 @@ export const DOCUMENT_CONFIGS: Record<string, DocumentFormConfig> = {
   },
   'loss-of-document-affidavit': {
     id: 'loss-of-document-affidavit',
-    title: 'Loss of Documents Affidavit',
+    title: 'Loss of Document Affidavit',
     isUnilateral: true,
     firstPartyRole: 'The Deponent / Document Owner',
     secondPartyRole: 'Not Applicable',
@@ -205,6 +195,16 @@ export const DOCUMENT_CONFIGS: Record<string, DocumentFormConfig> = {
     coreSectionTitle: 'Core Academic Gap Year Declaration',
     defaultCustomTermTitle: 'Competitive Preparation Notice',
     defaultCustomTermDesc: 'The deponent dedicated full-time hours to competitive exam preparations without participating in active corporate ventures.'
+  },
+  'old-vehicle-sales-declaration': {
+    id: 'old-vehicle-sales-declaration',
+    title: 'Old Vehicle Sales and Purchase Declaration',
+    isUnilateral: false,
+    firstPartyRole: 'The Seller / Registered Owner',
+    secondPartyRole: 'The Buyer / Purchaser Taking Delivery',
+    coreSectionTitle: 'Core Vehicle Handover & Liability Declaration',
+    defaultCustomTermTitle: 'Traffic Challan Cut-Off',
+    defaultCustomTermDesc: 'All challans and liabilities prior to handover date & time rest with Seller, and thereafter strictly with Buyer.'
   },
   'old-vehicle-sale': {
     id: 'old-vehicle-sale',
@@ -256,25 +256,15 @@ export const DOCUMENT_CONFIGS: Record<string, DocumentFormConfig> = {
     defaultCustomTermTitle: 'Competitive Phase',
     defaultCustomTermDesc: 'The deponent clarifies that they are presently dedicating full-time hours to civil service exam preparations.'
   },
-  'employment-contract': {
-    id: 'employment-contract',
-    title: 'Employment Contract',
+  'employment-contract-offer-letter': {
+    id: 'employment-contract-offer-letter',
+    title: 'Employment Contract & Offer Letter',
     isUnilateral: false,
     firstPartyRole: 'The Employer / Company / Organization',
-    secondPartyRole: 'The Employee',
+    secondPartyRole: 'The Employee / Selected Candidate',
     coreSectionTitle: 'Core Employment Terms, CTC & Working Conditions',
     defaultCustomTermTitle: 'Training Bond',
     defaultCustomTermDesc: 'The employee agrees to serve a minimum duration of 12 months post specialized software training, failing which a recovery cost applies.'
-  },
-  'offer-letter': {
-    id: 'offer-letter',
-    title: 'Offer Letter',
-    isUnilateral: false,
-    firstPartyRole: 'The Issuing Company / Employer',
-    secondPartyRole: 'The Candidate / Selected Applicant',
-    coreSectionTitle: 'Core Offer Details, Joining Date & CTC',
-    defaultCustomTermTitle: 'Signing Bonus Condition',
-    defaultCustomTermDesc: 'A single lump-sum joining bonus of ₹25,000 will be paid, which must be fully returned if the candidate exits within 6 months.'
   },
   'general-consent': {
     id: 'general-consent',
@@ -289,9 +279,9 @@ export const DOCUMENT_CONFIGS: Record<string, DocumentFormConfig> = {
   'declaration-letter': {
     id: 'declaration-letter',
     title: 'Declaration Letter',
-    isUnilateral: true,
-    firstPartyRole: 'The Declarant / Entity Making Statement',
-    secondPartyRole: 'Not Applicable',
+    isUnilateral: false,
+    firstPartyRole: 'First Party (The Declarant)',
+    secondPartyRole: 'Second Party (Counterparty / Recipient)',
     coreSectionTitle: 'Core Factual Narrative & Affirmation',
     defaultCustomTermTitle: 'Subsidiary Clarification',
     defaultCustomTermDesc: 'The declarant clarifies that the statements made here extend structurally to their wholly-owned branch office.'
@@ -299,7 +289,13 @@ export const DOCUMENT_CONFIGS: Record<string, DocumentFormConfig> = {
 };
 
 export function getDocumentConfig(title: string): DocumentFormConfig {
-  const clean = title.toLowerCase();
+  const clean = title.toLowerCase().trim();
+  for (const key of Object.keys(DOCUMENT_CONFIGS)) {
+    const config = DOCUMENT_CONFIGS[key];
+    if (config.title.toLowerCase() === clean) {
+      return config;
+    }
+  }
   for (const key of Object.keys(DOCUMENT_CONFIGS)) {
     const config = DOCUMENT_CONFIGS[key];
     if (clean.includes(config.title.toLowerCase()) || config.title.toLowerCase().includes(clean)) {
@@ -307,8 +303,8 @@ export function getDocumentConfig(title: string): DocumentFormConfig {
     }
   }
 
-  // Fallback generic
-  const isUnilateral = clean.includes('affidavit') || clean.includes('declaration');
+  // Fallback generic (only Affidavits & Proprietorship Declaration Deed are unilateral)
+  const isUnilateral = clean.includes('affidavit') || clean.includes('proprietorship');
   return {
     id: 'generic-doc',
     title: title,

@@ -20,36 +20,39 @@ const apiKey = process.env.GEMINI_API_KEY || '';
 const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 
-// Master 28 Permitted Legal Documents
+// Master Permitted Legal Documents
 const ALLOWED_DOCUMENTS = [
   { id: 'rent-11-month', title: '11th Month Rent Agreement', category: 'Rent & Property' },
   { id: 'landlord-noc-business', title: 'Landlord NOC for Business', category: 'Rent & Property' },
-  { id: 'sub-lease-agreement', title: 'Sublease Agreement', category: 'Rent & Property' },
   { id: 'landlord-noc-gst', title: 'Landlord NOC for GST', category: 'Rent & Property' },
   { id: 'brand-sponsorship-promo', title: 'Brand Sponsorship & Promotion Agreement', category: 'Creators and Freelancers' },
   { id: 'influencer-collab-agreement', title: 'Influencer Collaboration Agreement', category: 'Creators and Freelancers' },
-  { id: 'content-rights-copyright', title: 'Content Right & Copyright Transfer Agreement', category: 'Creators and Freelancers' },
+  { id: 'content-rights-agreement', title: 'Content Rights Agreement', category: 'Creators and Freelancers' },
+  { id: 'copyright-transfer-agreement', title: 'Copyright Transfer Agreement', category: 'Creators and Freelancers' },
   { id: 'freelancer-client-contract', title: 'Freelancer & Client Service Contract', category: 'Creators and Freelancers' },
   { id: 'nda-agreement', title: 'Non-Disclosure Agreement (NDA)', category: 'Creators and Freelancers' },
   { id: 'video-audio-release-form', title: 'Video/Audio Release Form', category: 'Creators and Freelancers' },
   { id: 'partnership-deed', title: 'Partnership Deed', category: 'Business and Partnerships' },
   { id: 'proprietorship-declaration-deed', title: 'Proprietorship Declaration Deed', category: 'Business and Partnerships' },
-  { id: 'founder-co-founder-agreement', title: 'Founder & Co-Founder Agreement', category: 'Business and Partnerships' },
+  { id: 'founder-co-founder-agreement', title: 'Founder and Co-Founder Agreement', category: 'Business and Partnerships' },
+  { id: 'equipments-machinery-lease', title: 'Equipment & Machinery Lease Agreement', category: 'Business and Partnerships' },
   { id: 'vendor-supplier-agreement', title: 'Vendor & Supplier Agreement', category: 'Vendor, Supplier & IT' },
   { id: 'software-it-service-agreement', title: 'Software & IT Service Agreement', category: 'Vendor, Supplier & IT' },
-  { id: 'job-work-manufacturing-agreement', title: 'Job Work & Manufacturing Agreement', category: 'Vendor, Supplier & IT' },
-  { id: 'equipments-machinery-lease', title: 'Equipment & Machinery Lease Agreement', category: 'Business and Partnerships' },
-  { id: 'website-app-terms-privacy', title: 'Website & App Terms of Service and Privacy Policy', category: 'Vendor, Supplier & IT' },
   { id: 'name-change-affidavit', title: 'Name Change Affidavit', category: 'Personal Affidavits' },
   { id: 'address-proof-affidavit', title: 'Address Proof Correction Affidavit', category: 'Personal Affidavits' },
   { id: 'dob-correction-affidavit', title: 'Date of Birth & Age Correction Affidavit', category: 'Personal Affidavits' },
   { id: 'loss-of-document-affidavit', title: 'Loss of Document Affidavit', category: 'Personal Affidavits' },
-  { id: 'anti-ragging-gap-year-affidavit', title: 'Anti-Ragging & Gap Year Affidavit', category: 'Education, Job & Government' },
-  { id: 'income-unemployment-affidavit', title: 'Income & Unemployment Affidavit', category: 'Education, Job & Government' },
-  { id: 'first-child-single-child-affidavit', title: 'First Child / Single Child Affidavit', category: 'Education, Job & Government' },
+  { id: 'anti-ragging-affidavit', title: 'Anti-Ragging Affidavit', category: 'Education, Job & Government' },
+  { id: 'gap-year-affidavit', title: 'Gap Year Affidavit', category: 'Education, Job & Government' },
+  { id: 'income-affidavit', title: 'Income Affidavit', category: 'Education, Job & Government' },
+  { id: 'unemployment-affidavit', title: 'Unemployment Affidavit', category: 'Education, Job & Government' },
+  { id: 'first-child-affidavit', title: 'First Child Affidavit', category: 'Education, Job & Government' },
+  { id: 'single-girl-child-affidavit', title: 'Single Girl Child Affidavit', category: 'Education, Job & Government' },
   { id: 'employment-contract-offer-letter', title: 'Employment Contract & Offer Letter', category: 'Finance, HR & Vehicle' },
-  { id: 'general-consent-declaration-letter', title: 'General Consent & Declaration Letter', category: 'Finance, HR & Vehicle' },
-  { id: 'old-vehicle-sales-agreement', title: 'Vehicle Sales & Purchase Agreement', category: 'Finance, HR & Vehicle' }
+  { id: 'general-consent-agreement', title: 'General Consent Agreement', category: 'Finance, HR & Vehicle' },
+  { id: 'declaration-letter', title: 'Declaration Letter', category: 'Finance, HR & Vehicle' },
+  { id: 'old-vehicle-sales-declaration', title: 'Old Vehicle Sales and Purchase Declaration', category: 'Finance, HR & Vehicle' },
+  { id: 'old-vehicle-sales-agreement', title: 'Old Vehicle Sales and Purchase Agreement', category: 'Finance, HR & Vehicle' }
 ];
 
 // Helper: check for forbidden categories

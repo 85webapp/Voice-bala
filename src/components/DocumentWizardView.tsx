@@ -23,7 +23,7 @@ import { STATE_CATEGORIES, getSafeStampDuty, isUnilateralDocument } from '../dat
 import { getDocumentConfig, CustomKeyValueTerm } from '../data/documentFormConfigs';
 import { INITIAL_FRONT_DOCUMENTS } from '../data/documentsData';
 import { getDocumentIdRule } from '../data/documentIdRequirements';
-import { DateOfBirthPicker } from './DateOfBirthPicker';
+import { DateOfBirthPicker, calculateAgeInYears } from './DateOfBirthPicker';
 import { useExampleDetails } from '../hooks/useExampleDetails';
 import { AadhaarInput } from './AadhaarInput';
 import { AddressFieldGroup } from './AddressFieldGroup';
@@ -86,7 +86,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
     setOverrideStampValue(null);
   }, [selectedDocTitle, selectedState]);
 
-  // Master Statutory ID Requirements (PAN & Aadhaar) for current document
+  // Master Statutory ID Requirements (PAN, Aadhaar & Witnesses) for current document
   const docIdRule = useMemo(() => {
     return getDocumentIdRule(selectedDocTitle);
   }, [selectedDocTitle]);
@@ -126,6 +126,29 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
   const [secondPartyAadhaarLast4, setSecondPartyAadhaarLast4] = useState('');
   const [secondPartyMobile, setSecondPartyMobile] = useState('');
   const [secondPartyPan, setSecondPartyPan] = useState('');
+
+  // Conditional Age Check (e.g., Name Change Affidavit: Age >= 18 makes PAN Mandatory)
+  const firstPartyAge = useMemo(() => {
+    const parsedFromDob = calculateAgeInYears(firstPartyAgeOrIncDate);
+    if (parsedFromDob !== null) return parsedFromDob;
+    const numeric = Number((firstPartyAgeOrIncDate || '').trim());
+    if (/^\d{1,3}$/.test((firstPartyAgeOrIncDate || '').trim()) && numeric >= 0 && numeric < 130) {
+      return numeric;
+    }
+    return null;
+  }, [firstPartyAgeOrIncDate]);
+
+  const effectiveFirstPartyPan = useMemo(() => {
+    if (docIdRule.panMandatoryMinAge !== undefined && firstPartyAge !== null) {
+      return firstPartyAge >= docIdRule.panMandatoryMinAge ? 'mandatory' : 'optional';
+    }
+    return docIdRule.pan;
+  }, [docIdRule, firstPartyAge]);
+
+  const effectiveFirstPartyAadhaar = docIdRule.aadhaar;
+  const effectiveSecondPartyPan = docIdRule.secondPartyPan ?? docIdRule.pan;
+  const effectiveSecondPartyAadhaar = docIdRule.secondPartyAadhaar ?? docIdRule.aadhaar;
+  const requireWitnesses = docIdRule.requireWitnesses;
 
   // Strict 10-char PAN input sanitization
   const handlePanInput = (raw: string, setter: (val: string) => void) => {
@@ -274,26 +297,40 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
         showToast('Please enter Full Legal Name for First Party.', 'warning');
         return false;
       }
+      if (docIdRule.panMandatoryMinAge !== undefined && firstPartyAge === null) {
+        showToast('Please enter a valid Date of Birth (DD/MM/YYYY) to verify age eligibility.', 'warning');
+        return false;
+      }
       if (!firstPartyAddress.trim()) {
         showToast('Please enter Address for First Party.', 'warning');
         return false;
       }
-      if (!firstPartyMobile.trim()) {
-        showToast('Please enter Mobile Number (Aadhaar linked) for First Party.', 'warning');
+      const cleanMobile1 = firstPartyMobile.replace(/\D/g, '');
+      if (cleanMobile1.length !== 10) {
+        showToast('Please enter a valid 10-digit Mobile Number for First Party.', 'warning');
         return false;
       }
-      if (docIdRule.pan === 'mandatory') {
-        if (!firstPartyPan.trim() || firstPartyPan.trim().length !== 10) {
-          showToast(`PAN Card is Mandatory for ${selectedDocTitle}. Please enter a valid 10-character PAN.`, 'warning');
+      const cleanAadhaar1 = firstPartyAadhaarLast4.replace(/\D/g, '');
+      if (effectiveFirstPartyAadhaar === 'mandatory') {
+        if (cleanAadhaar1.length !== 12) {
+          showToast(`12-digit Aadhaar Number is Mandatory for ${selectedDocTitle}.`, 'warning');
           return false;
         }
+      } else if (cleanAadhaar1.length > 0 && cleanAadhaar1.length !== 12) {
+        showToast('If entering First Party Aadhaar Number, please enter all 12 digits.', 'warning');
+        return false;
       }
-      if (docIdRule.aadhaar === 'mandatory') {
-        const cleanAadhaar = firstPartyAadhaarLast4.replace(/\D/g, '');
-        if (!cleanAadhaar || cleanAadhaar.length < 4) {
-          showToast(`Aadhaar Card is Mandatory for ${selectedDocTitle}. Please enter a valid Aadhaar number.`, 'warning');
+      if (effectiveFirstPartyPan === 'mandatory') {
+        if (!firstPartyPan.trim() || firstPartyPan.trim().length !== 10) {
+          const reasonMsg = docIdRule.panMandatoryMinAge !== undefined
+            ? `PAN Card is Mandatory for ${selectedDocTitle} when Age is ${docIdRule.panMandatoryMinAge}+ years.`
+            : `PAN Card is Mandatory for ${selectedDocTitle}.`;
+          showToast(`${reasonMsg} Please enter a valid 10-character PAN.`, 'warning');
           return false;
         }
+      } else if (firstPartyPan.trim().length > 0 && firstPartyPan.trim().length !== 10) {
+        showToast('If entering First Party PAN Number, please enter a valid 10-character PAN.', 'warning');
+        return false;
       }
       return true;
     }
@@ -308,22 +345,29 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
           showToast('Please enter Address for Second Party.', 'warning');
           return false;
         }
-        if (!secondPartyMobile.trim()) {
-          showToast('Please enter Mobile Number for Second Party.', 'warning');
+        const cleanMobile2 = secondPartyMobile.replace(/\D/g, '');
+        if (cleanMobile2.length !== 10) {
+          showToast('Please enter a valid 10-digit Mobile Number for Second Party.', 'warning');
           return false;
         }
-        if (docIdRule.pan === 'mandatory') {
-          if (!secondPartyPan.trim() || secondPartyPan.trim().length !== 10) {
-            showToast(`PAN Card is Mandatory for ${selectedDocTitle}. Please enter Second Party 10-character PAN.`, 'warning');
+        const cleanAadhaar2 = secondPartyAadhaarLast4.replace(/\D/g, '');
+        if (effectiveSecondPartyAadhaar === 'mandatory') {
+          if (cleanAadhaar2.length !== 12) {
+            showToast(`Second Party 12-digit Aadhaar Number is Mandatory for ${selectedDocTitle}.`, 'warning');
             return false;
           }
+        } else if (cleanAadhaar2.length > 0 && cleanAadhaar2.length !== 12) {
+          showToast('If entering Second Party Aadhaar Number, please enter all 12 digits.', 'warning');
+          return false;
         }
-        if (docIdRule.aadhaar === 'mandatory') {
-          const cleanAadhaar = secondPartyAadhaarLast4.replace(/\D/g, '');
-          if (!cleanAadhaar || cleanAadhaar.length < 4) {
-            showToast(`Aadhaar Card is Mandatory for ${selectedDocTitle}. Please enter Second Party Aadhaar number.`, 'warning');
+        if (effectiveSecondPartyPan === 'mandatory') {
+          if (!secondPartyPan.trim() || secondPartyPan.trim().length !== 10) {
+            showToast(`Second Party 10-character PAN Card is Mandatory for ${selectedDocTitle}.`, 'warning');
             return false;
           }
+        } else if (secondPartyPan.trim().length > 0 && secondPartyPan.trim().length !== 10) {
+          showToast('If entering Second Party PAN Number, please enter a valid 10-character PAN.', 'warning');
+          return false;
         }
       }
       return true;
@@ -361,14 +405,41 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!w1Name.trim() || !w1Mobile.trim()) {
-      showToast('Please fill at least Witness 1 Name and Mobile Number.', 'warning');
-      return;
+    if (requireWitnesses) {
+      if (!w1Name.trim() || !w1FatherName.trim() || !w1Address.trim()) {
+        showToast('Witness 1 Name, Father/Husband Name, and Address are mandatory.', 'warning');
+        return;
+      }
+      if (w1Mobile.replace(/\D/g, '').length !== 10) {
+        showToast('Please enter a valid 10-digit Mobile Number for Witness 1.', 'warning');
+        return;
+      }
+      if (w1AadhaarLast4.replace(/\D/g, '').length !== 12) {
+        showToast('Please enter Witness 1 complete 12-digit Aadhaar Number.', 'warning');
+        return;
+      }
+
+      if (!w2Name.trim() || !w2FatherName.trim() || !w2Address.trim()) {
+        showToast('Witness 2 Name, Father/Husband Name, and Address are mandatory.', 'warning');
+        return;
+      }
+      if (w2Mobile.replace(/\D/g, '').length !== 10) {
+        showToast('Please enter a valid 10-digit Mobile Number for Witness 2.', 'warning');
+        return;
+      }
+      if (w2AadhaarLast4.replace(/\D/g, '').length !== 12) {
+        showToast('Please enter Witness 2 complete 12-digit Aadhaar Number.', 'warning');
+        return;
+      }
     }
 
     if (deliveryType === 'physical') {
-      if (!shippingAddress.trim() || !shippingPincode.trim() || !shippingPhone.trim()) {
-        showToast('Please enter complete Physical Courier Shipping Address, Pincode, and Contact Number.', 'warning');
+      if (!shippingRecipientName.trim() || !shippingAddress.trim() || shippingPincode.replace(/\D/g, '').length !== 6) {
+        showToast('Please enter Recipient Name, Shipping Address, and 6-digit Pincode.', 'warning');
+        return;
+      }
+      if (shippingPhone.replace(/\D/g, '').length !== 10) {
+        showToast('Please enter a valid 10-digit Physical Delivery Phone Number.', 'warning');
         return;
       }
     }
@@ -441,9 +512,9 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
             ]),
             fieldEntry(firstPartyEntityType === 'Company' ? 'Date of Incorporation' : 'Age / Date of Birth', firstPartyAgeOrIncDate, true),
             fieldEntry('Complete Address', firstPartyAddress, false),
-            fieldEntry('Aadhaar Number', firstPartyAadhaarLast4, docIdRule.aadhaar !== 'mandatory'),
+            fieldEntry('Aadhaar Number', firstPartyAadhaarLast4, effectiveFirstPartyAadhaar !== 'mandatory'),
             fieldEntry('Mobile Number', firstPartyMobile, false),
-            fieldEntry('PAN Card Number', firstPartyPan, docIdRule.pan !== 'mandatory')
+            fieldEntry('PAN Card Number', firstPartyPan, effectiveFirstPartyPan !== 'mandatory')
           ]
         },
         {
@@ -464,9 +535,9 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                 ]),
                 fieldEntry(secondPartyEntityType === 'Company' ? 'Date of Incorporation' : 'Age / Date of Birth', secondPartyAgeOrIncDate, true),
                 fieldEntry('Complete Address', secondPartyAddress, false),
-                fieldEntry('Aadhaar Number', secondPartyAadhaarLast4, docIdRule.aadhaar !== 'mandatory'),
+                fieldEntry('Aadhaar Number', secondPartyAadhaarLast4, effectiveSecondPartyAadhaar !== 'mandatory'),
                 fieldEntry('Mobile Number', secondPartyMobile, false),
-                fieldEntry('PAN Card Number', secondPartyPan, docIdRule.pan !== 'mandatory')
+                fieldEntry('PAN Card Number', secondPartyPan, effectiveSecondPartyPan !== 'mandatory')
               ]
         },
         {
@@ -489,20 +560,28 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
         },
         {
           pageNumber: 5,
-          sectionTitle: 'Page 5: Witnesses, Delivery, Review Mode & Legal Declarations',
+          sectionTitle: requireWitnesses
+            ? 'Page 5: Witnesses, Delivery, Review Mode & Legal Declarations'
+            : 'Page 5: Delivery, Review Mode & Legal Declarations (Witnesses Not Applicable)',
           fields: [
-            fieldEntry('Witness 1 Full Legal Name', w1Name, false),
-            fieldEntry("Witness 1 Father's / Husband's Name", w1FatherName, false),
-            fieldEntry('Witness 1 Residential Address', w1Address, false),
-            fieldEntry('Witness 1 Mobile Number', w1Mobile, false),
-            fieldEntry('Witness 1 Age / Date of Birth', w1Age, true),
-            fieldEntry('Witness 1 Aadhaar Last 4 Digits', w1AadhaarLast4, true),
-            fieldEntry('Witness 2 Full Legal Name', w2Name, true),
-            fieldEntry("Witness 2 Father's / Husband's Name", w2FatherName, true),
-            fieldEntry('Witness 2 Residential Address', w2Address, true),
-            fieldEntry('Witness 2 Mobile Number', w2Mobile, true),
-            fieldEntry('Witness 2 Age / Date of Birth', w2Age, true),
-            fieldEntry('Witness 2 Aadhaar Last 4 Digits', w2AadhaarLast4, true),
+            ...(requireWitnesses
+              ? [
+                  fieldEntry('Witness 1 Full Legal Name', w1Name, false),
+                  fieldEntry("Witness 1 Father's / Husband's Name", w1FatherName, false),
+                  fieldEntry('Witness 1 Residential Address', w1Address, false),
+                  fieldEntry('Witness 1 Mobile Number', w1Mobile, false),
+                  fieldEntry('Witness 1 Age / Date of Birth', w1Age, true),
+                  fieldEntry('Witness 1 Aadhaar Number (12 Digits)', w1AadhaarLast4, false),
+                  fieldEntry('Witness 2 Full Legal Name', w2Name, false),
+                  fieldEntry("Witness 2 Father's / Husband's Name", w2FatherName, false),
+                  fieldEntry('Witness 2 Residential Address', w2Address, false),
+                  fieldEntry('Witness 2 Mobile Number', w2Mobile, false),
+                  fieldEntry('Witness 2 Age / Date of Birth', w2Age, true),
+                  fieldEntry('Witness 2 Aadhaar Number (12 Digits)', w2AadhaarLast4, false)
+                ]
+              : [
+                  fieldEntry('Witnesses Applicable', 'No — Unilateral Affidavit / Proprietorship Declaration Deed', true)
+                ]),
             fieldEntry('Delivery Mode Selected', deliveryType === 'physical' ? 'Physical Courier Delivery (+₹50)' : 'Digital Delivery Only (Free)', false, ['digital', 'physical']),
             fieldEntry('Shipping Recipient Name', shippingRecipientName, deliveryType !== 'physical'),
             fieldEntry('Shipping Delivery Phone', shippingPhone, deliveryType !== 'physical'),
@@ -561,10 +640,12 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
           exclusivityTerritory,
           noticePeriod
         },
-        witnesses: [
-          { name: w1Name, fatherName: w1FatherName, address: w1Address, mobile: w1Mobile, age: w1Age, aadhaarLast4: w1AadhaarLast4 },
-          { name: w2Name, fatherName: w2FatherName, address: w2Address, mobile: w2Mobile, age: w2Age, aadhaarLast4: w2AadhaarLast4 }
-        ],
+        witnesses: requireWitnesses
+          ? [
+              { name: w1Name, fatherName: w1FatherName, address: w1Address, mobile: w1Mobile, age: w1Age, aadhaar: w1AadhaarLast4 },
+              { name: w2Name, fatherName: w2FatherName, address: w2Address, mobile: w2Mobile, age: w2Age, aadhaar: w2AadhaarLast4 }
+            ]
+          : [],
         pricing,
         verificationMode,
         delivery: {
@@ -1068,14 +1149,14 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
               required
             />
 
-            {/* Aadhaar (12-Digit Seamless), Mobile, PAN */}
+            {/* Aadhaar (12-Digit Seamless), Mobile (10-Digit), PAN */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <AadhaarInput
                   label="Aadhaar Card Number"
                   value={firstPartyAadhaarLast4}
                   onChange={setFirstPartyAadhaarLast4}
-                  required={docIdRule.aadhaar === 'mandatory'}
+                  required={effectiveFirstPartyAadhaar === 'mandatory'}
                   helperText="12-digit number"
                 />
               </div>
@@ -1086,21 +1167,32 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                 </label>
                 <input
                   type="tel"
+                  inputMode="numeric"
+                  maxLength={10}
                   required
                   value={firstPartyMobile}
-                  onChange={(e) => setFirstPartyMobile(e.target.value)}
-                  placeholder={getPlaceholder('+91 98765 43210')}
+                  onChange={(e) => setFirstPartyMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                  placeholder={getPlaceholder('9876543210')}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  PAN Number {docIdRule.pan === 'mandatory' ? <span className="text-red-500 font-bold">*</span> : docIdRule.pan === 'optional' ? <span className="text-slate-400 font-normal">(Optional)</span> : <span className="text-slate-400 font-normal">(N/A)</span>}
+                  PAN Number{' '}
+                  {effectiveFirstPartyPan === 'mandatory' ? (
+                    <span className="text-red-500 font-bold">
+                      *{docIdRule.panMandatoryMinAge !== undefined ? ` (Age ${docIdRule.panMandatoryMinAge}+)` : ''}
+                    </span>
+                  ) : (
+                    <span className="text-slate-400 font-normal">
+                      {docIdRule.panMandatoryMinAge !== undefined ? `(Optional if Age < ${docIdRule.panMandatoryMinAge})` : '(Optional)'}
+                    </span>
+                  )}
                 </label>
                 <input
                   type="text"
-                  required={docIdRule.pan === 'mandatory'}
+                  required={effectiveFirstPartyPan === 'mandatory'}
                   maxLength={10}
                   value={firstPartyPan}
                   onChange={(e) => handlePanInput(e.target.value, setFirstPartyPan)}
@@ -1266,14 +1358,14 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
               required
             />
 
-            {/* Aadhaar (12-Digit Seamless), Mobile, PAN */}
+            {/* Aadhaar (12-Digit Seamless), Mobile (10-Digit), PAN */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <AadhaarInput
                   label="Aadhaar Card Number"
                   value={secondPartyAadhaarLast4}
                   onChange={setSecondPartyAadhaarLast4}
-                  required={docIdRule.aadhaar === 'mandatory'}
+                  required={effectiveSecondPartyAadhaar === 'mandatory'}
                   helperText="12-digit number"
                 />
               </div>
@@ -1284,21 +1376,23 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                 </label>
                 <input
                   type="tel"
+                  inputMode="numeric"
+                  maxLength={10}
                   required
                   value={secondPartyMobile}
-                  onChange={(e) => setSecondPartyMobile(e.target.value)}
-                  placeholder={getPlaceholder('+91 98111 22334')}
+                  onChange={(e) => setSecondPartyMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                  placeholder={getPlaceholder('9811122334')}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  PAN Number {docIdRule.pan === 'mandatory' ? <span className="text-red-500 font-bold">*</span> : docIdRule.pan === 'optional' ? <span className="text-slate-400 font-normal">(Optional)</span> : <span className="text-slate-400 font-normal">(N/A)</span>}
+                  PAN Number {effectiveSecondPartyPan === 'mandatory' ? <span className="text-red-500 font-bold">*</span> : effectiveSecondPartyPan === 'optional' ? <span className="text-slate-400 font-normal">(Optional)</span> : <span className="text-slate-400 font-normal">(N/A)</span>}
                 </label>
                 <input
                   type="text"
-                  required={docIdRule.pan === 'mandatory'}
+                  required={effectiveSecondPartyPan === 'mandatory'}
                   maxLength={10}
                   value={secondPartyPan}
                   onChange={(e) => handlePanInput(e.target.value, setSecondPartyPan)}
@@ -1505,170 +1599,171 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
         {/* ================= PAGE 5: WITNESS & DELIVERY PREFERENCES + PRICING ================= */}
         {currentPage === 5 && (
           <form onSubmit={handleSubmit} className="space-y-6 animate-fadeIn">
-            {/* Witness 1 Details */}
-            <div className="space-y-3">
-              <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
-                Witness 1 Details <span className="text-red-500">*</span>
-              </span>
+            {/* Witness 1 & Witness 2 (Hidden for Affidavits & Proprietorship Declaration Deed) */}
+            {requireWitnesses && (
+              <>
+                <div className="space-y-3">
+                  <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
+                    Witness 1 Details <span className="text-red-500">*</span>
+                  </span>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Full Legal Name <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Full Legal Name <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={w1Name}
+                        onChange={(e) => setW1Name(e.target.value)}
+                        placeholder={getPlaceholder('e.g. Rohit Verma')}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Father's / Husband's Name <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={w1FatherName}
+                        onChange={(e) => setW1FatherName(e.target.value)}
+                        placeholder={getPlaceholder('e.g. S.K. Verma')}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      />
+                    </div>
+                  </div>
+
+                  <AddressFieldGroup
+                    label="Complete Residential Address"
+                    value={w1Address}
+                    onChangeAddress={setW1Address}
                     required
-                    value={w1Name}
-                    onChange={(e) => setW1Name(e.target.value)}
-                    placeholder="e.g. Rohit Verma"
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Mobile Number <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="tel"
+                        inputMode="numeric"
+                        maxLength={10}
+                        required
+                        value={w1Mobile}
+                        onChange={(e) => setW1Mobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                        placeholder={getPlaceholder('9899911223')}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      />
+                    </div>
+
+                    <div>
+                      <DateOfBirthPicker
+                        label="Age / Date of Birth"
+                        value={w1Age}
+                        onChange={setW1Age}
+                        placeholder="DD/MM/YYYY"
+                        helperText={showExampleDetails ? "Format: DD/MM/YYYY" : undefined}
+                      />
+                    </div>
+
+                    <div>
+                      <AadhaarInput
+                        label="Aadhaar Number (12 Digits)"
+                        value={w1AadhaarLast4}
+                        onChange={setW1AadhaarLast4}
+                        required
+                      />
+                    </div>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Father's / Husband's Name <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
+                {/* Witness 2 Details */}
+                <div className="space-y-3 pt-4 border-t border-slate-200">
+                  <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
+                    Witness 2 Details <span className="text-red-500">*</span>
+                  </span>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Full Legal Name <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={w2Name}
+                        onChange={(e) => setW2Name(e.target.value)}
+                        placeholder={getPlaceholder('e.g. Manisha Rawat')}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Father's / Husband's Name <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={w2FatherName}
+                        onChange={(e) => setW2FatherName(e.target.value)}
+                        placeholder={getPlaceholder('e.g. Anand Rawat')}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      />
+                    </div>
+                  </div>
+
+                  <AddressFieldGroup
+                    label="Complete Residential Address"
+                    value={w2Address}
+                    onChangeAddress={setW2Address}
                     required
-                    value={w1FatherName}
-                    onChange={(e) => setW1FatherName(e.target.value)}
-                    placeholder="e.g. S.K. Verma"
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Mobile Number <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="tel"
+                        inputMode="numeric"
+                        maxLength={10}
+                        required
+                        value={w2Mobile}
+                        onChange={(e) => setW2Mobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                        placeholder={getPlaceholder('9711188990')}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      />
+                    </div>
+
+                    <div>
+                      <DateOfBirthPicker
+                        label="Age / Date of Birth"
+                        value={w2Age}
+                        onChange={setW2Age}
+                        placeholder="DD/MM/YYYY"
+                        helperText={showExampleDetails ? "Format: DD/MM/YYYY" : undefined}
+                      />
+                    </div>
+
+                    <div>
+                      <AadhaarInput
+                        label="Aadhaar Number (12 Digits)"
+                        value={w2AadhaarLast4}
+                        onChange={setW2AadhaarLast4}
+                        required
+                      />
+                    </div>
+                  </div>
                 </div>
-              </div>
-
-              <AddressFieldGroup
-                label="Complete Residential Address"
-                value={w1Address}
-                onChangeAddress={setW1Address}
-                required
-              />
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Mobile Number <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="tel"
-                    required
-                    value={w1Mobile}
-                    onChange={(e) => setW1Mobile(e.target.value)}
-                    placeholder={getPlaceholder('+91 98999 11223')}
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  />
-                </div>
-
-                <div>
-                  <DateOfBirthPicker
-                    label="Age / Date of Birth"
-                    value={w1Age}
-                    onChange={setW1Age}
-                    placeholder="DD/MM/YYYY"
-                    helperText={showExampleDetails ? "Format: DD/MM/YYYY" : undefined}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Aadhaar Last 4 <span className="text-slate-400 font-normal">(Optional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    maxLength={4}
-                    value={w1AadhaarLast4}
-                    onChange={(e) => setW1AadhaarLast4(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                    placeholder={getPlaceholder('4819')}
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Witness 2 Details */}
-            <div className="space-y-3 pt-4 border-t border-slate-200">
-              <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
-                Witness 2 Details <span className="text-slate-400 font-normal">(Optional)</span>
-              </span>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Full Legal Name
-                  </label>
-                  <input
-                    type="text"
-                    value={w2Name}
-                    onChange={(e) => setW2Name(e.target.value)}
-                    placeholder={getPlaceholder('e.g. Manisha Rawat')}
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Father's / Husband's Name
-                  </label>
-                  <input
-                    type="text"
-                    value={w2FatherName}
-                    onChange={(e) => setW2FatherName(e.target.value)}
-                    placeholder={getPlaceholder('e.g. Anand Rawat')}
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  />
-                </div>
-              </div>
-
-              <AddressFieldGroup
-                label="Complete Residential Address"
-                value={w2Address}
-                onChangeAddress={setW2Address}
-                required={false}
-              />
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Mobile Number
-                  </label>
-                  <input
-                    type="tel"
-                    value={w2Mobile}
-                    onChange={(e) => setW2Mobile(e.target.value)}
-                    placeholder={getPlaceholder('+91 97111 88990')}
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  />
-                </div>
-
-                <div>
-                  <DateOfBirthPicker
-                    label="Age / Date of Birth"
-                    value={w2Age}
-                    onChange={setW2Age}
-                    placeholder="DD/MM/YYYY"
-                    helperText={showExampleDetails ? "Format: DD/MM/YYYY" : undefined}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Aadhaar Last 4 <span className="text-slate-400 font-normal">(Optional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    maxLength={4}
-                    value={w2AadhaarLast4}
-                    onChange={(e) => setW2AadhaarLast4(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                    placeholder={getPlaceholder('7721')}
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  />
-                </div>
-              </div>
-            </div>
+              </>
+            )}
 
             {/* Delivery Preferences: Digital vs Physical Courier */}
             <div className="pt-4 border-t border-slate-200 space-y-3">
@@ -1771,10 +1866,12 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                         </label>
                         <input
                           type="tel"
+                          inputMode="numeric"
+                          maxLength={10}
                           required={deliveryType === 'physical'}
                           value={shippingPhone}
-                          onChange={(e) => setShippingPhone(e.target.value)}
-                          placeholder={getPlaceholder('+91 98765 43210')}
+                          onChange={(e) => setShippingPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                          placeholder={getPlaceholder('9876543210')}
                           className="w-full bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-600"
                         />
                       </div>

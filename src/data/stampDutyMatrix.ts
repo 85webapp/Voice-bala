@@ -56,22 +56,14 @@ export const UNILATERAL_DOCUMENTS: string[] = [
   'Name Change Affidavit',
   'Address Proof Correction Affidavit',
   'Date of Birth & Age Correction Affidavit',
-  'Date of Birth Correction Affidavit',
-  'Loss of Documents Affidavit',
   'Loss of Document Affidavit',
   'Anti-Ragging Affidavit',
-  'Anti-ragging and Gap Year Affidavit',
   'Gap Year Affidavit',
   'Income Affidavit',
-  'Income and Unemployment Affidavit',
   'Unemployment Affidavit',
   'First Child Affidavit',
-  'First Child / Single Child / Single Girl Child Affidavit',
   'Single Girl Child Affidavit',
-  'Proprietorship Declaration Deed',
-  'Website Terms of Service & Privacy Policy Agreement',
-  'Website and App Terms of Service & Privacy Policy Agreement',
-  'Declaration Letter'
+  'Proprietorship Declaration Deed'
 ];
 
 export function isUnilateralDocument(docTitle: string): boolean {

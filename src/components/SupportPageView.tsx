@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { ArrowLeft, Headphones, Phone, MessageCircle, Clock, ShieldCheck, CheckCircle2, ListChecks } from 'lucide-react';
 import { VoiceGuidanceButton } from './VoiceGuidanceButton';
+import { AnimatedSupportConnect } from './AnimatedSupportConnect';
 import { playServiceVoice, stopServiceVoice } from '../services/googleVoiceGuidance';
 
 interface SupportPageViewProps {
@@ -65,7 +66,6 @@ export const SupportPageView: React.FC<SupportPageViewProps> = ({ onBack, onOpen
             </div>
 
             <span className="inline-flex items-center gap-1.5 self-start sm:self-center text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
-              <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" />
               Online 24/7
             </span>
           </div>
@@ -81,7 +81,7 @@ export const SupportPageView: React.FC<SupportPageViewProps> = ({ onBack, onOpen
               className="w-full inline-flex items-center justify-center gap-2.5 py-3.5 px-5 bg-[#15803d] hover:bg-[#166534] active:bg-[#14532d] text-white font-bold text-sm sm:text-base rounded-xl shadow-md transition-all cursor-pointer"
             >
               <Phone className="w-5 h-5" />
-              <span>Direct Call (+91 92865 96391)</span>
+              <span>Direct Call</span>
             </a>
 
             <a
@@ -154,6 +154,9 @@ export const SupportPageView: React.FC<SupportPageViewProps> = ({ onBack, onOpen
             </button>
           </section>
         )}
+
+        {/* Light-mode Animated Direct Call & WhatsApp Hub */}
+        <AnimatedSupportConnect />
       </main>
     </div>
   );

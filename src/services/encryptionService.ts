@@ -506,10 +506,17 @@ export function buildWebsiteBPayload(
       rawData.step1?.pan ||
       rawData.panNumber ||
       '',
+    aadhaar:
+      rawData.firstParty?.aadhaar ||
+      rawData.landlord?.aadhaar ||
+      rawData.step1?.aadhaar ||
+      rawData.step1?.aadhaarNumber ||
+      '',
     aadhaarLast4:
       rawData.firstParty?.aadhaar ||
       rawData.landlord?.aadhaar ||
       rawData.step1?.aadhaar ||
+      rawData.step1?.aadhaarNumber ||
       ''
   };
 
@@ -542,9 +549,15 @@ export function buildWebsiteBPayload(
           rawData.commercialTenant?.companyPan ||
           rawData.grantee?.pan ||
           '',
+        aadhaar:
+          rawData.secondParty?.aadhaar ||
+          rawData.tenant?.aadhaar ||
+          rawData.grantee?.aadhaar ||
+          '',
         aadhaarLast4:
           rawData.secondParty?.aadhaar ||
           rawData.tenant?.aadhaar ||
+          rawData.grantee?.aadhaar ||
           ''
       }
     : undefined);

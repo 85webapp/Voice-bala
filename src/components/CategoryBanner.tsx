@@ -1,5 +1,6 @@
 import React from 'react';
 import { BellRing, Globe2, Landmark, Headphones, ShieldCheck, CheckCircle2, ArrowRight } from 'lucide-react';
+import { AnimatedSupportConnect } from './AnimatedSupportConnect';
 
 interface CategoryBannerProps {
   category: 'agreements' | 'registrations' | 'insurance' | 'filings' | 'notices' | 'website' | 'bank-loans' | 'support';
@@ -101,14 +102,8 @@ export const CategoryBanner: React.FC<CategoryBannerProps> = ({ category }) => {
 
     case 'support':
       return (
-        <div className="my-6 max-w-sm sm:max-w-md mx-auto overflow-hidden rounded-2xl border border-slate-800 shadow-md bg-black flex items-center justify-center p-2">
-          <img
-            src="/assets/aistudio/1794135072474_14cc4ceb.png"
-            alt="Contact Now - 24/7 Dedicated Support"
-            className="w-full max-w-[360px] h-auto object-contain select-none transition-transform duration-300 hover:scale-[1.01]"
-            loading="eager"
-            decoding="async"
-          />
+        <div className="my-6 max-w-2xl mx-auto">
+          <AnimatedSupportConnect />
         </div>
       );
 

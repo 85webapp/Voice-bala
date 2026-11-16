@@ -283,8 +283,20 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
     }
 
     if (currentPage === '2') {
-      if (!landlordName.trim() || !landlordPan.trim() || !landlordMobile.trim()) {
-        showToast('Please provide Landlord Name, PAN, and Mobile number.', 'warning');
+      if (!landlordName.trim()) {
+        showToast('Please provide Landlord Name.', 'warning');
+        return;
+      }
+      if (landlordPan.trim().length !== 10) {
+        showToast('Landlord 10-character PAN Number is mandatory.', 'warning');
+        return;
+      }
+      if (landlordAadhaarLast4.replace(/\D/g, '').length !== 12) {
+        showToast('Landlord 12-digit Aadhaar Number is mandatory.', 'warning');
+        return;
+      }
+      if (landlordMobile.replace(/\D/g, '').length !== 10) {
+        showToast('Please provide a valid 10-digit Landlord Mobile Number.', 'warning');
         return;
       }
       if (ownershipStatus === 'Authorized Director / Partner / Trustee') {
@@ -296,8 +308,8 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
     }
 
     if (currentPage === '3') {
-      if (!proposedTradeName.trim() || !legalBusinessName.trim() || !granteePan.trim() || !applicantName.trim()) {
-        showToast('Please fill Proposed Trade Name, Legal Business Name, PAN, and Applicant Name.', 'warning');
+      if (!proposedTradeName.trim() || !legalBusinessName.trim() || granteePan.trim().length !== 10 || !applicantName.trim()) {
+        showToast('Please fill Proposed Trade Name, Legal Business Name, valid 10-char PAN, and Applicant Name.', 'warning');
         return;
       }
     }
@@ -327,8 +339,12 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
     e.preventDefault();
 
     if (deliveryPreference !== 'digital') {
-      if (!shippingAddress.trim() || !shippingPincode.trim() || !shippingPhone.trim()) {
-        showToast('Please provide physical courier delivery address, pincode, and phone number.', 'warning');
+      if (!shippingAddress.trim() || shippingPincode.replace(/\D/g, '').length !== 6) {
+        showToast('Please provide physical courier delivery address and 6-digit pincode.', 'warning');
+        return;
+      }
+      if (shippingPhone.replace(/\D/g, '').length !== 10) {
+        showToast('Please provide a valid 10-digit Courier Contact Mobile Number.', 'warning');
         return;
       }
     }
@@ -1019,6 +1035,7 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
                 <AadhaarInput
                   value={landlordAadhaarLast4}
                   onChange={(val) => setLandlordAadhaarLast4(val)}
+                  required
                   label="Aadhaar Number (12 Digits)"
                   placeholder={showExample ? "1234 - 5678 - 9012" : "12-digit Aadhaar number"}
                 />
@@ -1030,10 +1047,11 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
                 </label>
                 <input
                   type="tel"
+                  inputMode="numeric"
                   required
                   maxLength={10}
                   value={landlordMobile}
-                  onChange={(e) => setLandlordMobile(e.target.value.replace(/\D/g, ''))}
+                  onChange={(e) => setLandlordMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
                   placeholder={showExample ? "9876543210" : ""}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
@@ -1685,11 +1703,12 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
                     </label>
                     <input
                       type="tel"
+                      inputMode="numeric"
                       maxLength={10}
                       required
                       value={shippingPhone}
-                      onChange={(e) => setShippingPhone(e.target.value.replace(/\D/g, ''))}
-                      placeholder={showExample ? "Courier Contact Mobile Number" : ""}
+                      onChange={(e) => setShippingPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                      placeholder={showExample ? "9876543210" : ""}
                       className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono"
                     />
                   </div>

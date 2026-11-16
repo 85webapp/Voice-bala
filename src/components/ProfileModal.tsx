@@ -17,6 +17,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   const [formData, setFormData] = useState<UserProfile>(profile);
   const [citySearch, setCitySearch] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
   // Available cities dependent on selected state
   const availableCities = useMemo(() => {
@@ -60,7 +61,13 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSaveProfile(formData);
+    setErrorMsg('');
+    const cleanPhone = formData.phone.replace(/\D/g, '');
+    if (cleanPhone.length !== 10) {
+      setErrorMsg('Please enter a valid 10-digit mobile number.');
+      return;
+    }
+    onSaveProfile({ ...formData, phone: cleanPhone });
     setSaveSuccess(true);
     setTimeout(() => {
       setSaveSuccess(false);
@@ -85,6 +92,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
 
         {/* Body Form */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4">
+          {errorMsg && (
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs font-semibold text-rose-700">
+              {errorMsg}
+            </div>
+          )}
+
           {saveSuccess && (
             <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center gap-2">
               <Check className="w-4 h-4 text-emerald-600 shrink-0" />
