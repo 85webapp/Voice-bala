@@ -432,7 +432,85 @@ function splitTtsText(str: string, maxLength = 200): string[] {
   return chunks.length > 0 ? chunks : [normalized];
 }
 
-// Google TTS Audio Proxy - Handles chunking & seamless stream concatenation
+// Google TTS Audio Proxy - Handles chunking, POST+GET, Safari Range 206, & seamless stream concatenation
+async function synthesizeGoogleTtsBuffer(trimmedText: string, tl: string): Promise<Buffer> {
+  const cacheKey = `${tl}:${trimmedText}`;
+  if (ttsAudioCache.has(cacheKey)) {
+    return ttsAudioCache.get(cacheKey)!;
+  }
+
+  const chunks = splitTtsText(trimmedText, 200);
+
+  // Fetch all chunks concurrently in parallel for zero buffering latency
+  const audioResponses = await Promise.all(
+    chunks.map(async (chunk) => {
+      const clients = ['tw-ob', 'gtx'];
+      let lastStatus = 500;
+
+      for (const client of clients) {
+        const host = client === 'gtx' ? 'https://translate.googleapis.com' : 'https://translate.google.com';
+        const googleTTSUrl = `${host}/translate_tts?ie=UTF-8&q=${encodeURIComponent(chunk)}&tl=${encodeURIComponent(tl)}&client=${client}`;
+        const upstream = await fetch(googleTTSUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Referer': 'https://translate.google.com/'
+          }
+        });
+        lastStatus = upstream.status;
+        if (upstream.ok) {
+          const ab = await upstream.arrayBuffer();
+          if (ab.byteLength > 0) {
+            return Buffer.from(ab);
+          }
+        }
+      }
+
+      throw new Error(`Upstream TTS failed: ${lastStatus}`);
+    })
+  );
+
+  const finalBuffer = Buffer.concat(audioResponses);
+
+  if (ttsAudioCache.size > 200) {
+    const firstKey = ttsAudioCache.keys().next().value;
+    if (firstKey) ttsAudioCache.delete(firstKey);
+  }
+  ttsAudioCache.set(cacheKey, finalBuffer);
+  return finalBuffer;
+}
+
+function sendAudioBufferWithRange(req: express.Request, res: express.Response, buffer: Buffer) {
+  const total = buffer.length;
+  const range = req.headers.range;
+
+  if (range) {
+    const match = /bytes=(\d*)-(\d*)/.exec(range);
+    if (match) {
+      const start = match[1] ? parseInt(match[1], 10) : 0;
+      const end = match[2] ? Math.min(parseInt(match[2], 10), total - 1) : total - 1;
+      if (start >= 0 && start <= end && start < total) {
+        const chunk = buffer.subarray(start, end + 1);
+        res.status(206).set({
+          'Content-Type': 'audio/mpeg',
+          'Content-Range': `bytes ${start}-${end}/${total}`,
+          'Content-Length': chunk.length.toString(),
+          'Accept-Ranges': 'bytes',
+          'Cache-Control': 'public, max-age=86400'
+        });
+        return res.end(chunk);
+      }
+    }
+  }
+
+  res.set({
+    'Content-Type': 'audio/mpeg',
+    'Content-Length': total.toString(),
+    'Cache-Control': 'public, max-age=86400',
+    'Accept-Ranges': 'bytes'
+  });
+  return res.end(buffer);
+}
+
 app.get('/api/tts-audio', async (req, res) => {
   try {
     const q = typeof req.query.q === 'string' ? req.query.q : typeof req.query.text === 'string' ? req.query.text : '';
@@ -442,58 +520,27 @@ app.get('/api/tts-audio', async (req, res) => {
       return res.status(400).json({ error: 'Text query (q) is required' });
     }
 
-    const trimmedText = q.trim();
-    const cacheKey = `${tl}:${trimmedText}`;
-
-    if (ttsAudioCache.has(cacheKey)) {
-      const cachedBuffer = ttsAudioCache.get(cacheKey)!;
-      res.set({
-        'Content-Type': 'audio/mpeg',
-        'Content-Length': cachedBuffer.length.toString(),
-        'Cache-Control': 'public, max-age=86400',
-        'Accept-Ranges': 'bytes'
-      });
-      return res.end(cachedBuffer);
-    }
-
-    const chunks = splitTtsText(trimmedText, 200);
-
-    // Fetch all chunks concurrently in parallel for zero buffering latency
-    const audioResponses = await Promise.all(
-      chunks.map(async (chunk) => {
-        const googleTTSUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(chunk)}&tl=${encodeURIComponent(tl)}&client=tw-ob`;
-        const upstream = await fetch(googleTTSUrl, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Referer': 'https://translate.google.com/'
-          }
-        });
-        if (!upstream.ok) {
-          throw new Error(`Upstream TTS failed: ${upstream.status}`);
-        }
-        const ab = await upstream.arrayBuffer();
-        return Buffer.from(ab);
-      })
-    );
-
-    const finalBuffer = Buffer.concat(audioResponses);
-
-    if (ttsAudioCache.size > 200) {
-      const firstKey = ttsAudioCache.keys().next().value;
-      if (firstKey) ttsAudioCache.delete(firstKey);
-    }
-    ttsAudioCache.set(cacheKey, finalBuffer);
-
-    res.set({
-      'Content-Type': 'audio/mpeg',
-      'Content-Length': finalBuffer.length.toString(),
-      'Cache-Control': 'public, max-age=86400',
-      'Accept-Ranges': 'bytes'
-    });
-
-    return res.end(finalBuffer);
+    const buffer = await synthesizeGoogleTtsBuffer(q.trim(), tl);
+    return sendAudioBufferWithRange(req, res, buffer);
   } catch (err) {
-    console.error('TTS proxy error:', err);
+    console.error('TTS proxy error (GET):', err);
+    return res.status(500).json({ error: 'Failed to stream TTS audio' });
+  }
+});
+
+app.post('/api/tts-audio', async (req, res) => {
+  try {
+    const q = typeof req.body?.q === 'string' ? req.body.q : typeof req.body?.text === 'string' ? req.body.text : '';
+    const tl = typeof req.body?.tl === 'string' ? req.body.tl : typeof req.body?.lang === 'string' ? req.body.lang : 'hi';
+
+    if (!q.trim()) {
+      return res.status(400).json({ error: 'Text query (q) is required' });
+    }
+
+    const buffer = await synthesizeGoogleTtsBuffer(q.trim(), tl);
+    return sendAudioBufferWithRange(req, res, buffer);
+  } catch (err) {
+    console.error('TTS proxy error (POST):', err);
     return res.status(500).json({ error: 'Failed to stream TTS audio' });
   }
 });

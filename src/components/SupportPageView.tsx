@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { ArrowLeft, Headphones, Phone, MessageCircle, Clock, ShieldCheck, CheckCircle2, ListChecks } from 'lucide-react';
 import { VoiceGuidanceButton } from './VoiceGuidanceButton';
 import { AnimatedSupportConnect } from './AnimatedSupportConnect';
-import { playServiceVoice, stopServiceVoice } from '../services/googleVoiceGuidance';
+import { playServiceVoice, stopServiceVoice, isServiceVoicePlaying } from '../services/googleVoiceGuidance';
 
 interface SupportPageViewProps {
   onBack: () => void;
@@ -11,7 +11,9 @@ interface SupportPageViewProps {
 
 export const SupportPageView: React.FC<SupportPageViewProps> = ({ onBack, onOpenCheckSteps }) => {
   useEffect(() => {
-    playServiceVoice('Call Support');
+    if (!isServiceVoicePlaying('Call Support')) {
+      playServiceVoice('Call Support');
+    }
     return () => {
       stopServiceVoice();
     };

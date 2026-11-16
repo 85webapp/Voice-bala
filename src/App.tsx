@@ -24,7 +24,7 @@ import { SERVICE_CATEGORIES, ServiceCategory } from './data/servicesData';
 import { POLICIES_DATA } from './data/policiesData';
 import { LegalDocument, OrderItem, PolicySection, UserProfile } from './types';
 import { useDisplayLanguage } from './hooks/useDisplayLanguage';
-import { playServiceVoice } from './services/googleVoiceGuidance';
+import { playServiceVoice, initVoiceAndMicPermissions } from './services/googleVoiceGuidance';
 import { CategoryBanner } from './components/CategoryBanner';
 import { ToastContainer } from './components/ToastContainer';
 
@@ -120,6 +120,10 @@ export default function App() {
       localStorage.setItem('ctc_user_profile_v2', JSON.stringify(profile));
     } catch {}
   }, [profile]);
+
+  useEffect(() => {
+    initVoiceAndMicPermissions();
+  }, []);
 
   useEffect(() => {
     try {
@@ -383,6 +387,7 @@ export default function App() {
                   {/* 1. Contact Support Row -> Opens Dedicated Support Full Page */}
                   <div
                     onClick={() => {
+                      playServiceVoice('Call Support');
                       setIsSupportPageOpen(true);
                       window.scrollTo({ top: 0, behavior: 'smooth' });
                     }}
@@ -391,6 +396,7 @@ export default function App() {
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
+                        playServiceVoice('Call Support');
                         setIsSupportPageOpen(true);
                         window.scrollTo({ top: 0, behavior: 'smooth' });
                       }
@@ -414,6 +420,7 @@ export default function App() {
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
+                          playServiceVoice('Call Support');
                           setIsSupportPageOpen(true);
                           window.scrollTo({ top: 0, behavior: 'smooth' });
                         }}
@@ -475,6 +482,7 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => {
+                        playServiceVoice('Call Support');
                         setIsSupportPageOpen(true);
                         window.scrollTo({ top: 0, behavior: 'smooth' });
                       }}

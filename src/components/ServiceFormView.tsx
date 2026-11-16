@@ -19,7 +19,7 @@ import {
 import { ServiceCategory, SERVICE_CATEGORIES } from '../data/servicesData';
 import { VoiceGuidanceButton } from './VoiceGuidanceButton';
 import { ttsService } from '../services/textToSpeechService';
-import { stopServiceVoice } from '../services/googleVoiceGuidance';
+import { playServiceVoice, stopServiceVoice } from '../services/googleVoiceGuidance';
 import { useExampleDetails } from '../hooks/useExampleDetails';
 import {
   encryptFormDataAndSign,
@@ -500,7 +500,11 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
                   </label>
                   <select
                     value={selectedTitle}
-                    onChange={(e) => setSelectedTitle(e.target.value)}
+                    onChange={(e) => {
+                      const nextTitle = e.target.value;
+                      setSelectedTitle(nextTitle);
+                      playServiceVoice(nextTitle);
+                    }}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   >
                     {insuranceServices.map((srv) => (
@@ -980,7 +984,11 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
                   </label>
                   <select
                     value={selectedTitle}
-                    onChange={(e) => setSelectedTitle(e.target.value)}
+                    onChange={(e) => {
+                      const nextTitle = e.target.value;
+                      setSelectedTitle(nextTitle);
+                      playServiceVoice(nextTitle);
+                    }}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   >
                     {registrationServices.map((srv) => (

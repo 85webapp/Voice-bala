@@ -378,17 +378,9 @@ export function resolveServiceKey(keyOrTitle: string): string | null {
   const lower = (keyOrTitle || '').toLowerCase().trim();
   if (!lower) return null;
 
-  // Hard block for Agreements & Affidavits domain
+  // Hard block for Agreements & Affidavits domain (using word boundaries so "current" never matches "rent")
   if (
-    lower.includes('rent') ||
-    lower.includes('lease') ||
-    lower.includes('tenancy') ||
-    lower.includes('affidavit') ||
-    lower.includes('agreement') ||
-    lower.includes('noc') ||
-    lower.includes('deed') ||
-    lower.includes('contract') ||
-    lower.includes('nda') ||
+    /\b(rent|lease|tenancy|affidavit|agreement|noc|deed|contract|nda)\b/i.test(lower) ||
     lower.includes('release form') ||
     lower.includes('consent & declaration') ||
     lower.includes('शपथपत्र') ||
@@ -493,9 +485,7 @@ export function resolveServiceKey(keyOrTitle: string): string | null {
   return null;
 }
 
-// 2. NATIVE NATURAL SPEECH SYNTHESIS ENGINE (Edge / Google / Native TTS)
-// Crisp, fast, energetic pronunciation without stutter or proxy delays
-
+// 2. CROSS-BROWSER AUDIO UNLOCK, MICROPHONE PERMISSION & TTS ENGINE
 export const VOICE_LANGUAGE_TAGS: Record<VoiceLanguageCode, string> = {
   hi: 'hi-IN',
   en: 'en-IN',
@@ -509,20 +499,192 @@ export const VOICE_LANGUAGE_TAGS: Record<VoiceLanguageCode, string> = {
   kn: 'kn-IN'
 };
 
+const SILENT_WAV_DATA_URI =
+  'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+
 // Exported for backward compatibility with existing code
 export let currentAudioPlayer: HTMLAudioElement | null = null;
+let sharedAudioElement: HTMLAudioElement | null = null;
+let sharedAudioContext: AudioContext | null = null;
+let isAudioElementUnlocked = false;
+let isSpeechSynthesisUnlocked = false;
+let currentBlobUrl: string | null = null;
+let currentFetchAbortController: AbortController | null = null;
 let currentPlayingServiceKey: string | null = null;
 let currentUtterance: SpeechSynthesisUtterance | null = null;
 let speechHeartbeatTimer: any = null;
+
+type MicPermissionState = 'unknown' | 'prompt' | 'granted' | 'denied' | 'unsupported';
+let micPermissionStatus: MicPermissionState = 'unknown';
+let pendingMicRequest: Promise<MicPermissionState> | null = null;
+let initialMicPromptAttempted = false;
+let globalUnlockBound = false;
+
+/**
+ * Queries and requests browser microphone permission cleanly.
+ * Immediately stops audio input tracks so no active recording indicator lingers.
+ */
+export async function requestMicrophonePermission(forceRetryOnDenied = false): Promise<MicPermissionState> {
+  if (typeof navigator === 'undefined' || !navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
+    micPermissionStatus = 'unsupported';
+    return micPermissionStatus;
+  }
+
+  // Check current permission status via Permissions API if supported
+  try {
+    if (navigator.permissions && typeof navigator.permissions.query === 'function') {
+      const status = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+      micPermissionStatus = status.state as MicPermissionState;
+      status.onchange = () => {
+        micPermissionStatus = status.state as MicPermissionState;
+      };
+      if (status.state === 'granted') {
+        return 'granted';
+      }
+      if (status.state === 'denied' && !forceRetryOnDenied) {
+        return 'denied';
+      }
+    }
+  } catch {
+    // Some browsers (e.g., Safari) throw on permissions.query({ name: 'microphone' })
+  }
+
+  if (micPermissionStatus === 'granted') {
+    return 'granted';
+  }
+  if (micPermissionStatus === 'denied' && !forceRetryOnDenied) {
+    return 'denied';
+  }
+
+  if (pendingMicRequest) {
+    return pendingMicRequest;
+  }
+
+  pendingMicRequest = (async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      try {
+        stream.getTracks().forEach((track) => track.stop());
+      } catch {}
+      micPermissionStatus = 'granted';
+      return 'granted';
+    } catch {
+      micPermissionStatus = 'denied';
+      return 'denied';
+    } finally {
+      pendingMicRequest = null;
+    }
+  })();
+
+  return pendingMicRequest;
+}
+
+export function getMicrophonePermissionState(): MicPermissionState {
+  return micPermissionStatus;
+}
+
+/**
+ * Unlocks AudioContext, persistent HTMLAudioElement, and SpeechSynthesis synchronously inside a user gesture.
+ * Required by Chrome Mobile, iOS Safari, and Desktop Safari before async TTS playback.
+ */
+export function unlockAudioForPlayback() {
+  if (typeof window === 'undefined') return;
+
+  // 1. Unlock Web Audio API Context
+  try {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (AudioCtx) {
+      if (!sharedAudioContext) {
+        sharedAudioContext = new AudioCtx();
+      }
+      if (sharedAudioContext.state === 'suspended') {
+        void sharedAudioContext.resume().catch(() => {});
+      }
+    }
+  } catch {}
+
+  // 2. Unlock persistent HTMLAudioElement synchronously using a tiny silent WAV
+  try {
+    if (!sharedAudioElement) {
+      sharedAudioElement = new Audio();
+      sharedAudioElement.preload = 'auto';
+      (sharedAudioElement as any).playsInline = true;
+    }
+    if (!isAudioElementUnlocked) {
+      sharedAudioElement.muted = true;
+      sharedAudioElement.src = SILENT_WAV_DATA_URI;
+      const p = sharedAudioElement.play();
+      if (p && typeof p.then === 'function') {
+        p.then(() => {
+          if (sharedAudioElement) {
+            if (sharedAudioElement.src === SILENT_WAV_DATA_URI) {
+              sharedAudioElement.pause();
+            }
+            sharedAudioElement.muted = false;
+          }
+          isAudioElementUnlocked = true;
+        }).catch(() => {
+          if (sharedAudioElement) {
+            sharedAudioElement.muted = false;
+          }
+        });
+      } else {
+        sharedAudioElement.muted = false;
+        isAudioElementUnlocked = true;
+      }
+    }
+  } catch {}
+
+  // 3. Unlock SpeechSynthesis once per session so fallback speech never gets silently blocked
+  try {
+    if (!isSpeechSynthesisUnlocked && 'speechSynthesis' in window && typeof SpeechSynthesisUtterance !== 'undefined') {
+      isSpeechSynthesisUnlocked = true;
+      if (!window.speechSynthesis.speaking && !window.speechSynthesis.pending) {
+        const primer = new SpeechSynthesisUtterance('');
+        primer.volume = 0;
+        window.speechSynthesis.speak(primer);
+      }
+    }
+  } catch {}
+}
+
+/**
+ * Called on initial app mount:
+ * 1. Requests microphone permission immediately upon visiting the site/domain.
+ * 2. Binds first-gesture audio unlock across all browsers.
+ */
+export function initVoiceAndMicPermissions() {
+  if (typeof window === 'undefined') return;
+
+  if (!initialMicPromptAttempted) {
+    initialMicPromptAttempted = true;
+    void requestMicrophonePermission(false);
+  }
+
+  if (!globalUnlockBound) {
+    globalUnlockBound = true;
+    const handleFirstInteraction = () => {
+      unlockAudioForPlayback();
+      window.removeEventListener('pointerdown', handleFirstInteraction, true);
+      window.removeEventListener('touchstart', handleFirstInteraction, true);
+      window.removeEventListener('click', handleFirstInteraction, true);
+      window.removeEventListener('keydown', handleFirstInteraction, true);
+    };
+    window.addEventListener('pointerdown', handleFirstInteraction, { capture: true, passive: true });
+    window.addEventListener('touchstart', handleFirstInteraction, { capture: true, passive: true });
+    window.addEventListener('click', handleFirstInteraction, { capture: true, passive: true });
+    window.addEventListener('keydown', handleFirstInteraction, { capture: true, passive: true });
+  }
+}
 
 type VoiceListener = (isPlaying: boolean, serviceKey: string | null) => void;
 const listeners = new Set<VoiceListener>();
 
 function notifyListeners() {
   const isSpeaking = Boolean(
+    currentPlayingServiceKey !== null ||
     (typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis.speaking) ||
-    (currentAudioPlayer && !currentAudioPlayer.paused) ||
-    currentPlayingServiceKey !== null
+    (currentAudioPlayer && !currentAudioPlayer.paused && Boolean(currentAudioPlayer.src) && currentAudioPlayer.src !== SILENT_WAV_DATA_URI)
   );
   listeners.forEach((listener) => {
     try {
@@ -536,11 +698,11 @@ function notifyListeners() {
 export function subscribeVoiceState(listener: VoiceListener): () => void {
   listeners.add(listener);
   const isSpeaking = Boolean(
+    currentPlayingServiceKey !== null ||
     (typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis.speaking) ||
-    (currentAudioPlayer && !currentAudioPlayer.paused) ||
-    currentPlayingServiceKey !== null
+    (currentAudioPlayer && !currentAudioPlayer.paused && Boolean(currentAudioPlayer.src) && currentAudioPlayer.src !== SILENT_WAV_DATA_URI)
   );
-  listener(isSpeaking, currentPlayingServiceKey);
+  listener(isSpeaking, isSpeaking ? currentPlayingServiceKey : null);
   return () => {
     listeners.delete(listener);
   };
@@ -548,9 +710,9 @@ export function subscribeVoiceState(listener: VoiceListener): () => void {
 
 export function isServiceVoicePlaying(serviceKey?: string): boolean {
   const isSpeaking = Boolean(
+    currentPlayingServiceKey !== null ||
     (typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis.speaking) ||
-    (currentAudioPlayer && !currentAudioPlayer.paused) ||
-    currentPlayingServiceKey !== null
+    (currentAudioPlayer && !currentAudioPlayer.paused && Boolean(currentAudioPlayer.src) && currentAudioPlayer.src !== SILENT_WAV_DATA_URI)
   );
   if (!isSpeaking) return false;
   if (!serviceKey) return true;
@@ -572,55 +734,29 @@ function resolveVoiceAndLanguage(langCode: VoiceLanguageCode): { voice: SpeechSy
   const requestedTag = VOICE_LANGUAGE_TAGS[langCode] || 'hi-IN';
 
   if (voices.length > 0) {
-    // 1. Try to find a voice for requested language
-    const exactVoice = voices.find((v) => {
-      const vLang = v.lang.replace('_', '-').toLowerCase();
-      return vLang === requestedTag.toLowerCase();
-    });
-    if (exactVoice) {
-      console.log(`[VoiceGuidance] Found exact voice for '${requestedTag}':`, exactVoice.name);
-      return { voice: exactVoice, lang: exactVoice.lang };
-    }
+    const exactVoice = voices.find((v) => v.lang.replace('_', '-').toLowerCase() === requestedTag.toLowerCase());
+    if (exactVoice) return { voice: exactVoice, lang: exactVoice.lang };
 
-    const prefixVoice = voices.find((v) => {
-      const vLang = v.lang.replace('_', '-').toLowerCase();
-      return vLang.startsWith(langCode.toLowerCase());
-    });
-    if (prefixVoice) {
-      console.log(`[VoiceGuidance] Found prefix voice for '${langCode}':`, prefixVoice.name);
-      return { voice: prefixVoice, lang: prefixVoice.lang };
-    }
+    const prefixVoice = voices.find((v) => v.lang.replace('_', '-').toLowerCase().startsWith(langCode.toLowerCase()));
+    if (prefixVoice) return { voice: prefixVoice, lang: prefixVoice.lang };
 
-    // 2. Fallback to Hindi ('hi-IN') if regional voice is not on device
     const hindiVoice = voices.find((v) => {
       const vLang = v.lang.replace('_', '-').toLowerCase();
       return vLang === 'hi-in' || vLang.startsWith('hi');
     });
-    if (hindiVoice) {
-      console.log(`[VoiceGuidance] No voice on device for '${requestedTag}'. Falling back to Hindi:`, hindiVoice.name);
-      return { voice: hindiVoice, lang: 'hi-IN' };
-    }
+    if (hindiVoice) return { voice: hindiVoice, lang: 'hi-IN' };
 
-    // 3. Fallback to Indian English ('en-IN') or any English voice
     const englishVoice = voices.find((v) => {
       const vLang = v.lang.replace('_', '-').toLowerCase();
       return vLang === 'en-in' || vLang.startsWith('en');
     });
-    if (englishVoice) {
-      console.log(`[VoiceGuidance] Falling back to English voice:`, englishVoice.name);
-      return { voice: englishVoice, lang: 'en-IN' };
-    }
+    if (englishVoice) return { voice: englishVoice, lang: 'en-IN' };
 
-    // 4. Fallback to default system voice
     const defaultVoice = voices.find((v) => v.default) || voices[0];
-    if (defaultVoice) {
-      console.log(`[VoiceGuidance] Falling back to default system voice:`, defaultVoice.name);
-      return { voice: defaultVoice, lang: defaultVoice.lang || 'hi-IN' };
-    }
+    if (defaultVoice) return { voice: defaultVoice, lang: defaultVoice.lang || requestedTag };
   }
 
-  // If voices list is still empty, safe fallback to hi-IN
-  return { voice: null, lang: 'hi-IN' };
+  return { voice: null, lang: requestedTag };
 }
 
 // Pre-warm browser voices on page load
@@ -628,8 +764,9 @@ if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
   try {
     window.speechSynthesis.getVoices();
     window.speechSynthesis.onvoiceschanged = () => {
-      const voices = window.speechSynthesis.getVoices();
-      console.log('[VoiceGuidance] Speech voices loaded into browser:', voices.length);
+      try {
+        window.speechSynthesis.getVoices();
+      } catch {}
     };
   } catch {}
 }
@@ -637,75 +774,90 @@ if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
 // Active play session tracking to ensure ONLY ONE voice can ever play at any instant
 let currentPlaySessionId = 0;
 
+function cleanupAudioElementHandlers(audio: HTMLAudioElement | null) {
+  if (!audio) return;
+  audio.onloadedmetadata = null;
+  audio.onplay = null;
+  audio.onended = null;
+  audio.onerror = null;
+}
+
 /**
  * 4. MUTE / STOP CONTROLS:
- * Stops any playing speech or audio immediately
+ * Stops any playing speech or audio immediately without triggering stale error callbacks
  */
 export function stopServiceVoice() {
   currentPlaySessionId++;
+
+  if (currentFetchAbortController) {
+    try {
+      currentFetchAbortController.abort();
+    } catch {}
+    currentFetchAbortController = null;
+  }
+
   if (speechHeartbeatTimer) {
     clearInterval(speechHeartbeatTimer);
     speechHeartbeatTimer = null;
   }
+
   if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
     try {
-      window.speechSynthesis.cancel();
+      if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+        window.speechSynthesis.cancel();
+      }
     } catch {}
   }
+
   if (currentAudioPlayer) {
+    cleanupAudioElementHandlers(currentAudioPlayer);
     try {
       currentAudioPlayer.pause();
       currentAudioPlayer.currentTime = 0;
-      currentAudioPlayer.src = '';
+      currentAudioPlayer.removeAttribute('src');
+      currentAudioPlayer.load();
     } catch {}
     currentAudioPlayer = null;
   }
+
+  if (currentBlobUrl) {
+    try {
+      URL.revokeObjectURL(currentBlobUrl);
+    } catch {}
+    currentBlobUrl = null;
+  }
+
+  currentUtterance = null;
   currentPlayingServiceKey = null;
   notifyListeners();
 }
 
 /**
- * Plays the voice guidance for the requested service using native SpeechSynthesis
- * With energetic 1.5x speed, accurate pronunciation, and seamless delivery
+ * Plays the voice guidance for the requested service.
+ * 1. Synchronously unlocks audio playback in the browser.
+ * 2. If microphone access was previously disallowed/dismissed, re-prompts cleanly on click without blocking playback.
+ * 3. Fetches audio via POST /api/tts-audio (no URL length limit) -> plays on unlocked HTMLAudioElement at 1.3x.
+ * 4. Falls back cleanly to chunked Web SpeechSynthesis if offline or proxy unavailable.
  */
 export function playServiceVoice(serviceKey: string) {
-  // 1. Mandatory cancel before speaking
   stopServiceVoice();
-  if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-    try {
-      window.speechSynthesis.cancel();
-    } catch {}
-  }
 
   const canonicalKey = resolveServiceKey(serviceKey);
   if (!canonicalKey) {
-    // Voice strictly disabled outside the 7 allowed sections
     return;
   }
 
   const thisSession = ++currentPlaySessionId;
   const userLang = (localStorage.getItem('userAudioLanguage') || localStorage.getItem('ctc_audio_language_v2') || 'hi') as VoiceLanguageCode;
-  const bcp47 = VOICE_LANGUAGE_TAGS[userLang] || 'hi-IN';
-
-  console.log('[VoiceGuidance] Service Button Clicked (Session #' + thisSession + '):', {
-    serviceKey,
-    canonicalKey,
-    userAudioLanguage: userLang,
-    bcp47
-  });
-
   const serviceData = allServiceVoiceTexts[canonicalKey];
   if (!serviceData) {
     return;
   }
   const rawText = serviceData[userLang] || serviceData['hi'] || '';
-
   if (!rawText) {
-    console.warn('[VoiceGuidance] No voice text found for serviceKey:', serviceKey, 'lang:', userLang);
     return;
   }
 
-  // Sanitize text for crisp, fluid speech without awkward pauses
   const textToSpeak = rawText
     .replace(/['"“”‘’]/g, '')
     .replace(/सबमिट/g, 'सब्मिट')
@@ -714,64 +866,140 @@ export function playServiceVoice(serviceKey: string) {
 
   if (typeof window === 'undefined') return;
 
-  // Try HTML5 Audio stream via /api/tts-audio first for rich, natural Google Voice at 1.3x speed
-  try {
-    const audioUrl = `/api/tts-audio?tl=${encodeURIComponent(userLang)}&q=${encodeURIComponent(textToSpeak)}`;
-    const audio = new Audio(audioUrl);
-    currentAudioPlayer = audio;
-    audio.defaultPlaybackRate = 1.3;
-    audio.playbackRate = 1.3;
-    (audio as any).preservesPitch = true;
+  // Synchronously mark active & unlock browser audio inside the click gesture
+  currentPlayingServiceKey = canonicalKey;
+  notifyListeners();
+  unlockAudioForPlayback();
 
-    audio.onloadedmetadata = () => {
-      audio.playbackRate = 1.3;
-    };
+  // If mic permission was disallowed/dismissed earlier, re-request cleanly without blocking voice output
+  if (micPermissionStatus !== 'granted') {
+    void requestMicrophonePermission(true);
+  }
 
-    audio.onplay = () => {
+  const abortController = new AbortController();
+  currentFetchAbortController = abortController;
+
+  fetch('/api/tts-audio', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tl: userLang, q: textToSpeak }),
+    signal: abortController.signal
+  })
+    .then(async (res) => {
+      if (thisSession !== currentPlaySessionId) return;
+      const contentType = (res.headers.get('content-type') || '').toLowerCase();
+      if (!res.ok || !contentType.includes('audio')) {
+        throw new Error(`TTS proxy unavailable (${res.status} ${contentType})`);
+      }
+      const blob = await res.blob();
+      if (thisSession !== currentPlaySessionId) return;
+      if (!blob || blob.size === 0) {
+        throw new Error('Empty TTS audio blob');
+      }
+
+      const blobUrl = URL.createObjectURL(blob);
       if (thisSession !== currentPlaySessionId) {
-        audio.pause();
+        URL.revokeObjectURL(blobUrl);
         return;
       }
+
+      if (currentBlobUrl) {
+        try { URL.revokeObjectURL(currentBlobUrl); } catch {}
+      }
+      currentBlobUrl = blobUrl;
+
+      const audio = sharedAudioElement || new Audio();
+      sharedAudioElement = audio;
+      currentAudioPlayer = audio;
+      cleanupAudioElementHandlers(audio);
+
+      audio.muted = false;
+      audio.volume = 1.0;
+      audio.src = blobUrl;
+      audio.defaultPlaybackRate = 1.3;
       audio.playbackRate = 1.3;
-      currentPlayingServiceKey = canonicalKey;
-      notifyListeners();
-      console.log('🔊 [VoiceGuidance] HTML5 TTS Stream Playing at 1.3x for:', canonicalKey, '| Lang:', userLang);
-    };
+      (audio as any).preservesPitch = true;
 
-    audio.onended = () => {
-      if (thisSession !== currentPlaySessionId) return;
-      console.log('✅ [VoiceGuidance] HTML5 TTS Stream Ended naturally for:', canonicalKey);
-      stopServiceVoice();
-    };
+      audio.onloadedmetadata = () => {
+        if (thisSession !== currentPlaySessionId) return;
+        audio.playbackRate = 1.3;
+      };
 
-    audio.onerror = () => {
-      console.warn('[VoiceGuidance] HTML5 Audio streaming failed, trying SpeechSynthesis fallback...');
+      audio.onplay = () => {
+        if (thisSession !== currentPlaySessionId) {
+          audio.pause();
+          return;
+        }
+        audio.playbackRate = 1.3;
+        currentPlayingServiceKey = canonicalKey;
+        notifyListeners();
+      };
+
+      audio.onended = () => {
+        if (thisSession !== currentPlaySessionId) return;
+        stopServiceVoice();
+      };
+
+      audio.onerror = () => {
+        if (thisSession !== currentPlaySessionId) return;
+        console.warn('[VoiceGuidance] HTML5 Blob audio failed, trying SpeechSynthesis fallback...');
+        fallbackToSpeechSynthesis(textToSpeak, userLang, canonicalKey, thisSession);
+      };
+
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            if (thisSession !== currentPlaySessionId) {
+              audio.pause();
+              return;
+            }
+            audio.playbackRate = 1.3;
+            currentPlayingServiceKey = canonicalKey;
+            notifyListeners();
+          })
+          .catch((playErr) => {
+            if (thisSession !== currentPlaySessionId) return;
+            console.warn('[VoiceGuidance] Audio play interrupted/blocked, falling back to speech synthesis:', playErr);
+            fallbackToSpeechSynthesis(textToSpeak, userLang, canonicalKey, thisSession);
+          });
+      }
+    })
+    .catch((err) => {
+      if (err?.name === 'AbortError' || thisSession !== currentPlaySessionId) {
+        return;
+      }
+      console.warn('[VoiceGuidance] POST /api/tts-audio failed, trying GET/SpeechSynthesis fallback:', err);
       fallbackToSpeechSynthesis(textToSpeak, userLang, canonicalKey, thisSession);
-    };
+    });
+}
 
-    const playPromise = audio.play();
-    if (playPromise !== undefined) {
-      playPromise
-        .then(() => {
-          audio.playbackRate = 1.3;
-          currentPlayingServiceKey = canonicalKey;
-          notifyListeners();
-        })
-        .catch((playErr) => {
-          console.warn('[VoiceGuidance] Audio play interrupted/blocked, falling back to speech synthesis:', playErr);
-          fallbackToSpeechSynthesis(textToSpeak, userLang, canonicalKey, thisSession);
-        });
+function splitSpeechChunks(text: string, maxLength = 160): string[] {
+  if (text.length <= maxLength) return [text];
+  const sentences = text.split(/(?<=[।!?.\n])\s+/);
+  const chunks: string[] = [];
+  let cur = '';
+  for (const s of sentences) {
+    if (!s.trim()) continue;
+    if ((cur + ' ' + s).trim().length <= maxLength) {
+      cur = cur ? `${cur} ${s}` : s;
+    } else {
+      if (cur.trim()) chunks.push(cur.trim());
+      cur = s.trim();
     }
-  } catch (audioInitErr) {
-    fallbackToSpeechSynthesis(textToSpeak, userLang, canonicalKey, thisSession);
   }
+  if (cur.trim()) chunks.push(cur.trim());
+  return chunks.length > 0 ? chunks : [text];
 }
 
 /**
- * Fallback to browser SpeechSynthesis when Audio element is unavailable
+ * Fallback to browser SpeechSynthesis when /api/tts-audio or HTMLAudioElement is unavailable
  */
 function fallbackToSpeechSynthesis(textToSpeak: string, userLang: VoiceLanguageCode, canonicalKey: string, thisSession: number) {
   if (typeof window === 'undefined' || !('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined') {
+    if (thisSession === currentPlaySessionId) {
+      stopServiceVoice();
+    }
     return;
   }
 
@@ -779,52 +1007,78 @@ function fallbackToSpeechSynthesis(textToSpeak: string, userLang: VoiceLanguageC
     if (window.speechSynthesis.paused) {
       window.speechSynthesis.resume();
     }
+    if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+      window.speechSynthesis.cancel();
+    }
 
     const { voice, lang } = resolveVoiceAndLanguage(userLang);
-    const utterance = new SpeechSynthesisUtterance(textToSpeak);
-    currentUtterance = utterance;
-    if (typeof window !== 'undefined') {
-      (window as any).currentUtterance = utterance;
+    const chunks = splitSpeechChunks(textToSpeak, 160);
+    let chunkIndex = 0;
+
+    if (speechHeartbeatTimer) {
+      clearInterval(speechHeartbeatTimer);
     }
+    speechHeartbeatTimer = setInterval(() => {
+      if (thisSession === currentPlaySessionId && window.speechSynthesis.speaking) {
+        try {
+          window.speechSynthesis.pause();
+          window.speechSynthesis.resume();
+        } catch {}
+      }
+    }, 8000);
 
-    utterance.lang = lang;
-    utterance.rate = 1.3;
-    utterance.pitch = 1.0;
-
-    if (voice) {
-      utterance.voice = voice;
-    }
-
-    utterance.onstart = () => {
-      if (thisSession !== currentPlaySessionId) {
-        try { window.speechSynthesis.cancel(); } catch {}
+    const speakNextChunk = () => {
+      if (thisSession !== currentPlaySessionId) return;
+      if (chunkIndex >= chunks.length) {
+        stopServiceVoice();
         return;
       }
+
+      const utterance = new SpeechSynthesisUtterance(chunks[chunkIndex]);
+      currentUtterance = utterance;
+      (window as any).currentUtterance = utterance;
+
+      utterance.lang = lang;
+      utterance.rate = 1.3;
+      utterance.pitch = 1.0;
+      utterance.volume = 1.0;
+      if (voice) utterance.voice = voice;
+
+      utterance.onstart = () => {
+        if (thisSession !== currentPlaySessionId) {
+          try { window.speechSynthesis.cancel(); } catch {}
+          return;
+        }
+        currentPlayingServiceKey = canonicalKey;
+        notifyListeners();
+      };
+
+      utterance.onend = () => {
+        if (thisSession !== currentPlaySessionId) return;
+        chunkIndex++;
+        speakNextChunk();
+      };
+
+      utterance.onerror = (e) => {
+        if (thisSession !== currentPlaySessionId) return;
+        if (e.error === 'interrupted' || e.error === 'canceled') {
+          currentPlayingServiceKey = null;
+          notifyListeners();
+          return;
+        }
+        stopServiceVoice();
+      };
+
+      window.speechSynthesis.speak(utterance);
       currentPlayingServiceKey = canonicalKey;
       notifyListeners();
     };
 
-    utterance.onend = () => {
-      if (thisSession !== currentPlaySessionId) return;
-      stopServiceVoice();
-    };
-
-    utterance.onerror = (e) => {
-      if (e.error === 'interrupted' || e.error === 'canceled') {
-        if (thisSession === currentPlaySessionId) {
-          currentPlayingServiceKey = null;
-          notifyListeners();
-        }
-        return;
-      }
-      stopServiceVoice();
-    };
-
-    window.speechSynthesis.speak(utterance);
-    currentPlayingServiceKey = canonicalKey;
-    notifyListeners();
+    speakNextChunk();
   } catch {
-    stopServiceVoice();
+    if (thisSession === currentPlaySessionId) {
+      stopServiceVoice();
+    }
   }
 }
 
@@ -844,10 +1098,11 @@ export function toggleServiceVoice(serviceKey: string) {
   }
 }
 
-// Expose on window object for direct HTML / script consumption as requested
+// Expose on window object for direct HTML / script consumption
 if (typeof window !== 'undefined') {
   (window as any).allServiceVoiceTexts = allServiceVoiceTexts;
   (window as any).playServiceVoice = playServiceVoice;
   (window as any).stopServiceVoice = stopServiceVoice;
   (window as any).toggleServiceVoice = toggleServiceVoice;
+  (window as any).requestMicrophonePermission = requestMicrophonePermission;
 }

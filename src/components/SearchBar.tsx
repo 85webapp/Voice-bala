@@ -19,6 +19,7 @@ import {
 } from '../data/voiceNarrationData';
 import { INITIAL_FRONT_DOCUMENTS } from '../data/documentsData';
 import { LegalDocument } from '../types';
+import { requestMicrophonePermission } from '../services/googleVoiceGuidance';
 
 interface SearchBarProps {
   value: string;
@@ -204,7 +205,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
     setAiError(null);
   };
 
-  const toggleListening = () => {
+  const toggleListening = async () => {
     if (!recognitionRef.current) {
       setSpeechError('Voice input is not supported by this browser. Please type your query or use a supported browser.');
       return;
@@ -218,6 +219,11 @@ export const SearchBar: React.FC<SearchBarProps> = ({
       } catch {}
       setIsListening(false);
     } else {
+      const micState = await requestMicrophonePermission(true);
+      if (micState === 'denied') {
+        setSpeechError('Microphone permission blocked. Please allow microphone access in your browser.');
+        return;
+      }
       shouldListenRef.current = true;
       try {
         recognitionRef.current.start();
