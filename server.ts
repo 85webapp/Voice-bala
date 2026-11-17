@@ -10,7 +10,13 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const port = process.env.PORT || 3000;
+const portArgIdx = process.argv.indexOf('--port');
+const cliPort = portArgIdx !== -1 ? Number(process.argv[portArgIdx + 1]) : NaN;
+const port = Number.isFinite(cliPort) && cliPort > 0
+  ? cliPort
+  : process.env.NODE_ENV === 'production'
+    ? Number(process.env.PORT || 3000)
+    : 3000;
 
 app.use('/api/website-b/relay', express.json({ limit: '10mb' }));
 app.use(express.json({ limit: '32kb' }));

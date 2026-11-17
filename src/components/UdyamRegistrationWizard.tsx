@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
@@ -7,23 +7,14 @@ import {
   FileCheck2,
   Plus,
   Trash2,
-  Volume2,
-  VolumeX,
   Award,
   Download,
   AlertTriangle,
   MapPin,
   Landmark,
   ShieldCheck,
-  Lock,
-  ExternalLink
+  Lock
 } from 'lucide-react';
-import {
-  speechController,
-  getStoredAudioLanguage,
-  SUPPORTED_LANGUAGES,
-  getServiceVoiceScript
-} from '../data/voiceNarrationData';
 import { SERVICE_CATEGORIES } from '../data/servicesData';
 import { VoiceGuidanceButton } from './VoiceGuidanceButton';
 import { useExampleDetails } from '../hooks/useExampleDetails';
@@ -36,11 +27,15 @@ import {
   generateSequentialOrderId,
   buildSubmissionOverview,
   fieldEntry,
+  checkboxEntry,
   DossierSection,
   ServerBSyncResult
 } from '../services/encryptionService';
 import { ServerBSyncStatusCard } from './ServerBSyncStatusCard';
 import { showToast } from '../services/toastService';
+import { AddressFieldGroup } from './AddressFieldGroup';
+import { FormRequestTabBar, HorizontalSwipeContainer, WizardModeTab } from './FormRequestTabBar';
+import { QuickCallbackRequestPanel } from './QuickCallbackRequestPanel';
 
 interface UdyamRegistrationWizardProps {
   onBack: () => void;
@@ -48,15 +43,10 @@ interface UdyamRegistrationWizardProps {
 
 export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = ({ onBack }) => {
   const { getPlaceholder } = useExampleDetails();
-  const [activeTab, setActiveTab] = useState<'form' | 'request'>('form');
+  const [activeTab, setActiveTab] = useState<WizardModeTab>('form');
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [udyamRegNumber, setUdyamRegNumber] = useState('');
-  const [submissionSecurityDetails, setSubmissionSecurityDetails] = useState<{
-    encryptedPayload: string;
-    signature: string;
-    websiteBUrl: string;
-  } | null>(null);
   const [serverBSyncResult, setServerBSyncResult] = useState<ServerBSyncResult | null>(null);
   const [isRetryingSync, setIsRetryingSync] = useState(false);
   const [cachedEncPayload, setCachedEncPayload] = useState<{ result: any; metadata: any } | null>(null);
@@ -71,19 +61,6 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
       setIsRetryingSync(false);
     }
   };
-
-  // Audio language
-  const [audioLang] = useState(getStoredAudioLanguage());
-  const activeLangConfig = SUPPORTED_LANGUAGES.find((l) => l.code === audioLang) || SUPPORTED_LANGUAGES[0];
-
-  // Request Tab Form State
-  const [requestData, setRequestData] = useState({
-    name: '',
-    phone: '',
-    email: '',
-    service: 'MSME Udyam Registration'
-  });
-  const [requestSubmitted, setRequestSubmitted] = useState(false);
 
   // STEP 1 State: Aadhaar Authentication & PAN Gate
   const [step1, setStep1] = useState({
@@ -215,10 +192,10 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
         buildingName: '',
         villageOrTown: '',
         block: '',
-        city: 'Mainpuri',
-        district: 'Mainpuri',
+        city: '',
+        district: '',
         state: 'Uttar Pradesh',
-        pinCode: '205001'
+        pinCode: ''
       }
     ]);
   };
@@ -228,83 +205,7 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
     setUnitsList((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleRequestSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!requestData.name.trim()) {
-      showToast('Please enter your full name.', 'warning');
-      return;
-    }
-    if (requestData.phone.replace(/\D/g, '').length !== 10) {
-      showToast('Please enter a valid 10-digit mobile number.', 'warning');
-      return;
-    }
-    const orderId = generateSequentialOrderId();
-    const urn = `UDYAM-REQ-${orderId}`;
-    const now = new Date();
-    setUdyamRegNumber(urn);
 
-    const registrationServices = SERVICE_CATEGORIES.find((c) => c.id === 'registrations')?.services || [];
-    const submissionOverview = buildSubmissionOverview({
-      orderId: urn,
-      requestType: 'Registration Callback Request (1-Hour Instant)',
-      mainCategory: 'Registrations',
-      subCategory: requestData.service || 'MSME Udyam Registration',
-      availableCategories: SERVICE_CATEGORIES.map((c) => c.title),
-      availableSubCategories: registrationServices,
-      documentTitle: `${requestData.service || 'MSME Udyam Registration'} (Callback Request)`,
-      date: now
-    });
-
-    const sections: DossierSection[] = [
-      {
-        pageNumber: 1,
-        sectionTitle: 'Instant Udyam Callback Request Details',
-        fields: [
-          fieldEntry('Applicant Name', requestData.name, false),
-          fieldEntry('10-Digit Mobile Number', requestData.phone, false),
-          fieldEntry('Email Address', requestData.email, true),
-          fieldEntry('Service Selected', requestData.service, false, registrationServices)
-        ]
-      }
-    ];
-
-    const sensitiveData = {
-      orderId,
-      urn,
-      submissionOverview,
-      sections,
-      mode: 'Quick Callback Request',
-      service: requestData.service || 'MSME Udyam Registration',
-      category: 'Registrations',
-      clientName: requestData.name,
-      clientPhone: requestData.phone,
-      clientEmail: requestData.email || 'Not Filled (Optional)',
-      requestData,
-      timestamp: now.toISOString()
-    };
-
-    const encResult = encryptFormDataAndSign(sensitiveData);
-    const metadata = {
-      firstPartyName: requestData.name || 'MSME Callback Applicant',
-      formName: `${requestData.service || 'MSME Udyam Registration'} (Callback Request)`,
-      timestamp: now.toISOString(),
-      totalPrice: '0',
-      orderId: urn
-    };
-    await saveLightweightMetadata(metadata);
-    const syncRes = await postEncryptedPayloadToWebsiteB(encResult, metadata);
-    setServerBSyncResult(syncRes);
-    setCachedEncPayload({ result: encResult, metadata });
-    setSubmissionSecurityDetails({
-      encryptedPayload: encResult.encryptedPayload,
-      signature: encResult.signature,
-      websiteBUrl: encResult.websiteBUrl
-    });
-    setRequestSubmitted(true);
-    try {
-      playConfirmationChime();
-    } catch {}
-  };
 
   const handleFinalUdyamSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -337,6 +238,14 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
       date: now
     });
 
+    const orgOptions = ['PROPRIETORY', 'HUF', 'PARTNERSHIP', 'CO_OPERATIVE', 'PVT_LTD', 'PUBLIC_LTD', 'LLP'];
+    const dicOptions = [
+      'DIC Mainpuri, Uttar Pradesh',
+      'DIC Gautam Buddha Nagar (Noida)',
+      'DIC Lucknow, Uttar Pradesh',
+      'DIC Kanpur, Uttar Pradesh'
+    ];
+
     const sections: DossierSection[] = [
       {
         pageNumber: 1,
@@ -344,7 +253,7 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
         fields: [
           fieldEntry('Aadhaar Number (12 Digits)', step1.aadhaarNumber, false),
           fieldEntry('Name of Entrepreneur (As per Aadhaar)', step1.entrepreneurName, false),
-          fieldEntry('Aadhaar OTP Verified?', step1.otpVerified ? 'Yes' : 'Pending Verification', true),
+          checkboxEntry('Aadhaar OTP Verified', step1.otpVerified, false),
           fieldEntry('Do you have PAN?', step1.hasPan, false, ['Yes', 'No']),
           fieldEntry('PAN Number', step1.hasPan === 'Yes' ? step1.panNumber : '', step1.hasPan !== 'Yes')
         ]
@@ -353,13 +262,9 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
         pageNumber: 2,
         sectionTitle: 'Step 2: Type of Organisation & Social Category',
         fields: [
-          fieldEntry('Type of Organisation', step2.organizationType, false, [
-            'PROPRIETORY', 'HINDU UNDIVIDED FAMILY', 'PARTNERSHIP', 'CO-OPERATIVE',
-            'PRIVATE LIMITED COMPANY', 'PUBLIC LIMITED COMPANY', 'SELF HELP GROUP',
-            'LIMITED LIABILITY PARTNERSHIP', 'SOCIETY', 'TRUST', 'OTHERS'
-          ]),
+          fieldEntry('Type of Organisation', step2.organizationType, false, orgOptions),
           fieldEntry('Social Category', step2.socialCategory, false, ['GENERAL', 'SC', 'ST', 'OBC']),
-          fieldEntry('Caste Certificate Number', step2.socialCategory !== 'GENERAL' ? step2.casteCertificateNumber : '', step2.socialCategory === 'GENERAL'),
+          fieldEntry('Caste Certificate Number', step2.socialCategory !== 'GENERAL' ? step2.casteCertificateNumber : '', true),
           fieldEntry('Gender', step2.gender, false, ['Male', 'Female', 'Other']),
           fieldEntry('Specially Abled (Divyang)?', step2.physicallyHandicapped, false, ['Yes', 'No'])
         ]
@@ -369,15 +274,15 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
         sectionTitle: 'Step 3: Enterprise Contact, Bank & Plant/Unit Addresses',
         fields: [
           fieldEntry('Name of Enterprise', step3.enterpriseName, false),
-          fieldEntry('Official Email ID', step3.officialEmail, false),
+          fieldEntry('Official Email ID', step3.officialEmail, true),
           fieldEntry('Official Mobile Number', step3.officialMobile, false),
           fieldEntry('Date of Commencement of Business', step3.dateOfCommencement, false),
           fieldEntry('Previous UAM / EM-II Number', step3.previousUamNumber, true),
-          fieldEntry('Bank Name', step3.bankName, false),
-          fieldEntry('IFSC Code', step3.ifscCode, false),
-          fieldEntry('Bank Account Number', step3.bankAccountNumber, false),
+          fieldEntry('Bank Name', step3.bankName, true),
+          fieldEntry('IFSC Code', step3.ifscCode, true),
+          fieldEntry('Bank Account Number', step3.bankAccountNumber, true),
           ...unitsList.flatMap((u, idx) => [
-            fieldEntry(`Plant/Unit #${idx + 1} Name`, u.unitName, false),
+            fieldEntry(`Plant/Unit #${idx + 1} Name`, u.unitName || `Unit #${idx + 1}`, false),
             fieldEntry(`Plant/Unit #${idx + 1} Flat / Door / Block`, u.flatNo, false),
             fieldEntry(`Plant/Unit #${idx + 1} Building / Premises`, u.buildingName, true),
             fieldEntry(`Plant/Unit #${idx + 1} Village / Town`, u.villageOrTown, true),
@@ -393,7 +298,7 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
         pageNumber: 4,
         sectionTitle: 'Step 4: Major Activity, NIC Codes, Employment & Financials',
         fields: [
-          fieldEntry('Major Activity', step4.majorActivity, false, ['MANUFACTURING', 'SERVICES']),
+          fieldEntry('Major Activity', step4.majorActivity, false, ['MANUFACTURING', 'SERVICES', 'TRADING']),
           fieldEntry('NIC 2/4/5-Digit Codes', step4.nicCodes, false),
           fieldEntry('Employees - Male', step4.empMale, false),
           fieldEntry('Employees - Female', step4.empFemale, false),
@@ -408,9 +313,9 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
         pageNumber: 5,
         sectionTitle: 'Step 5: DIC Office & Final Declaration',
         fields: [
-          fieldEntry('Selected District Industries Centre (DIC)', step5.preferredDIC, false),
-          fieldEntry('Declaration Accepted?', step5.declarationAccepted ? 'Yes' : 'No', false),
-          fieldEntry('Final Aadhaar OTP Entered', step5.finalAadhaarOtp, true)
+          fieldEntry('Selected District Industries Centre (DIC)', step5.preferredDIC, false, dicOptions),
+          checkboxEntry('MSMED Act 2006 Self-Declaration Accepted', step5.declarationAccepted, false),
+          fieldEntry('Final Aadhaar OTP Entered', step5.finalAadhaarOtp, false)
         ]
       }
     ];
@@ -434,7 +339,6 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
       timestamp: now.toISOString()
     };
     const encResult = encryptFormDataAndSign(sensitiveData);
-    const { encryptedPayload, signature, websiteBUrl } = encResult;
 
     // 2. Save ONLY 4 lightweight metadata fields in Supabase
     const metadata = {
@@ -451,7 +355,6 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
     setServerBSyncResult(syncRes);
     setCachedEncPayload({ result: encResult, metadata });
 
-    setSubmissionSecurityDetails({ encryptedPayload, signature, websiteBUrl });
     setIsSubmitted(true);
     try {
       playConfirmationChime();
@@ -561,147 +464,20 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
         <h1 className="text-2xl font-black text-black">MSME Udyam Registration</h1>
       </div>
 
-      {/* Two Sliders / Tabs: "Form" (default) & "Request" */}
-      <div className="flex items-center border-b border-slate-200 mb-6 gap-6">
-        <button
-          type="button"
-          onClick={() => setActiveTab('form')}
-          className={`pb-3 text-sm font-bold cursor-pointer transition-colors relative ${
-            activeTab === 'form' ? 'text-blue-600' : 'text-slate-500 hover:text-slate-900'
-          }`}
-        >
-          <span>Form (5-Step Official Workflow)</span>
-          {activeTab === 'form' && (
-            <div className="absolute bottom-0 inset-x-0 h-0.5 bg-blue-600 rounded-full" />
-          )}
-        </button>
+      {/* Swipeable / Clickable Mode Switcher */}
+      <FormRequestTabBar activeTab={activeTab} onChangeTab={setActiveTab} className="mb-6" />
 
-        <button
-          type="button"
-          onClick={() => setActiveTab('request')}
-          className={`pb-3 text-sm font-bold cursor-pointer transition-colors relative ${
-            activeTab === 'request' ? 'text-blue-600' : 'text-slate-500 hover:text-slate-900'
-          }`}
-        >
-          <span>Request (Instant 1-Hour Certificate Issuance)</span>
-          {activeTab === 'request' && (
-            <div className="absolute bottom-0 inset-x-0 h-0.5 bg-blue-600 rounded-full" />
-          )}
-        </button>
-      </div>
-
-      {/* TAB 2: Quick Callback Request */}
-      {activeTab === 'request' && (
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-sm">
-          {requestSubmitted ? (
-            <div className="text-center py-8 space-y-4">
-              <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
-                <CheckCircle2 className="w-7 h-7" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-slate-900">Request Submitted Successfully!</h3>
-                <p className="text-sm text-slate-600 mt-1 max-w-md mx-auto">
-                  Reference <strong>{udyamRegNumber}</strong>: Our MSME officer will call you on <strong>{requestData.phone}</strong> within 1 hour and generate your Udyam Certificate immediately.
-                </p>
-              </div>
-              <div className="max-w-md mx-auto text-left">
-                <ServerBSyncStatusCard
-                  syncResult={serverBSyncResult}
-                  isRetrying={isRetryingSync}
-                  onRetry={handleRetryServerBSync}
-                />
-              </div>
-              <div className="pt-2 flex justify-center gap-3">
-                <button
-                  type="button"
-                  onClick={onBack}
-                  className="px-5 py-2 bg-blue-600 text-white font-bold rounded-xl text-xs cursor-pointer"
-                >
-                  Back to Services
-                </button>
-              </div>
-            </div>
-          ) : (
-            <form onSubmit={handleRequestSubmit} className="space-y-4 max-w-lg mx-auto">
-              <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-xl text-xs text-blue-900 leading-relaxed">
-                💡 <strong>Instant Assistance:</strong> Skip the technical 5-step form. Enter your basic details and our team will coordinate with you within 1 hour to hand over your government Udyam Certificate.
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Your Name <span className="text-rose-600">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder={getPlaceholder('Enter full name')}
-                  value={requestData.name}
-                  onChange={(e) => setRequestData({ ...requestData, name: e.target.value })}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Mobile Number <span className="text-rose-600">*</span>
-                </label>
-                <input
-                  type="tel"
-                  inputMode="numeric"
-                  maxLength={10}
-                  required
-                  placeholder={getPlaceholder('10-digit mobile number')}
-                  value={requestData.phone}
-                  onChange={(e) => setRequestData({ ...requestData, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Email Address <span className="text-slate-400 font-normal">(Optional)</span>
-                </label>
-                <input
-                  type="email"
-                  placeholder={getPlaceholder('name@example.com')}
-                  value={requestData.email}
-                  onChange={(e) => setRequestData({ ...requestData, email: e.target.value })}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Service Selected
-                </label>
-                <select
-                  value={requestData.service}
-                  onChange={(e) => setRequestData({ ...requestData, service: e.target.value })}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                >
-                  {SERVICE_CATEGORIES.find((c) => c.id === 'registrations')?.services.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="pt-2">
-                <button
-                  type="submit"
-                  className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-sm shadow-sm cursor-pointer transition-all"
-                >
-                  Submit 1-Hour Callback Request
-                </button>
-              </div>
-            </form>
-          )}
-        </div>
-      )}
-
-      {/* TAB 1: 5-STEP UDYAM OFFICIAL FORM */}
-      {activeTab === 'form' && (
+      <HorizontalSwipeContainer activeTab={activeTab} onChangeTab={setActiveTab}>
+      {/* TAB 2: Upgraded Quick Callback Request */}
+      {activeTab === 'request' ? (
+        <QuickCallbackRequestPanel
+          mode="registration"
+          initialItemTitle="MSME Udyam Registration"
+          categoryLabel="Registrations"
+          onBack={onBack}
+          onSwitchToForm={() => setActiveTab('form')}
+        />
+      ) : (
         <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm">
           {/* Progress Tracker */}
           <div className="mb-6 border-b border-slate-200 pb-4">
@@ -1085,53 +861,32 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
                           )}
                         </div>
 
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                          <input
-                            type="text"
-                            placeholder={getPlaceholder('Flat/Plot No.')}
-                            value={unit.flatNo}
-                            onChange={(e) => {
-                              const updated = [...unitsList];
-                              updated[index].flatNo = e.target.value;
-                              setUnitsList(updated);
-                            }}
-                            className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-900"
-                          />
-                          <input
-                            type="text"
-                            placeholder={getPlaceholder('Building / Estate')}
-                            value={unit.buildingName}
-                            onChange={(e) => {
-                              const updated = [...unitsList];
-                              updated[index].buildingName = e.target.value;
-                              setUnitsList(updated);
-                            }}
-                            className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-900"
-                          />
-                          <input
-                            type="text"
-                            placeholder={getPlaceholder('City')}
-                            value={unit.city}
-                            onChange={(e) => {
-                              const updated = [...unitsList];
-                              updated[index].city = e.target.value;
-                              setUnitsList(updated);
-                            }}
-                            className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-900"
-                          />
-                          <input
-                            type="text"
-                            maxLength={6}
-                            placeholder={getPlaceholder('PIN Code')}
-                            value={unit.pinCode}
-                            onChange={(e) => {
-                              const updated = [...unitsList];
-                              updated[index].pinCode = e.target.value;
-                              setUnitsList(updated);
-                            }}
-                            className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-900"
-                          />
-                        </div>
+                        <AddressFieldGroup
+                          label={`Plant / Unit #${index + 1} Address`}
+                          variant="standard"
+                          onChangeAddress={(_, details) => {
+                            if (!details) return;
+                            setUnitsList((prev) =>
+                              prev.map((item, idx) =>
+                                idx === index
+                                  ? {
+                                      ...item,
+                                      unitName: item.unitName || `Unit-${idx + 1}`,
+                                      flatNo: details.flatBuilding || '',
+                                      buildingName: details.areaOrSociety || '',
+                                      villageOrTown: details.landmark || '',
+                                      block: details.areaStreet || '',
+                                      city: details.city || '',
+                                      district: details.city || '',
+                                      state: details.state || 'Uttar Pradesh',
+                                      pinCode: details.pincode || ''
+                                    }
+                                  : item
+                              )
+                            );
+                          }}
+                          required
+                        />
                       </div>
                     ))}
                   </div>
@@ -1428,6 +1183,7 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
           )}
         </div>
       )}
+      </HorizontalSwipeContainer>
     </div>
   );
 };

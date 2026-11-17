@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
@@ -9,20 +9,10 @@ import {
   Landmark,
   Plus,
   Trash2,
-  Volume2,
-  VolumeX,
-  Phone,
   MessageCircle,
   FileText,
-  Lock,
-  ExternalLink
+  Lock
 } from 'lucide-react';
-import {
-  speechController,
-  getStoredAudioLanguage,
-  SUPPORTED_LANGUAGES,
-  getServiceVoiceScript
-} from '../data/voiceNarrationData';
 import { SERVICE_CATEGORIES } from '../data/servicesData';
 import { VoiceGuidanceButton } from './VoiceGuidanceButton';
 import { AadhaarInput } from './AadhaarInput';
@@ -35,11 +25,15 @@ import {
   generateSequentialOrderId,
   buildSubmissionOverview,
   fieldEntry,
+  checkboxEntry,
   DossierSection,
   ServerBSyncResult
 } from '../services/encryptionService';
 import { ServerBSyncStatusCard } from './ServerBSyncStatusCard';
 import { showToast } from '../services/toastService';
+import { AddressFieldGroup } from './AddressFieldGroup';
+import { FormRequestTabBar, HorizontalSwipeContainer, WizardModeTab } from './FormRequestTabBar';
+import { QuickCallbackRequestPanel } from './QuickCallbackRequestPanel';
 
 interface GstRegistrationWizardProps {
   onBack: () => void;
@@ -61,15 +55,10 @@ const SAMPLE_DISTRICTS: Record<string, string[]> = {
 
 export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ onBack }) => {
   const { getPlaceholder } = useExampleDetails();
-  const [activeTab, setActiveTab] = useState<'form' | 'request'>('form');
+  const [activeTab, setActiveTab] = useState<WizardModeTab>('form');
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [arnNumber, setArnNumber] = useState('');
-  const [submissionSecurityDetails, setSubmissionSecurityDetails] = useState<{
-    encryptedPayload: string;
-    signature: string;
-    websiteBUrl: string;
-  } | null>(null);
   const [serverBSyncResult, setServerBSyncResult] = useState<ServerBSyncResult | null>(null);
   const [isRetryingSync, setIsRetryingSync] = useState(false);
   const [cachedEncPayload, setCachedEncPayload] = useState<{ result: any; metadata: any } | null>(null);
@@ -84,19 +73,6 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
       setIsRetryingSync(false);
     }
   };
-
-  // Audio language
-  const [audioLang] = useState(getStoredAudioLanguage());
-  const activeLangConfig = SUPPORTED_LANGUAGES.find((l) => l.code === audioLang) || SUPPORTED_LANGUAGES[0];
-
-  // Request Tab Form State
-  const [requestData, setRequestData] = useState({
-    name: '',
-    phone: '',
-    email: '',
-    service: 'GST Registration'
-  });
-  const [requestSubmitted, setRequestSubmitted] = useState(false);
 
   // STEP 1 State
   const [step1, setStep1] = useState({
@@ -165,81 +141,7 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
     ptinOrShopAct: '',
   });
 
-  const handleRequestSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!requestData.name.trim()) {
-      showToast('Please enter your full name.', 'warning');
-      return;
-    }
-    if (requestData.phone.replace(/\D/g, '').length !== 10) {
-      showToast('Please enter a valid 10-digit mobile number.', 'warning');
-      return;
-    }
-    const orderId = generateSequentialOrderId();
-    const now = new Date();
-    setArnNumber(orderId);
 
-    const registrationServices = SERVICE_CATEGORIES.find((c) => c.id === 'registrations')?.services || [];
-    const submissionOverview = buildSubmissionOverview({
-      orderId,
-      requestType: 'Registration Callback Request (1-Hour)',
-      mainCategory: 'Registrations',
-      subCategory: requestData.service || 'GST Registration',
-      availableCategories: SERVICE_CATEGORIES.map((c) => c.title),
-      availableSubCategories: registrationServices,
-      documentTitle: `${requestData.service || 'GST Registration'} (1-Hour Callback Request)`,
-      date: now
-    });
-
-    const sections: DossierSection[] = [
-      {
-        pageNumber: 1,
-        sectionTitle: '1-Hour Callback Request Details',
-        fields: [
-          fieldEntry('Applicant Name', requestData.name, false),
-          fieldEntry('10-Digit Mobile Number', requestData.phone, false),
-          fieldEntry('Email Address', requestData.email, true),
-          fieldEntry('Service Selected', requestData.service, false, registrationServices)
-        ]
-      }
-    ];
-
-    const sensitiveData = {
-      orderId,
-      submissionOverview,
-      sections,
-      mode: 'Quick Callback Request',
-      service: requestData.service || 'GST Registration',
-      category: 'Registrations',
-      clientName: requestData.name,
-      clientPhone: requestData.phone,
-      clientEmail: requestData.email || 'Not Filled (Optional)',
-      requestData,
-      timestamp: now.toISOString()
-    };
-
-    const encResult = encryptFormDataAndSign(sensitiveData);
-    const metadata = {
-      firstPartyName: requestData.name || 'GST Callback Applicant',
-      formName: `${requestData.service || 'GST Registration'} (Callback Request)`,
-      timestamp: now.toISOString(),
-      totalPrice: '0',
-      orderId
-    };
-    await saveLightweightMetadata(metadata);
-    const syncRes = await postEncryptedPayloadToWebsiteB(encResult, metadata);
-    setServerBSyncResult(syncRes);
-    setCachedEncPayload({ result: encResult, metadata });
-    setSubmissionSecurityDetails({
-      encryptedPayload: encResult.encryptedPayload,
-      signature: encResult.signature,
-      websiteBUrl: encResult.websiteBUrl
-    });
-    setRequestSubmitted(true);
-    try {
-      playConfirmationChime();
-    } catch {}
-  };
 
   const handleFinalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -267,6 +169,16 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
 
     const registrationServices = SERVICE_CATEGORIES.find((c) => c.id === 'registrations')?.services || [];
     const constitutionOptions = ['Sole Proprietorship', 'Partnership', 'Private Limited Company', 'LLP', 'HUF / Society / Trust / Others'];
+    const districtOptions = SAMPLE_DISTRICTS[step1.state] || ['Mainpuri', 'Central', 'HQ District'];
+    const possessionOptions = ['Own', 'Rented / Leased', 'Consent / Shared', 'Other'];
+    const activityOptions = [
+      'Retail Business',
+      'Wholesale',
+      'Manufacturing',
+      'Warehouse / Storage',
+      'Supply of Services',
+      'Office / Other'
+    ];
 
     const submissionOverview = buildSubmissionOverview({
       orderId,
@@ -286,7 +198,7 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
         sectionTitle: 'Step 1: Basic Business Details',
         fields: [
           fieldEntry('State', step1.state, false, INDIAN_STATES),
-          fieldEntry('District', step1.district, false),
+          fieldEntry('District', step1.district, false, districtOptions),
           fieldEntry('Legal Name of Business (As per PAN)', step1.legalName, false),
           fieldEntry('Business PAN Number', step1.pan, false),
           fieldEntry('Business Email Address', step1.email, false),
@@ -301,27 +213,27 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
           ? [
               fieldEntry('Proprietor Full Name', proprietor.fullName, false),
               fieldEntry("Proprietor Father's Name", proprietor.fatherName, false),
-              fieldEntry('Date of Birth', proprietor.dob, false),
+              fieldEntry('Date of Birth', proprietor.dob, true),
               fieldEntry('Gender', proprietor.gender, false, ['Male', 'Female', 'Other']),
-              fieldEntry('Proprietor Mobile', proprietor.mobile, false),
+              fieldEntry('Proprietor Mobile', proprietor.mobile, true),
               fieldEntry('Proprietor Email', proprietor.email, true),
-              fieldEntry('Proprietor PAN', proprietor.pan, false),
+              fieldEntry('Proprietor PAN', proprietor.pan, true),
               fieldEntry('Proprietor Aadhaar', proprietor.aadhaar, false),
               fieldEntry('Residential Address', proprietor.address, false),
-              fieldEntry('Residential PIN Code', proprietor.pinCode, false),
-              fieldEntry('Address Proof Type', proprietor.addressProofType, false),
-              fieldEntry('Proprietor is Authorized Signatory?', proprietor.isAuthorizedSignatory ? 'Yes' : 'No', false),
-              fieldEntry('Separate Authorized Signatory Name', proprietor.isAuthorizedSignatory ? '' : proprietor.authSignatoryName, proprietor.isAuthorizedSignatory),
-              fieldEntry('Separate Authorized Signatory PAN', proprietor.isAuthorizedSignatory ? '' : proprietor.authSignatoryPan, proprietor.isAuthorizedSignatory)
+              fieldEntry('Residential PIN Code', proprietor.pinCode, true),
+              fieldEntry('Address Proof Type', proprietor.addressProofType, true),
+              checkboxEntry('Proprietor is the Primary Authorized Signatory', proprietor.isAuthorizedSignatory, true),
+              fieldEntry('Separate Authorized Signatory Name', proprietor.isAuthorizedSignatory ? '' : proprietor.authSignatoryName, true),
+              fieldEntry('Separate Authorized Signatory PAN', proprietor.isAuthorizedSignatory ? '' : proprietor.authSignatoryPan, true)
             ]
           : partners.flatMap((p, idx) => [
-              fieldEntry(`Partner/Director #${idx + 1} Full Name`, p.fullName, false),
-              fieldEntry(`Partner/Director #${idx + 1} Designation`, p.designation, false),
-              fieldEntry(`Partner/Director #${idx + 1} DIN / PAN`, p.dinPan, false),
-              fieldEntry(`Partner/Director #${idx + 1} Aadhaar`, p.aadhaar, false),
-              fieldEntry(`Partner/Director #${idx + 1} Mobile`, p.mobile, false),
+              fieldEntry(`Partner/Director #${idx + 1} Full Name`, p.fullName, true),
+              fieldEntry(`Partner/Director #${idx + 1} Designation`, p.designation, true),
+              fieldEntry(`Partner/Director #${idx + 1} DIN / PAN`, p.dinPan, true),
+              fieldEntry(`Partner/Director #${idx + 1} Aadhaar`, p.aadhaar, true),
+              fieldEntry(`Partner/Director #${idx + 1} Mobile`, p.mobile, true),
               fieldEntry(`Partner/Director #${idx + 1} Email`, p.email, true),
-              fieldEntry(`Partner/Director #${idx + 1} Is Authorized Signatory?`, p.isAuthorizedSignatory ? 'Yes' : 'No', false)
+              checkboxEntry(`Partner/Director #${idx + 1} Is Authorized Signatory`, p.isAuthorizedSignatory, true)
             ])
       },
       {
@@ -330,16 +242,18 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
         fields: [
           fieldEntry('Building / Flat / Premises No.', step3.buildingNo, false),
           fieldEntry('Road / Street / Lane', step3.street, false),
-          fieldEntry('Locality / Sub-Locality', step3.locality, false),
+          fieldEntry('Locality / Sub-Locality', step3.locality, true),
           fieldEntry('City / Town / Village', step3.city, false),
           fieldEntry('Premises PIN Code', step3.pinCode, false),
           fieldEntry('Office Landline', step3.officeLandline, true),
           fieldEntry('Office Email', step3.officeEmail, true),
-          fieldEntry('Nature of Possession', step3.natureOfPossession, false),
-          fieldEntry('Business Activities Selected', step3.activities.join(', '), false),
-          fieldEntry('Has Additional Place of Business?', step3.hasAdditionalPlace ? 'Yes' : 'No', true),
-          fieldEntry('Additional Place Address', step3.hasAdditionalPlace ? step3.additionalAddress : '', !step3.hasAdditionalPlace),
-          fieldEntry('Additional Place Possession Nature', step3.hasAdditionalPlace ? step3.additionalPossession : '', !step3.hasAdditionalPlace)
+          fieldEntry('Nature of Possession', step3.natureOfPossession, false, possessionOptions),
+          ...activityOptions.map((act) =>
+            checkboxEntry(`Business Activity — ${act}`, step3.activities.includes(act), true)
+          ),
+          checkboxEntry('Are there any additional places of business (APOB)?', step3.hasAdditionalPlace, true),
+          fieldEntry('Additional Place Address', step3.hasAdditionalPlace ? step3.additionalAddress : '', true),
+          fieldEntry('Additional Place Possession Nature', step3.hasAdditionalPlace ? step3.additionalPossession : '', true, possessionOptions)
         ]
       },
       {
@@ -347,8 +261,8 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
         sectionTitle: 'Step 4: Goods/Services & Bank Account',
         fields: [
           fieldEntry('Top Commodities / HSN / SAC Description', step4.topCommoditiesDescription, false),
-          fieldEntry('Bank Account Number', step4.accountNumber, true),
-          fieldEntry('IFSC Code', step4.ifscCode, true),
+          fieldEntry('Bank Account Number', step4.accountNumber, false),
+          fieldEntry('IFSC Code', step4.ifscCode, false),
           fieldEntry('Bank Name', step4.bankName, true),
           fieldEntry('Branch Name', step4.branchName, true),
           fieldEntry('Professional Tax / Shop & Establishment Act Reg. No.', step4.ptinOrShopAct, true)
@@ -372,7 +286,6 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
       timestamp: now.toISOString()
     };
     const encResult = encryptFormDataAndSign(sensitiveData);
-    const { encryptedPayload, signature, websiteBUrl } = encResult;
 
     // 2. Save ONLY 4 lightweight metadata fields in Supabase
     const metadata = {
@@ -389,7 +302,6 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
     setServerBSyncResult(syncRes);
     setCachedEncPayload({ result: encResult, metadata });
 
-    setSubmissionSecurityDetails({ encryptedPayload, signature, websiteBUrl });
     setIsSubmitted(true);
     try {
       playConfirmationChime();
@@ -517,147 +429,20 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
         <h1 className="text-2xl font-black text-black">GST Registration</h1>
       </div>
 
-      {/* Two Sliders / Tabs: "Form" (default) & "Request" */}
-      <div className="flex items-center border-b border-slate-200 mb-6 gap-6">
-        <button
-          type="button"
-          onClick={() => setActiveTab('form')}
-          className={`pb-3 text-sm font-bold cursor-pointer transition-colors relative ${
-            activeTab === 'form' ? 'text-blue-600' : 'text-slate-500 hover:text-slate-900'
-          }`}
-        >
-          <span>Form</span>
-          {activeTab === 'form' && (
-            <div className="absolute bottom-0 inset-x-0 h-0.5 bg-blue-600 rounded-full" />
-          )}
-        </button>
+      {/* Swipeable / Clickable Mode Switcher */}
+      <FormRequestTabBar activeTab={activeTab} onChangeTab={setActiveTab} className="mb-6" />
 
-        <button
-          type="button"
-          onClick={() => setActiveTab('request')}
-          className={`pb-3 text-sm font-bold cursor-pointer transition-colors relative ${
-            activeTab === 'request' ? 'text-blue-600' : 'text-slate-500 hover:text-slate-900'
-          }`}
-        >
-          <span>Request (1-Hour Callback)</span>
-          {activeTab === 'request' && (
-            <div className="absolute bottom-0 inset-x-0 h-0.5 bg-blue-600 rounded-full" />
-          )}
-        </button>
-      </div>
-
-      {/* TAB 2: Quick Callback Request */}
-      {activeTab === 'request' && (
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-sm">
-          {requestSubmitted ? (
-            <div className="text-center py-8 space-y-4">
-              <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
-                <CheckCircle2 className="w-7 h-7" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-slate-900">Request Submitted Successfully!</h3>
-                <p className="text-sm text-slate-600 mt-1 max-w-md mx-auto">
-                  Reference <strong>{arnNumber}</strong>: Our GST registration specialist will call you on <strong>{requestData.phone}</strong> within 1 hour to complete your GST application.
-                </p>
-              </div>
-              <div className="max-w-md mx-auto text-left">
-                <ServerBSyncStatusCard
-                  syncResult={serverBSyncResult}
-                  isRetrying={isRetryingSync}
-                  onRetry={handleRetryServerBSync}
-                />
-              </div>
-              <div className="pt-2 flex justify-center gap-3">
-                <button
-                  type="button"
-                  onClick={onBack}
-                  className="px-5 py-2 bg-blue-600 text-white font-bold rounded-xl text-xs cursor-pointer"
-                >
-                  Back to Services
-                </button>
-              </div>
-            </div>
-          ) : (
-            <form onSubmit={handleRequestSubmit} className="space-y-4 max-w-lg mx-auto">
-              <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-xl text-xs text-blue-900 leading-relaxed">
-                💡 <strong>Skip the 4-step form:</strong> Enter your basic details below. Our GST officer will call you within 1 hour, verify your documents, and complete your GST registration directly.
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Your Name <span className="text-rose-600">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder={getPlaceholder('Enter full name')}
-                  value={requestData.name}
-                  onChange={(e) => setRequestData({ ...requestData, name: e.target.value })}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Mobile Number <span className="text-rose-600">*</span>
-                </label>
-                <input
-                  type="tel"
-                  inputMode="numeric"
-                  maxLength={10}
-                  required
-                  placeholder={getPlaceholder('10-digit mobile number')}
-                  value={requestData.phone}
-                  onChange={(e) => setRequestData({ ...requestData, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Email Address <span className="text-slate-400 font-normal">(Optional)</span>
-                </label>
-                <input
-                  type="email"
-                  placeholder={getPlaceholder('name@example.com')}
-                  value={requestData.email}
-                  onChange={(e) => setRequestData({ ...requestData, email: e.target.value })}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Service Selected
-                </label>
-                <select
-                  value={requestData.service}
-                  onChange={(e) => setRequestData({ ...requestData, service: e.target.value })}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                >
-                  {SERVICE_CATEGORIES.find((c) => c.id === 'registrations')?.services.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="pt-2">
-                <button
-                  type="submit"
-                  className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-sm shadow-sm cursor-pointer transition-all"
-                >
-                  Submit 1-Hour Callback Request
-                </button>
-              </div>
-            </form>
-          )}
-        </div>
-      )}
-
-      {/* TAB 1: 4-STAGE FULL GST FORM */}
-      {activeTab === 'form' && (
+      <HorizontalSwipeContainer activeTab={activeTab} onChangeTab={setActiveTab}>
+      {/* TAB 2: Upgraded Quick Callback Request */}
+      {activeTab === 'request' ? (
+        <QuickCallbackRequestPanel
+          mode="registration"
+          initialItemTitle="GST Registration"
+          categoryLabel="Registrations"
+          onBack={onBack}
+          onSwitchToForm={() => setActiveTab('form')}
+        />
+      ) : (
         <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm">
           {/* Step Progress Tracker */}
           <div className="mb-6 border-b border-slate-200 pb-4">
@@ -895,26 +680,20 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Residential Pin Code</label>
-                    <input
-                      type="text"
-                      maxLength={6}
-                      placeholder={getPlaceholder('6-digit PIN')}
-                      value={proprietor.pinCode}
-                      onChange={(e) => setProprietor({ ...proprietor, pinCode: e.target.value })}
-                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                    />
-                  </div>
-
                   <div className="sm:col-span-2">
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Residential Address</label>
-                    <textarea
-                      rows={2}
-                      placeholder={getPlaceholder('Complete residential address')}
+                    <AddressFieldGroup
+                      label="Residential Address"
+                      variant="standard"
+                      defaultState={step1.state || 'Uttar Pradesh'}
                       value={proprietor.address}
-                      onChange={(e) => setProprietor({ ...proprietor, address: e.target.value })}
-                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      onChangeAddress={(fullAddr, details) =>
+                        setProprietor((prev) => ({
+                          ...prev,
+                          address: fullAddr,
+                          pinCode: details?.pincode || prev.pinCode
+                        }))
+                      }
+                      required
                     />
                   </div>
 
@@ -1089,59 +868,22 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
               </h2>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Building / Flat / Shop Number <span className="text-rose-600">*</span>
-                  </label>
-                  <input
-                    type="text"
+                <div className="sm:col-span-2">
+                  <AddressFieldGroup
+                    label="Principal Place of Business Address"
+                    variant="property"
+                    defaultState={step1.state || 'Uttar Pradesh'}
+                    onChangeAddress={(_, details) =>
+                      setStep3((prev) => ({
+                        ...prev,
+                        buildingNo: details?.flatBuilding || '',
+                        street: details?.areaStreet || '',
+                        locality: details?.areaOrSociety || '',
+                        city: details?.city || '',
+                        pinCode: details?.pincode || ''
+                      }))
+                    }
                     required
-                    placeholder={getPlaceholder('Shop No. 12, Ground Floor')}
-                    value={step3.buildingNo}
-                    onChange={(e) => setStep3({ ...step3, buildingNo: e.target.value })}
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Street / Road / Lane <span className="text-rose-600">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder={getPlaceholder('Market Road')}
-                    value={step3.street}
-                    onChange={(e) => setStep3({ ...step3, street: e.target.value })}
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    City / Town <span className="text-rose-600">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={step3.city}
-                    onChange={(e) => setStep3({ ...step3, city: e.target.value })}
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    PIN Code <span className="text-rose-600">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    maxLength={6}
-                    required
-                    placeholder={getPlaceholder('205001')}
-                    value={step3.pinCode}
-                    onChange={(e) => setStep3({ ...step3, pinCode: e.target.value })}
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
 
@@ -1208,16 +950,16 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
                   </label>
 
                   {step3.hasAdditionalPlace && (
-                    <div className="mt-3 pt-3 border-t border-slate-200 space-y-2">
-                      <label className="block text-xs font-bold text-slate-700">
-                        Additional Godown / Branch Address
-                      </label>
-                      <input
-                        type="text"
-                        placeholder={getPlaceholder('Complete address of godown or branch')}
+                    <div className="mt-3 pt-3 border-t border-slate-200">
+                      <AddressFieldGroup
+                        label="Additional Godown / Branch Address"
+                        variant="property"
+                        defaultState={step1.state || 'Uttar Pradesh'}
                         value={step3.additionalAddress}
-                        onChange={(e) => setStep3({ ...step3, additionalAddress: e.target.value })}
-                        className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
+                        onChangeAddress={(fullAddr) =>
+                          setStep3((prev) => ({ ...prev, additionalAddress: fullAddr }))
+                        }
+                        required={false}
                       />
                     </div>
                   )}
@@ -1234,7 +976,13 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
                 </button>
                 <button
                   type="button"
-                  onClick={() => setCurrentStep(4)}
+                  onClick={() => {
+                    if (!step3.buildingNo.trim() || !step3.street.trim() || !step3.city.trim() || step3.pinCode.replace(/\D/g, '').length !== 6) {
+                      showToast('Please complete Principal Place of Business Address (including 6-digit PIN Code).', 'warning');
+                      return;
+                    }
+                    setCurrentStep(4);
+                  }}
                   className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm px-6 py-2.5 rounded-xl cursor-pointer shadow-sm"
                 >
                   <span>Next</span>
@@ -1372,6 +1120,7 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
           )}
         </div>
       )}
+      </HorizontalSwipeContainer>
     </div>
   );
 };

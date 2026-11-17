@@ -27,6 +27,7 @@ import { DateOfBirthPicker, calculateAgeInYears } from './DateOfBirthPicker';
 import { useExampleDetails } from '../hooks/useExampleDetails';
 import { AadhaarInput } from './AadhaarInput';
 import { AddressFieldGroup } from './AddressFieldGroup';
+import { WitnessDetailsCard } from './WitnessDetailsCard';
 import {
   encryptFormDataAndSign,
   saveLightweightMetadata,
@@ -35,11 +36,16 @@ import {
   generateSequentialOrderId,
   buildSubmissionOverview,
   fieldEntry,
+  checkboxEntry,
   ServerBSyncResult
 } from '../services/encryptionService';
 import { ExternalLink, Lock } from 'lucide-react';
 import { showToast } from '../services/toastService';
 import { ServerBSyncStatusCard } from './ServerBSyncStatusCard';
+import { playServiceVoice } from '../services/googleVoiceGuidance';
+import { VoiceGuidanceButton } from './VoiceGuidanceButton';
+import { FormRequestTabBar, HorizontalSwipeContainer, WizardModeTab } from './FormRequestTabBar';
+import { QuickCallbackRequestPanel } from './QuickCallbackRequestPanel';
 
 interface DocumentWizardViewProps {
   document: LegalDocument;
@@ -55,6 +61,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
   onNavigateToDashboard
 }) => {
   const { showExampleDetails, getPlaceholder } = useExampleDetails();
+  const [activeTab, setActiveTab] = useState<WizardModeTab>('form');
   // Current document selection (can be swapped via Page 1 dropdown)
   const [selectedDocTitle, setSelectedDocTitle] = useState(initialDoc.title);
 
@@ -191,6 +198,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
   // Witness 1
   const [w1Name, setW1Name] = useState('');
   const [w1FatherName, setW1FatherName] = useState('');
+  const [w1Profession, setW1Profession] = useState('');
   const [w1Address, setW1Address] = useState('');
   const [w1Mobile, setW1Mobile] = useState('');
   const [w1Age, setW1Age] = useState('');
@@ -199,6 +207,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
   // Witness 2
   const [w2Name, setW2Name] = useState('');
   const [w2FatherName, setW2FatherName] = useState('');
+  const [w2Profession, setW2Profession] = useState('');
   const [w2Address, setW2Address] = useState('');
   const [w2Mobile, setW2Mobile] = useState('');
   const [w2Age, setW2Age] = useState('');
@@ -484,16 +493,26 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
         date: now
       });
 
+      const stateOptions = STATE_CATEGORIES.map((s) => s.name);
+      const docTitleOptions = INITIAL_FRONT_DOCUMENTS.map((d) => d.title);
+      const declarationTexts = [
+        '1. मैंने दस्तावेज़ के सभी नियम व शर्तें ध्यानपूर्वक पढ़ ली हैं और मैं इनसे सहमत हूँ। (I have carefully read and agreed to all terms and conditions of this legal draft.)',
+        '2. प्रस्तुत की गई दोनों पक्षों और गवाहों की व्यक्तिगत पहचान (PAN/Aadhaar) व पते की जानकारी पूर्णतः सत्य और प्रामाणिक है। (All personal identity and address details of parties and witnesses provided are true and verified.)',
+        '3. इस विलेख/करार का निष्पादन बिना किसी दबाव, कपट अथवा अनुचित प्रभाव के स्वतंत्र सहमति से किया जा रहा है। (This deed/agreement is being executed with free consent without any coercion, fraud, or undue influence.)',
+        '4. संबंधित राज्य सरकार की स्टाम्प ड्यूटी एवं ई-हस्ताक्षर (Aadhaar e-Sign) नियमों के अनुपालन की पूरी ज़िम्मेदारी मेरी है। (I understand and accept full responsibility for compliance with state stamp duty and Aadhaar e-Sign regulations.)',
+        '5. मैं पुष्टि करता हूँ कि दस्तावेज़ डिलीवरी के पश्चात देय राशि का भुगतान नियमानुसार करूँगा। (I confirm and agree to pay the post-delivery fee upon receipt of the verified legal document.)'
+      ];
+
       const sections = [
         {
           pageNumber: 1,
           sectionTitle: 'Page 1: Document Type, Jurisdiction & Stamp Selection',
           fields: [
-            fieldEntry('Selected Document Type', selectedDocTitle, false, INITIAL_FRONT_DOCUMENTS.map((d) => d.title)),
-            fieldEntry('Document Category', resolvedMainCategory, false),
-            fieldEntry('Execution Nature', isUnilateral ? 'Unilateral (1 Party)' : 'Bilateral (2 Parties)', false),
-            fieldEntry('Selected State / Union Territory', selectedState, false),
-            fieldEntry('Stamp Paper Value (INR)', `₹${activeStampValue}`, false),
+            fieldEntry('Selected Document Type', selectedDocTitle, false, docTitleOptions),
+            fieldEntry('Document Category', resolvedMainCategory, false, Array.from(new Set(INITIAL_FRONT_DOCUMENTS.map((d) => d.category)))),
+            fieldEntry('Execution Nature', isUnilateral ? 'Unilateral (1 Party)' : 'Bilateral (2 Parties)', false, ['Unilateral (1 Party)', 'Bilateral (2 Parties)']),
+            fieldEntry('Selected State / Union Territory', selectedState, false, stateOptions),
+            fieldEntry('Stamp Paper Value (INR)', `₹${activeStampValue}`, false, ['₹10', '₹20', '₹50', '₹100', '₹200', '₹500']),
             fieldEntry('Stamp Paper Override Applied', overrideStampValue !== null ? `Yes (₹${overrideStampValue})` : `Default Recommended (₹${autoStampValue})`, true),
             fieldEntry('Stamp Duty Paid By', paidBy, false, isUnilateral ? ['First Party'] : ['First Party', 'Second Party', '50-50%'])
           ]
@@ -504,12 +523,9 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
           fields: [
             fieldEntry('First Party Entity Type', firstPartyEntityType, false, ['Individual', 'Company']),
             fieldEntry(firstPartyEntityType === 'Company' ? 'Registered Company / Firm Name' : 'Full Legal Name', firstPartyName, false),
-            ...(firstPartyEntityType === 'Company' ? [
-              fieldEntry('Authorized Signatory Name', firstPartySignatory, false),
-              fieldEntry('Authorized Signatory Designation', firstPartyDesignation === 'Other' ? firstPartyCustomDesignation : firstPartyDesignation, false)
-            ] : [
-              fieldEntry("Father's / Husband's Name", firstPartyFatherName, true)
-            ]),
+            fieldEntry('Authorized Signatory Name', firstPartySignatory, firstPartyEntityType !== 'Company'),
+            fieldEntry('Authorized Signatory Designation', firstPartyDesignation === 'Other' ? firstPartyCustomDesignation : firstPartyDesignation, firstPartyEntityType !== 'Company', STANDARD_DESIGNATIONS),
+            fieldEntry("Father's / Husband's Name", firstPartyFatherName, true),
             fieldEntry(firstPartyEntityType === 'Company' ? 'Date of Incorporation' : 'Age / Date of Birth', firstPartyAgeOrIncDate, true),
             fieldEntry('Complete Address', firstPartyAddress, false),
             fieldEntry('Aadhaar Number', firstPartyAadhaarLast4, effectiveFirstPartyAadhaar !== 'mandatory'),
@@ -527,12 +543,9 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
             : [
                 fieldEntry('Second Party Entity Type', secondPartyEntityType, false, ['Individual', 'Company']),
                 fieldEntry(secondPartyEntityType === 'Company' ? 'Registered Company / Firm Name' : 'Full Legal Name', secondPartyName, false),
-                ...(secondPartyEntityType === 'Company' ? [
-                  fieldEntry('Authorized Signatory Name', secondPartySignatory, false),
-                  fieldEntry('Authorized Signatory Designation', secondPartyDesignation === 'Other' ? secondPartyCustomDesignation : secondPartyDesignation, false)
-                ] : [
-                  fieldEntry("Father's / Husband's Name", secondPartyFatherName, true)
-                ]),
+                fieldEntry('Authorized Signatory Name', secondPartySignatory, secondPartyEntityType !== 'Company'),
+                fieldEntry('Authorized Signatory Designation', secondPartyDesignation === 'Other' ? secondPartyCustomDesignation : secondPartyDesignation, secondPartyEntityType !== 'Company', STANDARD_DESIGNATIONS),
+                fieldEntry("Father's / Husband's Name", secondPartyFatherName, true),
                 fieldEntry(secondPartyEntityType === 'Company' ? 'Date of Incorporation' : 'Age / Date of Birth', secondPartyAgeOrIncDate, true),
                 fieldEntry('Complete Address', secondPartyAddress, false),
                 fieldEntry('Aadhaar Number', secondPartyAadhaarLast4, effectiveSecondPartyAadhaar !== 'mandatory'),
@@ -568,12 +581,14 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
               ? [
                   fieldEntry('Witness 1 Full Legal Name', w1Name, false),
                   fieldEntry("Witness 1 Father's / Husband's Name", w1FatherName, false),
+                  fieldEntry('Witness 1 Profession / Job Title', w1Profession, true),
                   fieldEntry('Witness 1 Residential Address', w1Address, false),
                   fieldEntry('Witness 1 Mobile Number', w1Mobile, false),
                   fieldEntry('Witness 1 Age / Date of Birth', w1Age, true),
                   fieldEntry('Witness 1 Aadhaar Number (12 Digits)', w1AadhaarLast4, false),
                   fieldEntry('Witness 2 Full Legal Name', w2Name, false),
                   fieldEntry("Witness 2 Father's / Husband's Name", w2FatherName, false),
+                  fieldEntry('Witness 2 Profession / Job Title', w2Profession, true),
                   fieldEntry('Witness 2 Residential Address', w2Address, false),
                   fieldEntry('Witness 2 Mobile Number', w2Mobile, false),
                   fieldEntry('Witness 2 Age / Date of Birth', w2Age, true),
@@ -582,15 +597,15 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
               : [
                   fieldEntry('Witnesses Applicable', 'No — Unilateral Affidavit / Proprietorship Declaration Deed', true)
                 ]),
-            fieldEntry('Delivery Mode Selected', deliveryType === 'physical' ? 'Physical Courier Delivery (+₹50)' : 'Digital Delivery Only (Free)', false, ['digital', 'physical']),
+            fieldEntry('Delivery Mode Selected', deliveryType === 'physical' ? 'Physical Courier Delivery (+₹50)' : 'Digital Delivery Only (Free)', false, ['Digital Delivery Only (Free)', 'Physical Courier Delivery (+₹50)']),
             fieldEntry('Shipping Recipient Name', shippingRecipientName, deliveryType !== 'physical'),
             fieldEntry('Shipping Delivery Phone', shippingPhone, deliveryType !== 'physical'),
             fieldEntry('Shipping Street Address', shippingAddress, deliveryType !== 'physical'),
             fieldEntry('Shipping Pincode', shippingPincode, deliveryType !== 'physical'),
-            fieldEntry('Verification & Review Mode', verificationMode === 'expert' ? 'Expert Legal Re-check (+₹10)' : 'Self-Verified (Free)', false, ['self', 'expert']),
+            fieldEntry('Verification & Review Mode', verificationMode === 'expert' ? 'Expert Legal Re-check (+₹10)' : 'Self-Verified (Free)', false, ['Self-Verified (Free)', 'Expert Legal Re-check (+₹10)']),
             fieldEntry('Total Amount Payable Post-Delivery', `₹${pricing.totalPayable}`, false),
-            fieldEntry('All 5 Legal Declarations Accepted', declarations.every(Boolean) ? 'Yes (All 5 Accepted)' : 'No', false),
-            fieldEntry('Intermediary Disclaimer Accepted', intermediaryDisclaimerAccepted ? 'Yes' : 'No', false)
+            ...declarationTexts.map((txt, idx) => checkboxEntry(txt, Boolean(declarations[idx]), false)),
+            checkboxEntry('Intermediary Disclaimer Accepted (Cotex Compliance IT Act 2000)', intermediaryDisclaimerAccepted, false)
           ]
         }
       ];
@@ -642,8 +657,8 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
         },
         witnesses: requireWitnesses
           ? [
-              { name: w1Name, fatherName: w1FatherName, address: w1Address, mobile: w1Mobile, age: w1Age, aadhaar: w1AadhaarLast4 },
-              { name: w2Name, fatherName: w2FatherName, address: w2Address, mobile: w2Mobile, age: w2Age, aadhaar: w2AadhaarLast4 }
+              { name: w1Name, fatherName: w1FatherName, profession: w1Profession, address: w1Address, mobile: w1Mobile, age: w1Age, aadhaar: w1AadhaarLast4 },
+              { name: w2Name, fatherName: w2FatherName, profession: w2Profession, address: w2Address, mobile: w2Mobile, age: w2Age, aadhaar: w2AadhaarLast4 }
             ]
           : [],
         pricing,
@@ -844,7 +859,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
     <div data-document-wizard className="w-full max-w-4xl mx-auto px-4 py-5 animate-fadeIn pb-28">
       {/* Top Navigation & Step Indicator */}
       <div className="mb-6">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <button
             type="button"
             onClick={onBack}
@@ -854,17 +869,20 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
             <span>Cancel &amp; Return</span>
           </button>
 
+          <VoiceGuidanceButton serviceTitle={selectedDocTitle} />
         </div>
 
         {/* Progress Bar */}
-        <div className="w-full bg-slate-200 h-1.5 rounded-full mt-3 overflow-hidden">
-          <div
-            className="bg-blue-600 h-full transition-all duration-300"
-            style={{
-              width: `${(currentPage / 5) * 100}%`
-            }}
-          />
-        </div>
+        {activeTab === 'form' && (
+          <div className="w-full bg-slate-200 h-1.5 rounded-full mt-3 overflow-hidden">
+            <div
+              className="bg-blue-600 h-full transition-all duration-300"
+              style={{
+                width: `${(currentPage / 5) * 100}%`
+              }}
+            />
+          </div>
+        )}
 
         {/* Title Header */}
         <div className="mt-4">
@@ -875,9 +893,25 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
             Architecture
           </span>
         </div>
+
+        <FormRequestTabBar
+          activeTab={activeTab}
+          onChangeTab={setActiveTab}
+          className="mt-4"
+        />
       </div>
 
-      {/* Main Wizard Form Container */}
+      <HorizontalSwipeContainer activeTab={activeTab} onChangeTab={setActiveTab}>
+      {activeTab === 'request' ? (
+        <QuickCallbackRequestPanel
+          mode="document"
+          initialItemTitle={selectedDocTitle}
+          categoryLabel={initialDoc.category}
+          onBack={onBack}
+          onSwitchToForm={() => setActiveTab('form')}
+        />
+      ) : (
+      /* Main Wizard Form Container */
       <div className="bg-white border border-slate-200 rounded-2xl shadow-xs p-5 sm:p-7">
         {/* ================= PAGE 1 ================= */}
         {currentPage === 1 && (
@@ -890,7 +924,10 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
               </label>
               <select
                 value={selectedDocTitle}
-                onChange={(e) => setSelectedDocTitle(e.target.value)}
+                onChange={(e) => {
+                  setSelectedDocTitle(e.target.value);
+                  playServiceVoice(e.target.value);
+                }}
                 className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-black focus:outline-none focus:ring-2 focus:ring-blue-600"
               >
                 {INITIAL_FRONT_DOCUMENTS.map((doc) => (
@@ -1601,168 +1638,43 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
           <form onSubmit={handleSubmit} className="space-y-6 animate-fadeIn">
             {/* Witness 1 & Witness 2 (Hidden for Affidavits & Proprietorship Declaration Deed) */}
             {requireWitnesses && (
-              <>
-                <div className="space-y-3">
-                  <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
-                    Witness 1 Details <span className="text-red-500">*</span>
-                  </span>
+              <div className="space-y-4">
+                <WitnessDetailsCard
+                  witnessNumber={1}
+                  name={w1Name}
+                  onNameChange={setW1Name}
+                  fatherName={w1FatherName}
+                  onFatherNameChange={setW1FatherName}
+                  profession={w1Profession}
+                  onProfessionChange={setW1Profession}
+                  ageOrDob={w1Age}
+                  onAgeOrDobChange={setW1Age}
+                  mobile={w1Mobile}
+                  onMobileChange={setW1Mobile}
+                  aadhaar={w1AadhaarLast4}
+                  onAadhaarChange={setW1AadhaarLast4}
+                  address={w1Address}
+                  onAddressChange={setW1Address}
+                />
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Full Legal Name <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={w1Name}
-                        onChange={(e) => setW1Name(e.target.value)}
-                        placeholder={getPlaceholder('e.g. Rohit Verma')}
-                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Father's / Husband's Name <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={w1FatherName}
-                        onChange={(e) => setW1FatherName(e.target.value)}
-                        placeholder={getPlaceholder('e.g. S.K. Verma')}
-                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                      />
-                    </div>
-                  </div>
-
-                  <AddressFieldGroup
-                    label="Complete Residential Address"
-                    value={w1Address}
-                    onChangeAddress={setW1Address}
-                    required
-                  />
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Mobile Number <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="tel"
-                        inputMode="numeric"
-                        maxLength={10}
-                        required
-                        value={w1Mobile}
-                        onChange={(e) => setW1Mobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                        placeholder={getPlaceholder('9899911223')}
-                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                      />
-                    </div>
-
-                    <div>
-                      <DateOfBirthPicker
-                        label="Age / Date of Birth"
-                        value={w1Age}
-                        onChange={setW1Age}
-                        placeholder="DD/MM/YYYY"
-                        helperText={showExampleDetails ? "Format: DD/MM/YYYY" : undefined}
-                      />
-                    </div>
-
-                    <div>
-                      <AadhaarInput
-                        label="Aadhaar Number (12 Digits)"
-                        value={w1AadhaarLast4}
-                        onChange={setW1AadhaarLast4}
-                        required
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Witness 2 Details */}
-                <div className="space-y-3 pt-4 border-t border-slate-200">
-                  <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
-                    Witness 2 Details <span className="text-red-500">*</span>
-                  </span>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Full Legal Name <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={w2Name}
-                        onChange={(e) => setW2Name(e.target.value)}
-                        placeholder={getPlaceholder('e.g. Manisha Rawat')}
-                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Father's / Husband's Name <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={w2FatherName}
-                        onChange={(e) => setW2FatherName(e.target.value)}
-                        placeholder={getPlaceholder('e.g. Anand Rawat')}
-                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                      />
-                    </div>
-                  </div>
-
-                  <AddressFieldGroup
-                    label="Complete Residential Address"
-                    value={w2Address}
-                    onChangeAddress={setW2Address}
-                    required
-                  />
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Mobile Number <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="tel"
-                        inputMode="numeric"
-                        maxLength={10}
-                        required
-                        value={w2Mobile}
-                        onChange={(e) => setW2Mobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                        placeholder={getPlaceholder('9711188990')}
-                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                      />
-                    </div>
-
-                    <div>
-                      <DateOfBirthPicker
-                        label="Age / Date of Birth"
-                        value={w2Age}
-                        onChange={setW2Age}
-                        placeholder="DD/MM/YYYY"
-                        helperText={showExampleDetails ? "Format: DD/MM/YYYY" : undefined}
-                      />
-                    </div>
-
-                    <div>
-                      <AadhaarInput
-                        label="Aadhaar Number (12 Digits)"
-                        value={w2AadhaarLast4}
-                        onChange={setW2AadhaarLast4}
-                        required
-                      />
-                    </div>
-                  </div>
-                </div>
-              </>
+                <WitnessDetailsCard
+                  witnessNumber={2}
+                  name={w2Name}
+                  onNameChange={setW2Name}
+                  fatherName={w2FatherName}
+                  onFatherNameChange={setW2FatherName}
+                  profession={w2Profession}
+                  onProfessionChange={setW2Profession}
+                  ageOrDob={w2Age}
+                  onAgeOrDobChange={setW2Age}
+                  mobile={w2Mobile}
+                  onMobileChange={setW2Mobile}
+                  aadhaar={w2AadhaarLast4}
+                  onAadhaarChange={setW2AadhaarLast4}
+                  address={w2Address}
+                  onAddressChange={setW2Address}
+                />
+              </div>
             )}
 
             {/* Delivery Preferences: Digital vs Physical Courier */}
@@ -1877,34 +1789,20 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                       </div>
                     </div>
 
-                    <div>
-                      <label className="block text-[11px] font-semibold text-amber-900 mb-0.5">
-                        Street Address &amp; Landmark <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        required={deliveryType === 'physical'}
-                        value={shippingAddress}
-                        onChange={(e) => setShippingAddress(e.target.value)}
-                        placeholder={getPlaceholder('Flat No, Building, Street, Landmark')}
-                        className="w-full bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-600"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-semibold text-amber-900 mb-0.5">
-                        Pincode (6 digits) <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        maxLength={6}
-                        required={deliveryType === 'physical'}
-                        value={shippingPincode}
-                        onChange={(e) => setShippingPincode(e.target.value.replace(/\D/g, ''))}
-                        placeholder={getPlaceholder('201301')}
-                        className="w-36 bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-xs font-mono text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-600"
-                      />
-                    </div>
+                    <AddressFieldGroup
+                      label="Delivery Shipping Address"
+                      variant="standard"
+                      defaultState={selectedState || 'Uttar Pradesh'}
+                      value={shippingAddress}
+                      onChangeAddress={(fullAddr, details) => {
+                        setShippingAddress(fullAddr);
+                        if (details?.pincode !== undefined) {
+                          setShippingPincode(details.pincode);
+                        }
+                      }}
+                      required={deliveryType === 'physical'}
+                      className="bg-white"
+                    />
                   </div>
                 </div>
               )}
@@ -2141,7 +2039,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
               className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-100 font-bold text-xs cursor-pointer transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
-              <span>{currentPage === 1 ? 'Cancel' : 'Previous Page'}</span>
+              <span>{currentPage === 1 ? 'Cancel' : 'Previous'}</span>
             </button>
 
             <button
@@ -2155,6 +2053,8 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
           </div>
         )}
       </div>
+      )}
+      </HorizontalSwipeContainer>
     </div>
   );
 };

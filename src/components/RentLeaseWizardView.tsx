@@ -13,7 +13,9 @@ import {
   Trash2,
   Sparkles,
   UploadCloud,
-  Layers
+  Layers,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { LegalDocument, OrderItem } from '../types';
@@ -23,6 +25,14 @@ import { useExampleDetails } from '../hooks/useExampleDetails';
 import { AadhaarInput } from './AadhaarInput';
 import { AddressFieldGroup } from './AddressFieldGroup';
 import {
+  PropertyBoundariesSection,
+  PropertyBoundariesState,
+  createInitialPropertyBoundaries,
+  formatSingleBoundary,
+  areAllBoundariesFilled
+} from './PropertyBoundariesSection';
+import { WitnessDetailsCard } from './WitnessDetailsCard';
+import {
   encryptFormDataAndSign,
   saveLightweightMetadata,
   postEncryptedPayloadToWebsiteB,
@@ -30,6 +40,7 @@ import {
   generateSequentialOrderId,
   buildSubmissionOverview,
   fieldEntry,
+  checkboxEntry,
   readFileAsUploadPayload,
   UploadedDocumentPayload,
   ServerBSyncResult
@@ -37,6 +48,9 @@ import {
 import { ExternalLink, Lock } from 'lucide-react';
 import { showToast } from '../services/toastService';
 import { ServerBSyncStatusCard } from './ServerBSyncStatusCard';
+import { VoiceGuidanceButton } from './VoiceGuidanceButton';
+import { FormRequestTabBar, HorizontalSwipeContainer, WizardModeTab } from './FormRequestTabBar';
+import { QuickCallbackRequestPanel } from './QuickCallbackRequestPanel';
 
 interface RentLeaseWizardViewProps {
   document: LegalDocument;
@@ -64,6 +78,14 @@ interface CoOccupant {
   relationship: string;
 }
 
+interface FurnishedItem {
+  id: string;
+  itemName: string;
+  price: string;
+  uniqueId: string;
+  condition: 'Good' | 'Average' | 'Bad' | 'New';
+}
+
 interface CustomClause {
   id: string;
   title: string;
@@ -77,16 +99,17 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
   onNavigateToDashboard
 }) => {
   const { showExampleDetails, getPlaceholder } = useExampleDetails();
+  const [activeTab, setActiveTab] = useState<WizardModeTab>('form');
   const [currentPage, setCurrentPage] = useState<number>(1);
 
-  // --- PAGE 1: SERVICE & STAMP SELECTION ---
+  // --- SERVICE & STAMP SELECTION ---
   const [docCategory, setDocCategory] = useState<'residential' | 'commercial'>(() => {
     const lower = initialDoc.title.toLowerCase();
     if (lower.includes('commercial') || lower.includes('business')) return 'commercial';
     return 'residential';
   });
 
-  const [selectedState, setSelectedState] = useState<string>('Delhi');
+  const [selectedState, setSelectedState] = useState<string>('Uttar Pradesh');
   const [tenancyPurpose, setTenancyPurpose] = useState<'residential' | 'commercial' | 'mixed'>(
     docCategory === 'commercial' ? 'commercial' : 'residential'
   );
@@ -259,7 +282,36 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
   const [commercialGstin, setCommercialGstin] = useState('');
   const [isUnregisteredGst, setIsUnregisteredGst] = useState(false);
 
-  // --- PAGE 4: LEASE TERMS & STATUTORY CONDITIONS ---
+  // --- STEP 4: PROPERTY DETAILS ---
+  const [propertyAddress, setPropertyAddress] = useState('');
+  const [propertyBoundaries, setPropertyBoundaries] = useState<PropertyBoundariesState>(createInitialPropertyBoundaries);
+  const [propertyBoundariesOptional, setPropertyBoundariesOptional] = useState<boolean>(false);
+  const [propertyType, setPropertyType] = useState<string>('Flat / Apartment');
+  const [furnishingStatus, setFurnishingStatus] = useState<'Furnished' | 'Semi Furnished' | 'Unfurnished'>('Unfurnished');
+  const [furnishedItems, setFurnishedItems] = useState<FurnishedItem[]>([]);
+
+  const addFurnishedItem = () => {
+    setFurnishedItems((prev) => [
+      ...prev,
+      {
+        id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        itemName: '',
+        price: '',
+        uniqueId: '',
+        condition: 'Good'
+      }
+    ]);
+  };
+
+  const updateFurnishedItem = (id: string, field: keyof FurnishedItem, val: string) => {
+    setFurnishedItems((prev) => prev.map((item) => (item.id === id ? { ...item, [field]: val } : item)));
+  };
+
+  const removeFurnishedItem = (id: string) => {
+    setFurnishedItems((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  // --- STEP 5: LEASE TERMS & STATUTORY CONDITIONS ---
   const [leaseTenure, setLeaseTenure] = useState<string>('11 Months');
   const [customTenure, setCustomTenure] = useState('');
   const [commencementDate, setCommencementDate] = useState('');
@@ -267,19 +319,52 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
   const [rentDueDate, setRentDueDate] = useState<string>('5th of every calendar month');
   const [securityDeposit, setSecurityDeposit] = useState<string>('');
   const [noticePeriod, setNoticePeriod] = useState<string>('1 Month');
-  const [paymentChannel, setPaymentChannel] = useState<string>('Bank Transfer (NEFT/RTGS/IMPS/UPI)');
+  const [paymentChannel, setPaymentChannel] = useState<string>('Any Type');
+
+  // Who Will Pay (Utility Bills dropdown checklist)
+  const UTILITY_BILL_ITEMS = [
+    'Electricity Bill',
+    'Water Bill',
+    'Gas Bill',
+    'Telephone Bill',
+    'Internet / Broadband Bill'
+  ];
+  const [utilityBillsDropdownOpen, setUtilityBillsDropdownOpen] = useState<boolean>(false);
+  const [tenantUtilityBills, setTenantUtilityBills] = useState<Record<string, boolean>>({
+    'Electricity Bill': true,
+    'Water Bill': true,
+    'Gas Bill': true,
+    'Telephone Bill': true,
+    'Internet / Broadband Bill': true
+  });
+  const toggleUtilityBill = (billName: string) => {
+    setTenantUtilityBills((prev) => ({ ...prev, [billName]: !prev[billName] }));
+  };
+
+  // Society & Small/Big Maintenance
+  const [societyMaintenanceBy, setSocietyMaintenanceBy] = useState<'Tenant' | 'Owner'>('Tenant');
+  const [smallMaintenanceBy, setSmallMaintenanceBy] = useState<'Tenant' | 'Owner'>('Tenant');
+  const [bigMaintenanceBy, setBigMaintenanceBy] = useState<'Owner' | 'Tenant'>('Owner');
 
   // Commercial Configurations
   const [rentEscalation, setRentEscalation] = useState<string>('5% Annually');
   const [customEscalation, setCustomEscalation] = useState('');
-  const [lockInPeriod, setLockInPeriod] = useState<string>('6 Months');
   const [delayedRentInterest, setDelayedRentInterest] = useState<string>('12% Per Annum');
 
+  // Lock-in Period (Checkbox + Duration + Break Fine Amount)
+  const [hasLockInPeriod, setHasLockInPeriod] = useState<boolean>(false);
+  const [lockInPeriod, setLockInPeriod] = useState<string>('1 Month');
+  const [customLockInDuration, setCustomLockInDuration] = useState<string>('');
+  const [lockInFineAmount, setLockInFineAmount] = useState<string>('');
+
+  // Late Payment Penalty (Unchecked by default)
+  const [hasLatePaymentPenalty, setHasLatePaymentPenalty] = useState<boolean>(false);
+  const [latePaymentPenaltyAmount, setLatePaymentPenaltyAmount] = useState<string>('');
+
   // Statutory Clauses
-  const [maintenanceBearer, setMaintenanceBearer] = useState<'tenant' | 'landlord'>('tenant');
-  const [clauseUtility, setClauseUtility] = useState(true);
   const [clauseStructural, setClauseStructural] = useState(true);
   const [clauseSubletting, setClauseSubletting] = useState(true);
+  const [clausePetsAllowed, setClausePetsAllowed] = useState(false);
   const [clauseInspection, setClauseInspection] = useState(true);
   const [clauseForceMajeure, setClauseForceMajeure] = useState(true);
 
@@ -332,9 +417,10 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
   // PAN & Aadhaar strictly mandatory for both Landlord and Tenant in 11th Month Rent / Lease Agreements
   const isPanMandatoryUnder194IB = true;
 
-  // --- PAGE 5: WITNESS DETAILS & EXECUTION FORMAT ---
+  // --- STEP 6: WITNESS DETAILS & EXECUTION FORMAT ---
   const [w1Name, setW1Name] = useState('');
   const [w1FatherName, setW1FatherName] = useState('');
+  const [w1Profession, setW1Profession] = useState('');
   const [w1Address, setW1Address] = useState('');
   const [w1Mobile, setW1Mobile] = useState('');
   const [w1Age, setW1Age] = useState('');
@@ -342,6 +428,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
 
   const [w2Name, setW2Name] = useState('');
   const [w2FatherName, setW2FatherName] = useState('');
+  const [w2Profession, setW2Profession] = useState('');
   const [w2Address, setW2Address] = useState('');
   const [w2Mobile, setW2Mobile] = useState('');
   const [w2Age, setW2Age] = useState('');
@@ -500,6 +587,17 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
     }
 
     if (currentPage === 4) {
+      if (!propertyAddress.trim()) {
+        showToast('Please fill mandatory Property Address.', 'warning');
+        return;
+      }
+      if (!propertyBoundariesOptional && !areAllBoundariesFilled(propertyBoundaries)) {
+        showToast('Please complete all 4 Property Boundaries (East, West, North, South) or check Change to Optional.', 'warning');
+        return;
+      }
+    }
+
+    if (currentPage === 5) {
       if (!monthlyRent || numericRent <= 0) {
         showToast('Please enter Monthly Rent Amount.', 'warning');
         return;
@@ -596,57 +694,112 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
 
       const isCorpLandlord = landlordEntityType !== 'Individual' && landlordEntityType !== 'Joint Owners';
 
+      const utilityPayStatusList = UTILITY_BILL_ITEMS.map((bill) =>
+        tenantUtilityBills[bill] ? `Tenant pays ${bill}` : `Owner pays ${bill}`
+      );
+      const effectiveLockInDuration = hasLockInPeriod
+        ? lockInPeriod === 'Custom'
+          ? customLockInDuration || 'Custom'
+          : lockInPeriod
+        : 'None';
+
+      const stateOptionLabels = STATE_CATEGORIES.map((s) => s.name);
+      const stampBorneOptions = [
+        'Shared Equally (50-50 Split)',
+        'First Party (Landlord / Owner)',
+        'Second Party (Tenant / Lessee)',
+        'Custom Split'
+      ];
+      const landlordEntityOptions = [
+        'Individual',
+        'Joint Owners',
+        'Partnership Firm / LLP',
+        'Private Limited / Public Limited Company',
+        'HUF',
+        'Trust / Society'
+      ];
+      const leaseTenureOptions = [
+        '11 Months',
+        '10 Months',
+        '9 Months',
+        '8 Months',
+        '7 Months',
+        '6 Months',
+        '5 Months',
+        '4 Months',
+        '3 Months',
+        '2 Months',
+        '1 Month',
+        'Custom Tenure'
+      ];
+      const rentDueDateOptions = [1, 5, 7, 10, 15, 20, 25, 30].map(
+        (d) => `${d}th of every calendar month`
+      );
+      const noticePeriodOptions = ['1 Month', '2 Months', '3 Months', '15 Days'];
+      const paymentChannelOptions = [
+        'Any Type',
+        'Bank Transfer (NEFT/RTGS/IMPS/UPI)',
+        'Account Payee Cheque',
+        'Cash / Other'
+      ];
+      const lockInPeriodOptions = ['1 Month', '2 Months', '3 Months', '6 Months', 'Custom'];
+      const rentEscalationOptions = ['None', '5% Annually', '10% Annually', 'Custom Percentage'];
+      const delayedInterestOptions = ['None', '12% Per Annum', '18% Per Annum'];
+      const declarationTexts = [
+        '1. I have carefully read and agreed to all terms and conditions of this rental agreement.',
+        '2. All personal identity and address details of landlord, tenant, and witnesses provided are true and verified.',
+        '3. This deed/agreement is being executed with free consent without any coercion, fraud, or undue influence.',
+        '4. I understand and accept full responsibility for compliance with state stamp duty and Aadhaar e-Sign regulations.',
+        '5. I confirm and agree to pay the post-delivery fee upon receipt of the verified legal document.'
+      ];
+
       const sections = [
         {
           pageNumber: 1,
-          sectionTitle: 'Page 1: Document Category, State & Stamp Selection',
+          sectionTitle: 'Document Category, State & Stamp Selection',
           fields: [
-            fieldEntry('Document Category', docCategory === 'commercial' ? 'Commercial Lease Agreement' : 'Residential Rent Agreement', false, ['residential', 'commercial']),
-            fieldEntry('Selected State / Union Territory', selectedState, false),
-            fieldEntry('Purpose of Tenancy Specifics', tenancyPurpose, false, ['residential', 'commercial']),
+            fieldEntry('Document Category', docCategory === 'commercial' ? 'Commercial Lease Agreement' : 'Residential Rent Agreement', false, ['Residential Rent Agreement', 'Commercial Lease Agreement']),
+            fieldEntry('Selected State / Union Territory', selectedState, false, stateOptionLabels),
+            fieldEntry('Purpose of Tenancy Specifics', tenancyPurpose, false, ['residential', 'commercial', 'mixed']),
             fieldEntry('Mixed Use Area Details', mixedUseArea, true),
-            fieldEntry('Stamp Paper Procurement Mode', stampProcurementMode === 'physical_upload' ? 'Physical Stamp Paper (User Upload)' : 'E-Stamp Paper / Digital Stamp', false, ['estamp', 'physical_upload']),
+            fieldEntry('Stamp Paper Procurement Mode', stampProcurementMode === 'physical_upload' ? 'Physical Stamp Paper (User Upload)' : 'E-Stamp Paper / Digital Stamp', false, ['E-Stamp Paper / Digital Stamp', 'Physical Stamp Paper (User Upload)']),
             fieldEntry('Pre-Purchased Physical Stamp Uploaded', physicalStampFile ? `${physicalStampFile.fileName} (${Math.round(physicalStampFile.sizeBytes / 1024)} KB)` : '', true),
-            fieldEntry('Selected Stamp Paper Value (INR)', `₹${pricing.effectiveStamp}`, false),
+            fieldEntry('Selected Stamp Paper Value (INR)', `₹${pricing.effectiveStamp}`, false, ['₹10', '₹20', '₹50', '₹100', '₹500', '₹1000', 'Custom']),
             fieldEntry('Recommended Minimum State Stamp Duty', `₹${recommendedMinStamp}`, false),
-            fieldEntry('Stamp Duty Cost Paid By', stampCostBorneBy === 'Custom Split' ? customSplitText : stampCostBorneBy, false)
+            fieldEntry('Stamp Duty Cost Paid By', stampCostBorneBy, false, stampBorneOptions),
+            fieldEntry('Custom Stamp Cost Split Details', customSplitText, stampCostBorneBy !== 'Custom Split')
           ]
         },
         {
           pageNumber: 2,
-          sectionTitle: 'Page 2: 1st Party / Landlord Details',
+          sectionTitle: '1st Party / Landlord Details',
           fields: [
-            fieldEntry('Lessor / Landlord Entity Type', landlordEntityType, false),
+            fieldEntry('Lessor / Landlord Entity Type', landlordEntityType, false, landlordEntityOptions),
             fieldEntry(isCorpLandlord ? 'Entity Legal Name' : 'Full Legal Name', landlordName, false),
-            ...(isCorpLandlord
-              ? [
-                  fieldEntry('Company Registration / CIN / LLPIN', corporateRegNumber, false),
-                  fieldEntry('Registered Office Address', corporateAddress, false),
-                  fieldEntry('Authorized Signatory Name', authSignatoryName, false),
-                  fieldEntry('Signatory Designation', authSignatoryDesignation === 'Other' ? authSignatoryCustomDesignation : authSignatoryDesignation, false)
-                ]
-              : [
-                  fieldEntry("Father's / Husband's Name", landlordFatherName, false),
-                  fieldEntry('Age / Date of Birth', landlordDobOrAge, false),
-                  fieldEntry('Permanent Residential Address', landlordAddress, false)
-                ]),
+            fieldEntry('Company Registration / CIN / LLPIN', corporateRegNumber, !isCorpLandlord),
+            fieldEntry('Registered Office Address', corporateAddress, !isCorpLandlord),
+            fieldEntry('Authorized Signatory Name', authSignatoryName, !isCorpLandlord),
+            fieldEntry('Signatory Designation', authSignatoryDesignation === 'Other' ? authSignatoryCustomDesignation : authSignatoryDesignation, !isCorpLandlord, ['Director', 'Managing Director', 'Partner', 'Authorized Signatory', 'Trustee', 'Other']),
+            fieldEntry("Father's / Husband's Name", landlordFatherName, isCorpLandlord),
+            fieldEntry('Age / Date of Birth', landlordDobOrAge, isCorpLandlord),
+            fieldEntry('Permanent Residential Address', landlordAddress, isCorpLandlord),
             fieldEntry('Current Mobile Number', landlordMobile, false),
             fieldEntry('Email Address', landlordEmail, true),
             fieldEntry('Aadhaar Number (12 Digits)', landlordAadhaarLast4, false),
             fieldEntry('PAN Card Number', landlordPan, false),
             fieldEntry('Co-Owners / Joint Property Holders', coOwners.length > 0 ? coOwners : '', true),
-            fieldEntry('Signing via Power of Attorney (POA)', hasPoa ? 'Yes' : 'No', true),
+            checkboxEntry('Signing via Power of Attorney (POA)', hasPoa, true),
             fieldEntry('POA Holder Full Name', poaName, !hasPoa),
             fieldEntry('POA Holder Aadhaar (12 Digits)', poaAadhaarLast4, !hasPoa),
             fieldEntry('POA Holder Address', poaAddress, !hasPoa),
             fieldEntry('Certified POA Document Uploaded', poaFile ? poaFile.fileName : '', true),
-            fieldEntry('Proof of Property Ownership Type', ownershipProofType, true),
+            fieldEntry('Proof of Property Ownership Type', ownershipProofType, true, ['Sale Deed / Registry', 'Property Tax Receipt', 'Electricity Bill', 'Allotment Letter', 'Municipal Khata']),
             fieldEntry('Property Ownership Document Uploaded', propertyDocFile ? `${propertyDocFile.fileName} (${Math.round(propertyDocFile.sizeBytes / 1024)} KB)` : '', true)
           ]
         },
         {
           pageNumber: 3,
-          sectionTitle: docCategory === 'commercial' ? 'Page 3: 2nd Party / Commercial Tenant Details' : 'Page 3: 2nd Party / Residential Tenant Details',
+          sectionTitle: docCategory === 'commercial' ? '2nd Party / Commercial Tenant Details' : '2nd Party / Residential Tenant Details',
           fields:
             docCategory === 'residential'
               ? [
@@ -661,39 +814,72 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                   fieldEntry('Co-Occupants / Family Members Details', coOccupants.length > 0 ? coOccupants : '', true)
                 ]
               : [
-                  fieldEntry('Business Entity Type', commercialEntityType, false),
+                  fieldEntry('Business Entity Type', commercialEntityType, false, ['Sole Proprietorship', 'Partnership Firm', 'Limited Liability Partnership (LLP)', 'Private Limited Company', 'Public Limited Company', 'One Person Company (OPC)']),
                   fieldEntry('Registered Company / Firm Name', commercialCompanyName, false),
                   fieldEntry('Company / Firm PAN Card', commercialCompanyPan, false),
                   fieldEntry('Registered Office Address', commercialOfficeAddress, false),
                   fieldEntry('CIN / LLPIN', commercialCin, commercialEntityType === 'Sole Proprietorship' || commercialEntityType === 'Partnership Firm'),
                   fieldEntry('Authorized Representative Full Legal Name', commercialRepName, false),
                   fieldEntry('Authorized Representative Aadhaar (12 Digits)', commercialRepAadhaar, false),
-                  fieldEntry('Representative Designation', commercialRepDesignation === 'Other' ? commercialRepCustomDesignation : commercialRepDesignation, false),
+                  fieldEntry('Representative Designation', commercialRepDesignation === 'Other' ? commercialRepCustomDesignation : commercialRepDesignation, false, ['Proprietor', 'Partner', 'Director', 'Managing Director', 'Authorized Signatory', 'Other']),
                   fieldEntry('Board Resolution / Partner Authorization File', authDocFile ? authDocFile.fileName : '', true),
-                  fieldEntry('Unregistered Commercial Tenant (No GSTIN)', isUnregisteredGst ? 'Yes' : 'No', true),
-                  fieldEntry('GSTIN Number', isUnregisteredGst ? 'Unregistered' : commercialGstin, isUnregisteredGst)
+                  checkboxEntry('Unregistered Commercial Tenant (No GSTIN)', isUnregisteredGst, true),
+                  fieldEntry('GSTIN Number', commercialGstin, isUnregisteredGst)
                 ]
         },
         {
           pageNumber: 4,
-          sectionTitle: 'Page 4: Lease Financial Matrices & Statutory Clauses',
+          sectionTitle: 'Property Details, Boundaries & Furnishings',
           fields: [
-            fieldEntry('Lease Tenure (Duration)', leaseTenure === 'Custom Tenure' ? customTenure : leaseTenure, false),
-            fieldEntry('Lease Commencement Date', commencementDate, false),
+            fieldEntry('Property Address', propertyAddress, false),
+            fieldEntry('Property Type', propertyType, false),
+            checkboxEntry('Change to Optional (Property Boundaries)', propertyBoundariesOptional, true),
+            fieldEntry('East Boundary', formatSingleBoundary(propertyBoundaries.east), propertyBoundariesOptional),
+            fieldEntry('West Boundary', formatSingleBoundary(propertyBoundaries.west), propertyBoundariesOptional),
+            fieldEntry('North Boundary', formatSingleBoundary(propertyBoundaries.north), propertyBoundariesOptional),
+            fieldEntry('South Boundary', formatSingleBoundary(propertyBoundaries.south), propertyBoundariesOptional),
+            fieldEntry('Furnishing Status', furnishingStatus, false, ['Furnished', 'Semi Furnished', 'Unfurnished']),
+            fieldEntry(
+              'Furnished Items Inventory',
+              furnishedItems.length > 0
+                ? furnishedItems.map((it, idx) => `${idx + 1}. ${it.itemName} (₹${it.price || '0'}, ID: ${it.uniqueId || 'N/A'}, Condition: ${it.condition})`).join(' | ')
+                : '',
+              true
+            )
+          ]
+        },
+        {
+          pageNumber: 5,
+          sectionTitle: 'Lease Terms & Statutory Conditions',
+          fields: [
+            fieldEntry('Lease Tenure (Duration)', leaseTenure, false, leaseTenureOptions),
+            fieldEntry('Custom Lease Tenure (Months)', customTenure, leaseTenure !== 'Custom Tenure'),
+            fieldEntry('Lease Start Date', commencementDate, false),
             fieldEntry('Monthly Rent Amount (INR)', monthlyRent, false),
-            fieldEntry('Rent Due Date', rentDueDate, false),
+            fieldEntry('Rent Due Date', rentDueDate, false, rentDueDateOptions),
             fieldEntry('Security Deposit Amount (INR)', securityDeposit, false),
-            fieldEntry('Notice Period Duration', noticePeriod, false),
-            fieldEntry('Rent Payment Channel', paymentChannel, false),
-            fieldEntry('Rent Escalation Clause', rentEscalation === 'Custom Percentage' ? customEscalation : rentEscalation, docCategory !== 'commercial'),
-            fieldEntry('Lock-in Period', lockInPeriod, docCategory !== 'commercial'),
-            fieldEntry('Delayed Rent Interest', delayedRentInterest, docCategory !== 'commercial'),
-            fieldEntry('Maintenance Obligations Allocation', maintenanceBearer === 'tenant' ? 'Tenant Pays Routine Maintenance' : 'Landlord Pays Structural Maintenance', false),
-            fieldEntry('Clause — Utility Bills Allocation', clauseUtility ? 'Accepted' : 'Unchecked', false),
-            fieldEntry('Clause — Structural Alteration Bar', clauseStructural ? 'Accepted' : 'Unchecked', false),
-            fieldEntry('Clause — Sub-Letting Prohibition', clauseSubletting ? 'Accepted' : 'Unchecked', false),
-            fieldEntry('Clause — Landlord Inspection Access', clauseInspection ? 'Accepted' : 'Unchecked', false),
-            fieldEntry('Clause — Force Majeure Protocol', clauseForceMajeure ? 'Accepted' : 'Unchecked', false),
+            fieldEntry('Notice Period Duration', noticePeriod, false, noticePeriodOptions),
+            fieldEntry('Rent Payment Channel', paymentChannel, false, paymentChannelOptions),
+            ...UTILITY_BILL_ITEMS.map((bill) =>
+              checkboxEntry(`Utility Bill — Tenant pays ${bill}`, Boolean(tenantUtilityBills[bill]), true)
+            ),
+            fieldEntry('Society Maintenance Charge Who Pay', societyMaintenanceBy, false, ['Tenant', 'Owner']),
+            fieldEntry('Small Maintenance Bearer', smallMaintenanceBy, false, ['Tenant', 'Owner']),
+            fieldEntry('Big Maintenance Bearer', bigMaintenanceBy, false, ['Owner', 'Tenant']),
+            checkboxEntry('Sublease Not Allowed (Tenant cannot sublet without written owner permission)', clauseSubletting, true),
+            checkboxEntry('Pets & Pet Usage (Allow domestic pets on premises)', clausePetsAllowed, true),
+            checkboxEntry('No Structure Changes (Tenant cannot break or alter walls/pillars/beams)', clauseStructural, true),
+            checkboxEntry('Owner Visit Notice (Daytime inspection with 24 hrs prior notice)', clauseInspection, true),
+            checkboxEntry('Force Majeure Protocol (Natural disaster / lockdown rent relaxation)', clauseForceMajeure, true),
+            checkboxEntry('Lock-in Period Applicable', hasLockInPeriod, true),
+            fieldEntry('Lock-in Period Duration', hasLockInPeriod ? lockInPeriod : '', !hasLockInPeriod, lockInPeriodOptions),
+            fieldEntry('Custom Lock-in Duration', customLockInDuration, !hasLockInPeriod || lockInPeriod !== 'Custom'),
+            fieldEntry('Lock-in Break Fine / Fee (INR)', lockInFineAmount, !hasLockInPeriod),
+            checkboxEntry('Late Payment Penalty Applicable', hasLatePaymentPenalty, true),
+            fieldEntry('Late Payment Penalty Amount (INR)', latePaymentPenaltyAmount, !hasLatePaymentPenalty),
+            fieldEntry('Rent Escalation Clause', rentEscalation, docCategory !== 'commercial', rentEscalationOptions),
+            fieldEntry('Custom Rent Escalation Percentage', customEscalation, docCategory !== 'commercial' || rentEscalation !== 'Custom Percentage'),
+            fieldEntry('Delayed Rent Interest', delayedRentInterest, docCategory !== 'commercial', delayedInterestOptions),
             fieldEntry(
               'Custom Clauses Added',
               customClauses.length > 0
@@ -704,17 +890,19 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
           ]
         },
         {
-          pageNumber: 5,
-          sectionTitle: 'Page 5: Witnesses, Execution Mode, Review & Legal Declarations',
+          pageNumber: 6,
+          sectionTitle: 'Witnesses, Execution Mode, Review & Legal Declarations',
           fields: [
             fieldEntry('Witness 1 Full Legal Name', w1Name, false),
             fieldEntry("Witness 1 Father's / Husband's Name", w1FatherName, false),
+            fieldEntry('Witness 1 Profession', w1Profession, true),
             fieldEntry('Witness 1 Residential Address', w1Address, false),
             fieldEntry('Witness 1 Mobile Number', w1Mobile, false),
             fieldEntry('Witness 1 Age / Date of Birth', w1Age, true),
             fieldEntry('Witness 1 Aadhaar Number (12 Digits)', w1IdNumber, false),
             fieldEntry('Witness 2 Full Legal Name', w2Name, false),
             fieldEntry("Witness 2 Father's / Husband's Name", w2FatherName, false),
+            fieldEntry('Witness 2 Profession', w2Profession, true),
             fieldEntry('Witness 2 Residential Address', w2Address, false),
             fieldEntry('Witness 2 Mobile Number', w2Mobile, false),
             fieldEntry('Witness 2 Age / Date of Birth', w2Age, true),
@@ -723,10 +911,10 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
             fieldEntry('Shipping Street Address', shippingAddress, executionMode === 'digital'),
             fieldEntry('Shipping Pincode', shippingPincode, executionMode === 'digital'),
             fieldEntry('Shipping Contact Mobile', shippingPhone, executionMode === 'digital'),
-            fieldEntry('Verification & Review Mode', verificationMode === 'expert' ? 'Expert Legal Re-check (+₹10)' : 'Self-Verified (Free)', false, ['self', 'expert']),
+            fieldEntry('Verification & Review Mode', verificationMode === 'expert' ? 'Expert Legal Re-check (+₹10)' : 'Self-Verified (Free)', false, ['Self-Verified (Free)', 'Expert Legal Re-check (+₹10)']),
             fieldEntry('Total Payable Post-Delivery (INR)', `₹${pricing.totalPayable}`, false),
-            fieldEntry('All 5 Legal Declarations Accepted', declarations.every(Boolean) ? 'Yes (All 5 Accepted)' : 'No', false),
-            fieldEntry('Statutory Intermediary Disclaimer Accepted', disclaimerAccepted ? 'Yes' : 'No', false)
+            ...declarationTexts.map((txt, idx) => checkboxEntry(txt, Boolean(declarations[idx]), false)),
+            checkboxEntry('Statutory Intermediary Disclaimer Accepted (Cotex Compliance IT Act 2000 & MTA)', disclaimerAccepted, false)
           ]
         }
       ];
@@ -797,30 +985,45 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
           gstin: isUnregisteredGst ? 'Unregistered' : commercialGstin,
           isUnregisteredGst
         } : undefined,
+        propertyDetails: {
+          propertyAddress,
+          propertyType,
+          propertyBoundariesOptional,
+          boundaries: propertyBoundaries,
+          furnishingStatus,
+          furnishedItems: furnishingStatus !== 'Unfurnished' ? furnishedItems : []
+        },
         leaseTerms: {
           monthlyRent,
           securityDeposit,
-          lockInPeriod,
+          hasLockInPeriod,
+          lockInPeriod: effectiveLockInDuration,
+          lockInFineAmount: hasLockInPeriod ? lockInFineAmount : undefined,
+          hasLatePaymentPenalty,
+          latePaymentPenaltyAmount: hasLatePaymentPenalty ? latePaymentPenaltyAmount : undefined,
           leaseTenure: leaseTenure === 'Custom Tenure' ? customTenure : leaseTenure,
-          commencementDate,
+          leaseStartDate: commencementDate,
           rentDueDate,
           noticePeriod,
           paymentChannel,
-          rentEscalation: rentEscalation === 'Custom' ? customEscalation : rentEscalation,
+          utilityBills: utilityPayStatusList,
+          societyMaintenanceBy,
+          smallMaintenanceBy,
+          bigMaintenanceBy,
+          rentEscalation: rentEscalation === 'Custom Percentage' ? customEscalation : rentEscalation,
           delayedRentInterest,
-          maintenanceBearer,
           clauses: {
-            clauseUtility,
             clauseStructural,
             clauseSubletting,
+            clausePetsAllowed,
             clauseInspection,
             clauseForceMajeure
           },
           customClauses
         },
         witnesses: [
-          { name: w1Name, fatherName: w1FatherName, address: w1Address, mobile: w1Mobile, age: w1Age, idNumber: w1IdNumber },
-          { name: w2Name, fatherName: w2FatherName, address: w2Address, mobile: w2Mobile, age: w2Age, idNumber: w2IdNumber }
+          { name: w1Name, fatherName: w1FatherName, profession: w1Profession, address: w1Address, mobile: w1Mobile, age: w1Age, idNumber: w1IdNumber },
+          { name: w2Name, fatherName: w2FatherName, profession: w2Profession, address: w2Address, mobile: w2Mobile, age: w2Age, idNumber: w2IdNumber }
         ],
         delivery: {
           executionMode,
@@ -988,7 +1191,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
     <div data-document-wizard className="w-full max-w-4xl mx-auto px-4 py-5 animate-fadeIn pb-28">
       {/* Top Header & Step Progress */}
       <div className="mb-5">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <button
             type="button"
             onClick={onBack}
@@ -998,15 +1201,18 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
             <span>Cancel &amp; Return</span>
           </button>
 
+          <VoiceGuidanceButton serviceTitle={initialDoc.title} />
         </div>
 
         {/* Progress Bar */}
-        <div className="w-full bg-slate-200 h-1.5 rounded-full mt-3 overflow-hidden">
-          <div
-            className="bg-[#15803d] h-full transition-all duration-300"
-            style={{ width: `${(currentPage / 5) * 100}%` }}
-          />
-        </div>
+        {activeTab === 'form' && (
+          <div className="w-full bg-slate-200 h-1.5 rounded-full mt-3 overflow-hidden">
+            <div
+              className="bg-[#15803d] h-full transition-all duration-300"
+              style={{ width: `${(currentPage / 6) * 100}%` }}
+            />
+          </div>
+        )}
 
         {/* Title Header */}
         <div className="mt-4">
@@ -1017,9 +1223,25 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
             Architecture
           </span>
         </div>
+
+        <FormRequestTabBar
+          activeTab={activeTab}
+          onChangeTab={setActiveTab}
+          className="mt-4"
+        />
       </div>
 
-      {/* FORM CONTAINER */}
+      <HorizontalSwipeContainer activeTab={activeTab} onChangeTab={setActiveTab}>
+      {activeTab === 'request' ? (
+        <QuickCallbackRequestPanel
+          mode="document"
+          initialItemTitle={initialDoc.title}
+          categoryLabel={initialDoc.category}
+          onBack={onBack}
+          onSwitchToForm={() => setActiveTab('form')}
+        />
+      ) : (
+      /* FORM CONTAINER */
       <div className="bg-white border border-slate-200 rounded-2xl shadow-xs p-5 sm:p-7">
         {/* ================= PAGE 1 ================= */}
         {currentPage === 1 && (
@@ -1411,16 +1633,12 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Registered Office Address <span className="text-red-500 font-bold">*</span>
-                  </label>
-                  <textarea
-                    rows={2}
-                    required
+                  <AddressFieldGroup
+                    label="Registered Office Address"
+                    variant="standard"
                     value={corporateAddress}
-                    onChange={(e) => setCorporateAddress(e.target.value)}
-                    placeholder={getPlaceholder("Enter Registered Office Address")}
-                    className="w-full bg-white border border-slate-300 rounded-xl p-2.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 resize-none"
+                    onChangeAddress={(addr) => setCorporateAddress(addr)}
+                    required
                   />
                 </div>
 
@@ -1497,32 +1715,24 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <DateOfBirthPicker
-                      label="Age / Date of Birth (Age ≥ 18)"
-                      value={landlordDobOrAge}
-                      onChange={setLandlordDobOrAge}
-                      required={true}
-                      placeholder={getPlaceholder("DD/MM/YYYY")}
-                      helperText={showExampleDetails ? "Format: DD/MM/YYYY" : undefined}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Permanent Residential Address <span className="text-red-500 font-bold">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={landlordAddress}
-                      onChange={(e) => setLandlordAddress(e.target.value)}
-                      placeholder={getPlaceholder("Enter Permanent Address with City and PIN code")}
-                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                    />
-                  </div>
+                <div>
+                  <DateOfBirthPicker
+                    label="Age / Date of Birth (Age ≥ 18)"
+                    value={landlordDobOrAge}
+                    onChange={setLandlordDobOrAge}
+                    required={true}
+                    placeholder={getPlaceholder("DD/MM/YYYY")}
+                    helperText={showExampleDetails ? "Format: DD/MM/YYYY" : undefined}
+                  />
                 </div>
+
+                <AddressFieldGroup
+                  label="Permanent Residential Address"
+                  variant="standard"
+                  value={landlordAddress}
+                  onChangeAddress={(addr) => setLandlordAddress(addr)}
+                  required
+                />
               </div>
             )}
 
@@ -1710,16 +1920,12 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
-                      POA Holder Address <span className="text-red-500 font-bold">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required={hasPoa}
+                    <AddressFieldGroup
+                      label="POA Holder Address"
+                      variant="standard"
                       value={poaAddress}
-                      onChange={(e) => setPoaAddress(e.target.value)}
-                      placeholder={getPlaceholder("Enter Current Address of POA Holder")}
-                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-600"
+                      onChangeAddress={(addr) => setPoaAddress(addr)}
+                      required={hasPoa}
                     />
                   </div>
 
@@ -1860,32 +2066,24 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <DateOfBirthPicker
-                      label="Age / Date of Birth (Age ≥ 18)"
-                      value={tenantAge}
-                      onChange={setTenantAge}
-                      required={true}
-                      placeholder={getPlaceholder("DD/MM/YYYY")}
-                      helperText={showExampleDetails ? "Format: DD/MM/YYYY" : undefined}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Permanent Native Address <span className="text-red-500 font-bold">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={tenantAddress}
-                      onChange={(e) => setTenantAddress(e.target.value)}
-                      placeholder={getPlaceholder("Enter Permanent Native Address")}
-                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                    />
-                  </div>
+                <div>
+                  <DateOfBirthPicker
+                    label="Age / Date of Birth (Age ≥ 18)"
+                    value={tenantAge}
+                    onChange={setTenantAge}
+                    required={true}
+                    placeholder={getPlaceholder("DD/MM/YYYY")}
+                    helperText={showExampleDetails ? "Format: DD/MM/YYYY" : undefined}
+                  />
                 </div>
+
+                <AddressFieldGroup
+                  label="Permanent Native Address"
+                  variant="standard"
+                  value={tenantAddress}
+                  onChangeAddress={(addr) => setTenantAddress(addr)}
+                  required
+                />
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
@@ -2070,16 +2268,12 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Registered Office Address <span className="text-red-500 font-bold">*</span>
-                  </label>
-                  <textarea
-                    rows={2}
-                    required
+                  <AddressFieldGroup
+                    label="Registered Office Address"
+                    variant="standard"
                     value={commercialOfficeAddress}
-                    onChange={(e) => setCommercialOfficeAddress(e.target.value)}
-                    placeholder={getPlaceholder("Enter Registered Office Address")}
-                    className="w-full bg-white border border-slate-300 rounded-xl p-2.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 resize-none"
+                    onChangeAddress={(addr) => setCommercialOfficeAddress(addr)}
+                    required
                   />
                 </div>
 
@@ -2236,8 +2430,192 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
           </div>
         )}
 
-        {/* ================= PAGE 4 ================= */}
+        {/* ================= STEP 4: PROPERTY DETAILS ================= */}
         {currentPage === 4 && (
+          <div className="space-y-6 animate-fadeIn">
+            <div className="bg-slate-50 text-slate-900 rounded-2xl p-4 sm:p-5 shadow-2xs border border-slate-200 mb-2">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-black text-lg border border-emerald-200">
+                  3
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black tracking-wide uppercase text-slate-900">
+                    Property Details
+                  </h3>
+                  <p className="text-xs text-slate-600 font-medium">
+                    Premises Address, Boundaries, Property Type &amp; Furnishing Inventory
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* 1. Property Address */}
+            <AddressFieldGroup
+              label="Property Address"
+              variant="property"
+              value={propertyAddress}
+              onChangeAddress={(addr) => setPropertyAddress(addr)}
+              required
+            />
+
+            {/* 2. Property Boundaries */}
+            <PropertyBoundariesSection
+              title="Property Boundaries"
+              subtitle="Specify what sits on the East, West, North, and South sides of the rented property."
+              value={propertyBoundaries}
+              onChange={setPropertyBoundaries}
+              showOptionalToggle
+              isOptional={propertyBoundariesOptional}
+              onToggleOptional={setPropertyBoundariesOptional}
+            />
+
+            {/* 3. Property Type & Furnishing Status */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                  Property Type <span className="text-red-500 font-bold">*</span>
+                </label>
+                <select
+                  value={propertyType}
+                  onChange={(e) => setPropertyType(e.target.value)}
+                  className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                >
+                  <option value="Flat / Apartment">Flat / Apartment</option>
+                  <option value="Independent House / Villa">Independent House / Villa</option>
+                  <option value="Builder Floor">Builder Floor</option>
+                  <option value="Shop / Showroom">Shop / Showroom</option>
+                  <option value="Office Space">Office Space</option>
+                  <option value="Warehouse / Godown">Warehouse / Godown</option>
+                  <option value="Studio / Room">Studio / Room</option>
+                  <option value="Other Property">Other Property</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                  Furnishing Status <span className="text-red-500 font-bold">*</span>
+                </label>
+                <select
+                  value={furnishingStatus}
+                  onChange={(e) => setFurnishingStatus(e.target.value as 'Furnished' | 'Semi Furnished' | 'Unfurnished')}
+                  className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                >
+                  <option value="Unfurnished">Unfurnished</option>
+                  <option value="Semi Furnished">Semi Furnished</option>
+                  <option value="Furnished">Furnished</option>
+                </select>
+              </div>
+            </div>
+
+            {/* 4. Furnished Items Inventory (Visible when Furnished or Semi Furnished) */}
+            {furnishingStatus !== 'Unfurnished' && (
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3 animate-fadeIn">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div>
+                    <span className="text-xs font-bold text-slate-900 block uppercase tracking-wide">
+                      Furnished Items &amp; Appliances List ({furnishedItems.length})
+                    </span>
+                    <span className="text-[11px] text-slate-500">
+                      Add furniture, AC, fridge, fans, or fittings provided with the property.
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={addFurnishedItem}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-2xs cursor-pointer transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Items</span>
+                  </button>
+                </div>
+
+                {furnishedItems.length === 0 ? (
+                  <p className="text-xs text-slate-500 bg-white border border-dashed border-slate-300 rounded-xl p-3 text-center">
+                    No items added yet. Click &ldquo;Add Items&rdquo; to list furniture or appliances.
+                  </p>
+                ) : (
+                  <div className="space-y-2.5">
+                    {furnishedItems.map((item, idx) => (
+                      <div key={item.id} className="p-3 bg-white border border-slate-200 rounded-xl space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-bold text-blue-700">Item #{idx + 1}</span>
+                          <button
+                            type="button"
+                            onClick={() => removeFurnishedItem(item.id)}
+                            className="text-slate-400 hover:text-rose-600 p-1 cursor-pointer"
+                            title="Remove item"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-700 mb-0.5">
+                              Item Name <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={item.itemName}
+                              onChange={(e) => updateFurnishedItem(item.id, 'itemName', e.target.value)}
+                              placeholder={getPlaceholder('e.g. Split AC / Double Bed')}
+                              className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-700 mb-0.5">
+                              Price (₹)
+                            </label>
+                            <input
+                              type="number"
+                              value={item.price}
+                              onChange={(e) => updateFurnishedItem(item.id, 'price', e.target.value)}
+                              placeholder={getPlaceholder('e.g. 25000')}
+                              className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-700 mb-0.5">
+                              Unique ID <span className="text-slate-400 font-normal">(Optional)</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={item.uniqueId}
+                              onChange={(e) => updateFurnishedItem(item.id, 'uniqueId', e.target.value)}
+                              placeholder={getPlaceholder('Serial / Model ID')}
+                              className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-700 mb-0.5">
+                              Condition
+                            </label>
+                            <select
+                              value={item.condition}
+                              onChange={(e) => updateFurnishedItem(item.id, 'condition', e.target.value)}
+                              className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-900"
+                            >
+                              <option value="Good">Good</option>
+                              <option value="Average">Average</option>
+                              <option value="Bad">Bad</option>
+                              <option value="New">New</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ================= STEP 5: LEASE TERMS & STATUTORY CONDITIONS ================= */}
+        {currentPage === 5 && (
           <div className="space-y-6 animate-fadeIn">
             {/* 1. Financial & Tenure Matrices */}
             <div className="space-y-4">
@@ -2292,7 +2670,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Lease Commencement Date <span className="text-red-500 font-bold">*</span>
+                    Lease Start Date <span className="text-red-500 font-bold">*</span>
                   </label>
                   <input
                     type="date"
@@ -2355,7 +2733,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                 </div>
               </div>
 
-              {/* Security Deposit Amount */}
+              {/* Security Deposit Amount & Notice Period */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <div className="flex items-center justify-between mb-1">
@@ -2411,7 +2789,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                 </div>
               )}
 
-              {/* Payment Channel */}
+              {/* Payment Channel (Any Type default) */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
                   Rent Payment Channel <span className="text-red-500 font-bold">*</span>
@@ -2421,6 +2799,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                   onChange={(e) => setPaymentChannel(e.target.value)}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 >
+                  <option value="Any Type">Any Type</option>
                   <option value="Bank Transfer (NEFT/RTGS/IMPS/UPI)">Bank Transfer (NEFT/RTGS/IMPS/UPI)</option>
                   <option value="Account Payee Cheque">Account Payee Cheque</option>
                   <option value="Cash / Other">Cash / Other</option>
@@ -2428,14 +2807,140 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
               </div>
             </div>
 
-            {/* 2. Advanced Commercial Configurations */}
+            {/* 2. Who Will Pay? & Maintenance Allocation */}
+            <div className="pt-4 border-t border-slate-200 space-y-4">
+              <span className="text-xs font-bold text-blue-700 uppercase tracking-wider block">
+                2. Utility Bills &amp; Maintenance Responsibility
+              </span>
+
+              {/* Who Will Pay? Utility Bills Dropdown Checklist */}
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
+                <label className="block text-xs font-bold text-slate-800">
+                  Who Will Pay? <span className="text-slate-500 font-normal">(Utility Bills)</span>
+                </label>
+
+                <button
+                  type="button"
+                  onClick={() => setUtilityBillsDropdownOpen((o) => !o)}
+                  className="w-full flex items-center justify-between bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-semibold text-slate-900 hover:border-blue-500 cursor-pointer transition-colors"
+                >
+                  <span>Tenant pays the bill</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold text-blue-600">
+                      {UTILITY_BILL_ITEMS.filter((b) => tenantUtilityBills[b]).length}/{UTILITY_BILL_ITEMS.length} Selected
+                    </span>
+                    {utilityBillsDropdownOpen ? (
+                      <ChevronUp className="w-4 h-4 text-slate-500" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-slate-500" />
+                    )}
+                  </div>
+                </button>
+
+                {utilityBillsDropdownOpen && (
+                  <div className="bg-white border border-slate-200 rounded-xl p-3 space-y-2 animate-fadeIn">
+                    <span className="text-[11px] text-slate-500 block">
+                      Checked bills are paid by the Tenant. Any unchecked bill will be paid by the Owner.
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {UTILITY_BILL_ITEMS.map((bill) => {
+                        const isTenantPay = Boolean(tenantUtilityBills[bill]);
+                        return (
+                          <label
+                            key={bill}
+                            className={`flex items-center justify-between gap-2 p-2.5 rounded-lg border cursor-pointer text-xs select-none ${
+                              isTenantPay
+                                ? 'bg-blue-50/50 border-blue-200 text-slate-900 font-semibold'
+                                : 'bg-slate-50 border-slate-200 text-slate-600'
+                            }`}
+                          >
+                            <span className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={isTenantPay}
+                                onChange={() => toggleUtilityBill(bill)}
+                                className="w-4 h-4 text-blue-600 rounded"
+                              />
+                              <span>{bill}</span>
+                            </span>
+                            <span className={`text-[10px] font-bold ${isTenantPay ? 'text-blue-700' : 'text-amber-700'}`}>
+                              {isTenantPay ? 'Tenant' : 'Owner'}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {UTILITY_BILL_ITEMS.some((b) => !tenantUtilityBills[b]) && (
+                  <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+                    Owner pays:{' '}
+                    {UTILITY_BILL_ITEMS.filter((b) => !tenantUtilityBills[b]).join(', ')}
+                  </p>
+                )}
+              </div>
+
+              {/* Society Maintenance Charge + Small Maintenance + Big Maintenance */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Society Maintenance Charge Who Pay? <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={societyMaintenanceBy}
+                    onChange={(e) => setSocietyMaintenanceBy(e.target.value as 'Tenant' | 'Owner')}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  >
+                    <option value="Tenant">Tenant</option>
+                    <option value="Owner">Owner</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-0.5">
+                    Who Pay Small Maintenance? <span className="text-red-500">*</span>
+                  </label>
+                  <span className="text-[10px] text-slate-500 block mb-1">
+                    (like bulb, wire, tap, switch, etc.)
+                  </span>
+                  <select
+                    value={smallMaintenanceBy}
+                    onChange={(e) => setSmallMaintenanceBy(e.target.value as 'Tenant' | 'Owner')}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  >
+                    <option value="Tenant">Tenant</option>
+                    <option value="Owner">Owner</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-0.5">
+                    Who Pays Big Maintenance? <span className="text-red-500">*</span>
+                  </label>
+                  <span className="text-[10px] text-slate-500 block mb-1">
+                    (like modifying home, floor, paint, roof, etc.)
+                  </span>
+                  <select
+                    value={bigMaintenanceBy}
+                    onChange={(e) => setBigMaintenanceBy(e.target.value as 'Owner' | 'Tenant')}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  >
+                    <option value="Owner">Owner</option>
+                    <option value="Tenant">Tenant</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Commercial Escalation & Delayed Interest */}
             {docCategory === 'commercial' && (
               <div className="pt-4 border-t border-slate-200 space-y-3">
                 <span className="text-xs font-bold text-blue-700 uppercase tracking-wider block">
-                  2. Advanced Commercial Configurations
+                  Commercial Financial Configurations
                 </span>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
                       Rent Escalation Clause <span className="text-red-500 font-bold">*</span>
@@ -2450,22 +2955,15 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                       <option value="10% Annually">10% Annually</option>
                       <option value="Custom Percentage">Custom Percentage</option>
                     </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
-                      Lock-in Period <span className="text-red-500 font-bold">*</span>
-                    </label>
-                    <select
-                      value={lockInPeriod}
-                      onChange={(e) => setLockInPeriod(e.target.value)}
-                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
-                    >
-                      <option value="None">None</option>
-                      <option value="6 Months">6 Months</option>
-                      <option value="1 Year">1 Year</option>
-                      <option value="2 Years">2 Years</option>
-                    </select>
+                    {rentEscalation === 'Custom Percentage' && (
+                      <input
+                        type="text"
+                        value={customEscalation}
+                        onChange={(e) => setCustomEscalation(e.target.value)}
+                        placeholder={getPlaceholder("e.g. 7% per annum")}
+                        className="mt-2 w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
+                      />
+                    )}
                   </div>
 
                   <div>
@@ -2486,64 +2984,13 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
               </div>
             )}
 
-            {/* 3. Statutory Legal Clauses */}
+            {/* 3. Agreement Clauses, Lock-in Period & Late Payment Penalty */}
             <div className="pt-4 border-t border-slate-200 space-y-3">
               <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
-                3. Statutory Legal Guard-Rails (Pre-checked for Maximum Court Admissibility)
+                3. Agreement Rules &amp; Optional Terms
               </span>
 
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
-                <span className="text-xs font-bold text-slate-800">
-                  Maintenance Obligations Allocation:
-                </span>
-                <div className="flex items-center gap-4 text-xs">
-                  <label className="flex items-center gap-1.5 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="maintenance"
-                      checked={maintenanceBearer === 'tenant'}
-                      onChange={() => setMaintenanceBearer('tenant')}
-                      className="text-blue-600"
-                    />
-                    <span>Tenant Pays Routine Maintenance</span>
-                  </label>
-                  <label className="flex items-center gap-1.5 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="maintenance"
-                      checked={maintenanceBearer === 'landlord'}
-                      onChange={() => setMaintenanceBearer('landlord')}
-                      className="text-blue-600"
-                    />
-                    <span>Landlord Pays Structural Maintenance</span>
-                  </label>
-                </div>
-              </div>
-
-              <label className="flex items-start gap-2.5 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={clauseUtility}
-                  onChange={(e) => setClauseUtility(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 text-blue-600 rounded"
-                />
-                <span className="text-xs text-slate-700">
-                  <strong>Utility Bills Allocation:</strong> Tenant explicitly undertakes to pay electricity, water, internet, and gas bills directly based on actual meter readings.
-                </span>
-              </label>
-
-              <label className="flex items-start gap-2.5 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={clauseStructural}
-                  onChange={(e) => setClauseStructural(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 text-blue-600 rounded"
-                />
-                <span className="text-xs text-slate-700">
-                  <strong>Structural Alteration Bar:</strong> Restricts the Tenant from making permanent modifications or structural shifts to beams/pillars without prior written authorization.
-                </span>
-              </label>
-
+              {/* Sublease */}
               <label className="flex items-start gap-2.5 cursor-pointer select-none">
                 <input
                   type="checkbox"
@@ -2552,10 +2999,43 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                   className="mt-0.5 w-4 h-4 text-blue-600 rounded"
                 />
                 <span className="text-xs text-slate-700">
-                  <strong>Sub-Letting Prohibition:</strong> Completely bars the tenant from sub-leasing or assigning the premises to any third party without a fresh written contract.
+                  <strong>{clauseSubletting ? 'Sublease Not Allowed:' : 'Sublease Allowed:'}</strong>{' '}
+                  {clauseSubletting
+                    ? 'Sublease is not allowed. The tenant cannot sublet or rent the property to any third party without written permission from the owner.'
+                    : 'Sublease is allowed. The tenant may sublet part or full premises with prior notice to the owner.'}
                 </span>
               </label>
 
+              {/* Pets & Pet Usage (Unchecked by default) */}
+              <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={clausePetsAllowed}
+                  onChange={(e) => setClausePetsAllowed(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 text-blue-600 rounded"
+                />
+                <span className="text-xs text-slate-700">
+                  <strong>Pets &amp; Pet Usage:</strong>{' '}
+                  {clausePetsAllowed
+                    ? 'Domestic pets are allowed on the premises provided the tenant maintains cleanliness and ensures no disturbance or damage.'
+                    : 'Allow domestic pets on the premises (Unchecked — pets are not allowed).'}
+                </span>
+              </label>
+
+              {/* No Structure Changes */}
+              <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={clauseStructural}
+                  onChange={(e) => setClauseStructural(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 text-blue-600 rounded"
+                />
+                <span className="text-xs text-slate-700">
+                  <strong>No Structure Changes:</strong> The tenant cannot break or alter any walls, pillars, or beams without written permission from the property owner.
+                </span>
+              </label>
+
+              {/* Owner Visit Notice */}
               <label className="flex items-start gap-2.5 cursor-pointer select-none">
                 <input
                   type="checkbox"
@@ -2564,10 +3044,11 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                   className="mt-0.5 w-4 h-4 text-blue-600 rounded"
                 />
                 <span className="text-xs text-slate-700">
-                  <strong>Landlord Inspection Access (MTA Rule):</strong> Grants inspection rights to the Landlord during business/daylight hours subject to a minimum 24-hour advance written notice.
+                  <strong>Owner Visit Notice:</strong> The property owner can visit the property for inspection during daytime only after giving at least 24 hours prior notice to the tenant.
                 </span>
               </label>
 
+              {/* Force Majeure Protocol */}
               <label className="flex items-start gap-2.5 cursor-pointer select-none">
                 <input
                   type="checkbox"
@@ -2576,9 +3057,106 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                   className="mt-0.5 w-4 h-4 text-blue-600 rounded"
                 />
                 <span className="text-xs text-slate-700">
-                  <strong>Force Majeure Protocol:</strong> Explicit rules regarding rent waivers/suspensions during natural disasters, epidemics, or government-mandated lockdowns.
+                  <strong>Force Majeure Protocol:</strong> Fair rules for rent suspension or relaxation during natural disasters or government-mandated lockdowns.
                 </span>
               </label>
+
+              {/* Lock-in Period Checkbox + Duration + Break Fine Amount */}
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={hasLockInPeriod}
+                    onChange={(e) => setHasLockInPeriod(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 text-blue-600 rounded"
+                  />
+                  <span className="text-xs text-slate-800">
+                    <strong>Lock-in Period:</strong> Set a minimum lock-in duration during which neither party can terminate the lease without a break fine.
+                  </span>
+                </label>
+
+                {hasLockInPeriod && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 animate-fadeIn">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Lock-in Duration <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        value={lockInPeriod}
+                        onChange={(e) => setLockInPeriod(e.target.value)}
+                        className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
+                      >
+                        <option value="1 Month">1 Month</option>
+                        <option value="2 Months">2 Months</option>
+                        <option value="3 Months">3 Months</option>
+                        <option value="6 Months">6 Months</option>
+                        <option value="Custom">Custom (e.g. 1 Month 28 Days)</option>
+                      </select>
+
+                      {lockInPeriod === 'Custom' && (
+                        <input
+                          type="text"
+                          value={customLockInDuration}
+                          onChange={(e) => setCustomLockInDuration(e.target.value)}
+                          placeholder={getPlaceholder('e.g. 1 Month 28 Days')}
+                          className="mt-2 w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
+                        />
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Fine / Fee if Lock-in is Broken (₹) <span className="text-red-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">₹</span>
+                        <input
+                          type="number"
+                          min={0}
+                          value={lockInFineAmount}
+                          onChange={(e) => setLockInFineAmount(e.target.value)}
+                          placeholder={getPlaceholder('Enter fine amount in INR')}
+                          className="w-full bg-white border border-slate-300 rounded-lg pl-7 pr-3 py-1.5 text-xs text-slate-900"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Late Payment Penalty (Unchecked by default) */}
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={hasLatePaymentPenalty}
+                    onChange={(e) => setHasLatePaymentPenalty(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 text-blue-600 rounded"
+                  />
+                  <span className="text-xs text-slate-800">
+                    <strong>Late Payment Penalty:</strong> Charge a fixed late fee if monthly rent is paid after the due date.
+                  </span>
+                </label>
+
+                {hasLatePaymentPenalty && (
+                  <div className="animate-fadeIn">
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Penalty Amount (₹) <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative sm:max-w-xs">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">₹</span>
+                      <input
+                        type="number"
+                        min={0}
+                        value={latePaymentPenaltyAmount}
+                        onChange={(e) => setLatePaymentPenaltyAmount(e.target.value)}
+                        placeholder={getPlaceholder('Enter penalty amount in INR')}
+                        className="w-full bg-white border border-slate-300 rounded-lg pl-7 pr-3 py-1.5 text-xs text-slate-900"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* 4. Dynamic Custom Clause Injector */}
@@ -2615,7 +3193,7 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
-                    <input
+                  <input
                     type="text"
                     value={clause.title}
                     onChange={(e) => updateCustomClause(clause.id, 'title', e.target.value)}
@@ -2635,172 +3213,50 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
           </div>
         )}
 
-        {/* ================= PAGE 5 ================= */}
-        {currentPage === 5 && (
+        {/* ================= STEP 6: WITNESSES & EXECUTION ================= */}
+        {currentPage === 6 && (
           <form onSubmit={handleSubmit} className="space-y-6 animate-fadeIn">
-            {/* 1. Mandatory Attestation (Two Witnesses) */}
+            {/* 1. Attestation (Two Witnesses) */}
             <div className="space-y-4">
               <span className="text-xs font-bold text-blue-700 uppercase tracking-wider block">
                 1. Attestation (Two Witnesses)
               </span>
 
-              {/* Witness 1 */}
-              <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
-                <span className="text-xs font-bold text-slate-800 block">Witness 1 Details <span className="text-red-500 font-bold">*</span></span>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Witness 1 Full Legal Name <span className="text-red-500 font-bold">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={w1Name}
-                      onChange={(e) => setW1Name(e.target.value)}
-                      placeholder={getPlaceholder("Witness 1 Full Legal Name")}
-                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Father's / Husband's Name <span className="text-red-500 font-bold">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={w1FatherName}
-                      onChange={(e) => setW1FatherName(e.target.value)}
-                      placeholder={getPlaceholder("Father's / Husband's Name")}
-                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Complete Residential Address <span className="text-red-500 font-bold">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={w1Address}
-                    onChange={(e) => setW1Address(e.target.value)}
-                    placeholder={getPlaceholder("Complete Residential Address")}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
-                  />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      10-Digit Mobile Number <span className="text-red-500 font-bold">*</span>
-                    </label>
-                    <input
-                      type="tel"
-                      required
-                      maxLength={10}
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      value={w1Mobile}
-                      onChange={(e) => setW1Mobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                      placeholder={getPlaceholder("10-Digit Mobile Number")}
-                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
-                    />
-                  </div>
-                  <DateOfBirthPicker
-                    label="Age / Date of Birth"
-                    value={w1Age}
-                    onChange={setW1Age}
-                    placeholder={getPlaceholder("DD/MM/YYYY")}
-                    helperText={showExampleDetails ? "Optional" : undefined}
-                  />
-                  <div>
-                    <AadhaarInput
-                      label="Aadhaar Number (12 Digits)"
-                      value={w1IdNumber}
-                      onChange={(val) => setW1IdNumber(val)}
-                      required
-                    />
-                  </div>
-                </div>
-              </div>
+              <WitnessDetailsCard
+                witnessNumber={1}
+                name={w1Name}
+                onNameChange={setW1Name}
+                fatherName={w1FatherName}
+                onFatherNameChange={setW1FatherName}
+                profession={w1Profession}
+                onProfessionChange={setW1Profession}
+                ageOrDob={w1Age}
+                onAgeOrDobChange={setW1Age}
+                mobile={w1Mobile}
+                onMobileChange={setW1Mobile}
+                aadhaar={w1IdNumber}
+                onAadhaarChange={setW1IdNumber}
+                address={w1Address}
+                onAddressChange={setW1Address}
+              />
 
-              {/* Witness 2 */}
-              <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
-                <span className="text-xs font-bold text-slate-800 block">Witness 2 Details <span className="text-red-500 font-bold">*</span></span>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Witness 2 Full Legal Name <span className="text-red-500 font-bold">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={w2Name}
-                      onChange={(e) => setW2Name(e.target.value)}
-                      placeholder={getPlaceholder("Witness 2 Full Legal Name")}
-                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Father's / Husband's Name <span className="text-red-500 font-bold">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={w2FatherName}
-                      onChange={(e) => setW2FatherName(e.target.value)}
-                      placeholder={getPlaceholder("Father's / Husband's Name")}
-                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Complete Residential Address <span className="text-red-500 font-bold">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={w2Address}
-                    onChange={(e) => setW2Address(e.target.value)}
-                    placeholder={getPlaceholder("Complete Residential Address")}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
-                  />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      10-Digit Mobile Number <span className="text-red-500 font-bold">*</span>
-                    </label>
-                    <input
-                      type="tel"
-                      required
-                      maxLength={10}
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      value={w2Mobile}
-                      onChange={(e) => setW2Mobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                      placeholder={getPlaceholder("10-Digit Mobile Number")}
-                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
-                    />
-                  </div>
-                  <DateOfBirthPicker
-                    label="Age / Date of Birth"
-                    value={w2Age}
-                    onChange={setW2Age}
-                    placeholder={getPlaceholder("DD/MM/YYYY")}
-                    helperText={showExampleDetails ? "Optional" : undefined}
-                  />
-                  <div>
-                    <AadhaarInput
-                      label="Aadhaar Number (12 Digits)"
-                      value={w2IdNumber}
-                      onChange={(val) => setW2IdNumber(val)}
-                      required
-                    />
-                  </div>
-                </div>
-              </div>
+              <WitnessDetailsCard
+                witnessNumber={2}
+                name={w2Name}
+                onNameChange={setW2Name}
+                fatherName={w2FatherName}
+                onFatherNameChange={setW2FatherName}
+                profession={w2Profession}
+                onProfessionChange={setW2Profession}
+                ageOrDob={w2Age}
+                onAgeOrDobChange={setW2Age}
+                mobile={w2Mobile}
+                onMobileChange={setW2Mobile}
+                aadhaar={w2IdNumber}
+                onAadhaarChange={setW2IdNumber}
+                address={w2Address}
+                onAddressChange={setW2Address}
+              />
             </div>
 
             {/* 2. Legal Execution Mode */}
@@ -2904,53 +3360,36 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
                       Doorstep Shipping Details
                     </span>
 
+                    <AddressFieldGroup
+                      label="Doorstep Shipping Address"
+                      variant="standard"
+                      defaultState={selectedState || 'Uttar Pradesh'}
+                      value={shippingAddress}
+                      onChangeAddress={(fullAddr, details) => {
+                        setShippingAddress(fullAddr);
+                        if (details?.pincode !== undefined) {
+                          setShippingPincode(details.pincode);
+                        }
+                      }}
+                      required
+                      className="bg-white"
+                    />
+
                     <div>
                       <label className="block text-[11px] font-bold text-amber-900 mb-0.5">
-                        Complete Street Address with City &amp; State <span className="text-red-500">*</span>
+                        Recipient 10-Digit Mobile <span className="text-red-500">*</span>
                       </label>
                       <input
-                        type="text"
+                        type="tel"
                         required
-                        value={shippingAddress}
-                        onChange={(e) => setShippingAddress(e.target.value)}
-                        placeholder={getPlaceholder("Enter Complete Street Address with City and State")}
+                        maxLength={10}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        value={shippingPhone}
+                        onChange={(e) => setShippingPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                        placeholder={getPlaceholder("Recipient 10-Digit Mobile")}
                         className="w-full bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
                       />
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                      <div>
-                        <label className="block text-[11px] font-bold text-amber-900 mb-0.5">
-                          6-Digit Delivery Pincode <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          maxLength={6}
-                          inputMode="numeric"
-                          pattern="[0-9]*"
-                          required
-                          value={shippingPincode}
-                          onChange={(e) => setShippingPincode(e.target.value.replace(/\D/g, ''))}
-                          placeholder={getPlaceholder("Enter 6-Digit Pincode")}
-                          className="w-full bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-xs font-mono text-slate-900"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-bold text-amber-900 mb-0.5">
-                          Recipient 10-Digit Mobile <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="tel"
-                          required
-                          maxLength={10}
-                          inputMode="numeric"
-                          pattern="[0-9]*"
-                          value={shippingPhone}
-                          onChange={(e) => setShippingPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                          placeholder={getPlaceholder("Recipient 10-Digit Mobile")}
-                          className="w-full bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
-                        />
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -3158,7 +3597,10 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
             <div className="flex items-center justify-between pt-3 border-t border-slate-200">
               <button
                 type="button"
-                onClick={() => setCurrentPage(4)}
+                onClick={() => {
+                  setCurrentPage(5);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
                 className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-100 font-bold text-xs cursor-pointer transition-colors"
               >
                 <ArrowLeft className="w-4 h-4" />
@@ -3177,16 +3619,23 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
           </form>
         )}
 
-        {/* Step Navigation Controls for Pages 1 to 4 */}
-        {currentPage < 5 && (
+        {/* Step Navigation Controls for Steps 1 to 5 */}
+        {currentPage < 6 && (
           <div className="flex items-center justify-between pt-6 border-t border-slate-200 mt-6">
             <button
               type="button"
-              onClick={currentPage === 1 ? onBack : () => setCurrentPage((p) => p - 1)}
+              onClick={
+                currentPage === 1
+                  ? onBack
+                  : () => {
+                      setCurrentPage((p) => p - 1);
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }
+              }
               className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-100 font-bold text-xs cursor-pointer transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
-              <span>{currentPage === 1 ? 'Cancel' : 'Previous Page'}</span>
+              <span>{currentPage === 1 ? 'Cancel' : 'Previous'}</span>
             </button>
 
             <button
@@ -3200,6 +3649,8 @@ export const RentLeaseWizardView: React.FC<RentLeaseWizardViewProps> = ({
           </div>
         )}
       </div>
+      )}
+      </HorizontalSwipeContainer>
     </div>
   );
 };

@@ -371,26 +371,29 @@ export const allServiceVoiceTexts: Record<string, ServiceVoiceTexts> = {
   }
 };
 
-// Map service titles and aliases ONLY for the 7 allowed sections:
-// 1. Registrations, 2. Insurance, 3. Filing, 4. Notice, 5. Website, 6. Bank Loan, 7. Call Support
-// Agreements, Affidavits, NOCs, Leases, and Documents strictly return null (Voice disabled).
+function buildAgreementVoiceTexts(docTitle: string): Record<VoiceLanguageCode, string> {
+  const safeTitle = (docTitle || 'Legal Document').trim();
+  return {
+    hi: `आपने ${safeTitle} सेलेक्ट किया है। आप यह फॉर्म भरकर डायरेक्ट फॉर्म दे सकते हैं और आपसे कोऑर्डिनेशन करके आपका ${safeTitle} बनवा दिया जाएगा। या फिर अगर आपको फॉर्म समझ में नहीं आ रहा है, तो आप रिक्वेस्ट स्टेप पर स्वाइप करके रिक्वेस्ट सेंड कर सकते हैं और हमारे एग्जीक्यूटिव आपसे कॉल करके, कॉल पर सारी डिटेल्स लेकर खुद फॉर्म फिल करके आपका ${safeTitle} बनाकर आपको देंगे।`,
+    en: `You have selected ${safeTitle}. You can fill out this form and submit it directly so our team can coordinate with you and prepare your ${safeTitle}. Or, if you find the form difficult to understand, simply swipe to the Request step and send a callback request — our executive will call you, collect all details over the call, fill the form for you, and get your ${safeTitle} prepared and delivered.`,
+    mr: `तुम्ही ${safeTitle} निवडले आहे. तुम्ही हा फॉर्म भरून थेट सब्मिट करू शकता आणि तुमच्याशी समन्वय साधून तुमचा ${safeTitle} तयार करून दिला जाईल. किंवा जर तुम्हाला फॉर्म समजत नसेल, तर रिक्वेस्ट स्टेपवर स्वाइप करून रिक्वेस्ट पाठवा; आमचे एक्झिक्युटिव्ह तुम्हाला कॉल करतील, कॉलवर सर्व माहिती घेऊन स्वतः फॉर्म भरतील आणि तुमचा ${safeTitle} तयार करून देतील.`,
+    gu: `તમે ${safeTitle} પસંદ કર્યું છે. તમે આ ફોર્મ ભરીને સીધું સબમિટ કરી શકો છો અને તમારી સાથે સંકલન કરીને તમારું ${safeTitle} તૈયાર કરી આપવામાં આવશે. અથવા જો તમને ફોર્મ સમજવામાં મુશ્કેલી પડે, તો રિક્વેસ્ટ સ્ટેપ પર સ્વાઇપ કરીને રિક્વેસ્ટ મોકલી શકો છો; અમારા એક્ઝિક્યુટિવ તમને કૉલ કરીને કૉલ પર બધી વિગતો લઈને જાતે ફોર્મ ભરીને તમારું ${safeTitle} તૈયાર કરી આપશે.`,
+    pa: `ਤੁਸੀਂ ${safeTitle} ਚੁਣਿਆ ਹੈ। ਤੁਸੀਂ ਇਹ ਫਾਰਮ ਭਰ ਕੇ ਸਿੱਧਾ ਸਬਮਿਟ ਕਰ ਸਕਦੇ ਹੋ ਅਤੇ ਤੁਹਾਡੇ ਨਾਲ ਤਾਲਮੇਲ ਕਰਕੇ ਤੁਹਾਡਾ ${safeTitle} ਤਿਆਰ ਕਰ ਦਿੱਤਾ ਜਾਵੇਗਾ। ਜਾਂ ਫਿਰ ਜੇਕਰ ਤੁਹਾਨੂੰ ਫਾਰਮ ਸਮਝ ਨਹੀਂ ਆ ਰਿਹਾ, ਤਾਂ ਤੁਸੀਂ ਰਿਕੁਐਸਟ ਸਟੈਪ ਉੱਤੇ ਸਵਾਈਪ ਕਰਕੇ ਰਿਕੁਐਸਟ ਭੇਜ ਸਕਦੇ ਹੋ; ਸਾਡੇ ਐਗਜ਼ੀਕਿਊਟਿਵ ਤੁਹਾਨੂੰ ਕਾਲ ਕਰਕੇ, ਕਾਲ ਉੱਤੇ ਸਾਰੀ ਜਾਣਕਾਰੀ ਲੈ ਕੇ ਖੁਦ ਫਾਰਮ ਭਰ ਕੇ ਤੁਹਾਡਾ ${safeTitle} ਬਣਾ ਕੇ ਦੇਣਗੇ।`,
+    ml: `നിങ്ങൾ ${safeTitle} തിരഞ്ഞെടുത്തു. ഈ ഫോം പൂരിപ്പിച്ച് നേരിട്ട് സമർപ്പിക്കാവുന്നതാണ്, തുടർന്ന് ഞങ്ങളുടെ ടീം നിങ്ങളുമായി ഏകോപിപ്പിച്ച് നിങ്ങളുടെ ${safeTitle} തയ്യാറാക്കി നൽകും. അല്ലെങ്കിൽ ഫോം പൂരിപ്പിക്കാൻ ബുദ്ധിമുട്ടുണ്ടെങ്കിൽ, റിക്വസ്റ്റ് സ്റ്റെപ്പിലേക്ക് സ്വൈപ്പ് ചെയ്ത് റിക്വസ്റ്റ് അയക്കുക; ഞങ്ങളുടെ എക്സിക്യൂട്ടീവ് നിങ്ങളെ വിളിച്ച് എല്ലാ വിവരങ്ങളും ഫോണിലൂടെ ശേഖരിച്ച് സ്വയം ഫോം പൂരിപ്പിച്ച് നിങ്ങളുടെ ${safeTitle} തയ്യാറാക്കി നൽകുന്നതാണ്.`,
+    ta: `நீங்கள் ${safeTitle} என்பதைத் தேர்ந்தெடுத்துள்ளீர்கள். இந்தப் படிவத்தை நிரப்பி நேரடியாகச் சமர்ப்பிக்கலாம், எங்கள் குழு உங்களுடன் ஒருங்கிணைந்து உங்கள் ${safeTitle} தயாரித்துத் தரும். அல்லது படிவம் புரியவில்லை என்றால், ரெக்வெஸ்ட் பகுதிக்கு ஸ்வைப் செய்து கோரிக்கை அனுப்புங்கள்; எங்கள் பிரதிநிதி உங்களைத் தொடர்புகொண்டு தொலைபேசியில் அனைத்து விவரங்களையும் பெற்று படிவத்தை நிரப்பி உங்கள் ${safeTitle} தயாரித்துத் தருவார்.`,
+    te: `మీరు ${safeTitle} ఎంచుకున్నారు. మీరు ఈ ఫారమ్ నింపి నేరుగా సబ్మిట్ చేయవచ్చు, మా బృందం మీతో సమన్వయం చేసి మీ ${safeTitle} సిద్ధం చేసి ఇస్తుంది. లేదా ఫారమ్ అర్థం కాకపోతే, రిక్వెస్ట్ స్టెప్‌కు స్వైప్ చేసి రిక్వెస్ట్ పంపండి; మా ఎగ్జిక్యూటివ్ మీకు కాల్ చేసి, కాల్‌లో అన్ని వివరాలు తీసుకుని స్వయంగా ఫారమ్ నింపి మీ ${safeTitle} తయారు చేసి ఇస్తారు.`,
+    bn: `আপনি ${safeTitle} নির্বাচন করেছেন। আপনি এই ফর্মটি পূরণ করে সরাসরি জমা দিতে পারেন এবং আপনার সাথে সমন্বয় করে আপনার ${safeTitle} তৈরি করে দেওয়া হবে। অথবা যদি ফর্মটি বুঝতে অসুবিধা হয়, তবে রিকোয়েস্ট ধাপে সোয়াইপ করে রিকোয়েস্ট পাঠান; আমাদের এক্সিকিউটিভ আপনাকে কল করে ফোনে সমস্ত তথ্য নিয়ে নিজে ফর্ম পূরণ করে আপনার ${safeTitle} তৈরি করে দেবেন।`,
+    kn: `ನೀವು ${safeTitle} ಆಯ್ಕೆ ಮಾಡಿದ್ದೀರಿ. ನೀವು ಈ ಫಾರ್ಮ್ ಅನ್ನು ಭರ್ತಿ ಮಾಡಿ ನೇರವಾಗಿ ಸಲ್ಲಿಸಬಹುದು, ನಿಮ್ಮೊಂದಿಗೆ ಸಮನ್ವಯ ಸಾಧಿಸಿ ನಿಮ್ಮ ${safeTitle} ಸಿದ್ಧಪಡಿಸಿ ಕೊಡಲಾಗುತ್ತದೆ. ಅಥವಾ ಫಾರ್ಮ್ ಅರ್ಥವಾಗದಿದ್ದರೆ, ರಿಕ್ವೆಸ್ಟ್ ಹಂತಕ್ಕೆ ಸ್ವೈಪ್ ಮಾಡಿ ವಿನಂತಿ ಕಳುಹಿಸಿ; ನಮ್ಮ ಕಾರ್ಯನಿರ್ವಾಹಕರು ನಿಮಗೆ ಕರೆ ಮಾಡಿ, ಕರೆಯಲ್ಲಿ ಎಲ್ಲಾ ವಿವರಗಳನ್ನು ಪಡೆದು ತಾವೇ ಫಾರ್ಮ್ ಭರ್ತಿ ಮಾಡಿ ನಿಮ್ಮ ${safeTitle} ಸಿದ್ಧಪಡಿಸಿ ಕೊಡುತ್ತಾರೆ.`
+  };
+}
+
+// Map service titles, registrations, AND all Agreements/Affidavits/NOCs dynamically:
 export function resolveServiceKey(keyOrTitle: string): string | null {
-  const lower = (keyOrTitle || '').toLowerCase().trim();
+  const trimmed = (keyOrTitle || '').trim();
+  const lower = trimmed.toLowerCase();
   if (!lower) return null;
 
-  // Hard block for Agreements & Affidavits domain (using word boundaries so "current" never matches "rent")
-  if (
-    /\b(rent|lease|tenancy|affidavit|agreement|noc|deed|contract|nda)\b/i.test(lower) ||
-    lower.includes('release form') ||
-    lower.includes('consent & declaration') ||
-    lower.includes('शपथपत्र') ||
-    lower.includes('किराया') ||
-    lower.includes('एनओसी')
-  ) {
-    return null;
-  }
-
-  if (allServiceVoiceTexts[keyOrTitle]) return keyOrTitle;
+  if (allServiceVoiceTexts[trimmed]) return trimmed;
   if (allServiceVoiceTexts[lower]) return lower;
 
   // 7. Call Support
@@ -482,7 +485,13 @@ export function resolveServiceKey(keyOrTitle: string): string | null {
     return 'other_filing';
   }
 
-  return null;
+  // Agreements, Affidavits, NOCs, Deeds, Releases & Contracts (All 7 categories / 28 documents + aliases)
+  const docSlug = lower.replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  const dynamicKey = `doc_${docSlug || 'document'}`;
+  if (!allServiceVoiceTexts[dynamicKey]) {
+    allServiceVoiceTexts[dynamicKey] = buildAgreementVoiceTexts(trimmed);
+  }
+  return dynamicKey;
 }
 
 // 2. CROSS-BROWSER AUDIO UNLOCK, MICROPHONE PERMISSION & TTS ENGINE

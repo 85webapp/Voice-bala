@@ -156,6 +156,12 @@ export default function App() {
     }));
   };
 
+  const openDocumentWizard = (doc: LegalDocument) => {
+    playServiceVoice(doc.title);
+    setActiveWizardDoc(doc);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   // Filtered documents on Home
   const filteredHomeDocs = React.useMemo(() => {
     if (!searchQuery.trim()) {
@@ -276,10 +282,7 @@ export default function App() {
         ) : activeTab === 'agreements' ? (
           /* TAB 3: Agreements (Clean page with 7 categories and Make → buttons) */
           <AgreementsView
-            onSelectDocument={(doc) => {
-              setActiveWizardDoc(doc);
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-            }}
+            onSelectDocument={openDocumentWizard}
           />
         ) : activeTab === 'menu' ? (
           /* TAB 4: Menu */
@@ -307,10 +310,7 @@ export default function App() {
               <SearchBar
                 value={searchQuery}
                 onChange={setSearchQuery}
-                onSelectDocument={(doc) => {
-                  setActiveWizardDoc(doc);
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
+                onSelectDocument={openDocumentWizard}
               />
 
               {/* Category Selection: Smooth horizontal scrollable slider */}
@@ -356,10 +356,7 @@ export default function App() {
                       <DocumentRow
                         key={doc.id}
                         document={doc}
-                        onClick={(d) => {
-                          setActiveWizardDoc(d);
-                          window.scrollTo({ top: 0, behavior: 'smooth' });
-                        }}
+                        onClick={openDocumentWizard}
                       />
                     ))}
                   </div>

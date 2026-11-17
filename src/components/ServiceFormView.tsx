@@ -4,17 +4,9 @@ import {
   ArrowRight,
   Phone,
   MessageCircle,
-  Volume2,
-  VolumeX,
   CheckCircle2,
   Clock,
-  ShieldCheck,
-  Building2,
-  FileCheck2,
-  Car,
-  FileText,
-  Lock,
-  ExternalLink
+  Lock
 } from 'lucide-react';
 import { ServiceCategory, SERVICE_CATEGORIES } from '../data/servicesData';
 import { VoiceGuidanceButton } from './VoiceGuidanceButton';
@@ -29,11 +21,15 @@ import {
   generateSequentialOrderId,
   buildSubmissionOverview,
   fieldEntry,
+  checkboxEntry,
   DossierSection,
   ServerBSyncResult
 } from '../services/encryptionService';
 import { ServerBSyncStatusCard } from './ServerBSyncStatusCard';
 import { showToast } from '../services/toastService';
+import { AddressFieldGroup } from './AddressFieldGroup';
+import { FormRequestTabBar, HorizontalSwipeContainer, WizardModeTab } from './FormRequestTabBar';
+import { QuickCallbackRequestPanel } from './QuickCallbackRequestPanel';
 
 interface ServiceFormViewProps {
   category: ServiceCategory;
@@ -48,13 +44,9 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
 }) => {
   const { getPlaceholder } = useExampleDetails();
   const [selectedTitle, setSelectedTitle] = useState(initialTitle);
+  const [activeTab, setActiveTab] = useState<WizardModeTab>('form');
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [referenceId, setReferenceId] = useState('');
-  const [submissionSecurityDetails, setSubmissionSecurityDetails] = useState<{
-    encryptedPayload: string;
-    signature: string;
-    websiteBUrl: string;
-  } | null>(null);
   const [serverBSyncResult, setServerBSyncResult] = useState<ServerBSyncResult | null>(null);
   const [isRetryingSync, setIsRetryingSync] = useState(false);
   const [cachedEncPayload, setCachedEncPayload] = useState<{ result: any; metadata: any } | null>(null);
@@ -164,6 +156,14 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
       showToast('Please enter a valid 10-digit mobile number.', 'warning');
       return;
     }
+    if (isItrFiling && !taxAddress.trim()) {
+      showToast('Please enter your complete communication address.', 'warning');
+      return;
+    }
+    if (isOtherFiling && !otherFilingAddress.trim()) {
+      showToast('Please enter your complete address.', 'warning');
+      return;
+    }
     const ref = generateSequentialOrderId();
     setReferenceId(ref);
     const now = new Date();
@@ -216,14 +216,18 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
         ]
       });
     } else if (isGstFiling) {
+      const gstMonths = ['October 2026', 'September 2026', 'August 2026'];
+      const gstQuarters = ['Q2 (Jul - Sep 2026)', 'Q1 (Apr - Jun 2026)', 'Q4 (Jan - Mar 2026)'];
       sections.push({
         pageNumber: 2,
         sectionTitle: 'GST Return Filing Details',
         fields: [
-          fieldEntry('15-Digit GSTIN', gstin, false),
+          fieldEntry('15-Digit GSTIN', gstin, true),
           fieldEntry('Filing Frequency', gstFrequency, false, ['monthly', 'quarterly']),
-          fieldEntry('Selected Return Months', gstFrequency === 'monthly' ? selectedMonths.join(', ') : '', gstFrequency !== 'monthly'),
-          fieldEntry('Selected Return Quarter', gstFrequency === 'quarterly' ? selectedQuarter : '', gstFrequency !== 'quarterly')
+          ...gstMonths.map((m) =>
+            checkboxEntry(`Return Month Selected — ${m}`, selectedMonths.includes(m), true)
+          ),
+          fieldEntry('Selected Return Quarter', gstFrequency === 'quarterly' ? selectedQuarter : '', true, gstQuarters)
         ]
       });
     } else if (isItrFiling) {
@@ -232,8 +236,14 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
         sectionTitle: 'Income Tax Return (ITR) Details',
         fields: [
           fieldEntry('10-Character PAN Number', panNumber, false),
-          fieldEntry('Assessment Year', assessmentYear, false),
-          fieldEntry('Primary Income Source', incomeSource, false),
+          fieldEntry('Assessment Year', assessmentYear, false, ['AY 2026-27 (FY 2025-26)', 'AY 2025-26 (FY 2024-25)']),
+          fieldEntry('Primary Income Source', incomeSource, false, [
+            'Salary',
+            'Business / Profession',
+            'House Property',
+            'Capital Gain',
+            'Other'
+          ]),
           fieldEntry('Residential / Communication Address', taxAddress, false)
         ]
       });
@@ -253,7 +263,7 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
         fields: [
           fieldEntry('Proposed Business / Firm / Brand Name', businessName, false),
           fieldEntry('Business Activity / Scope', businessActivity, true),
-          fieldEntry('Registered / Operating Address', businessAddress, false)
+          fieldEntry('Registered / Operating Address', businessAddress, true)
         ]
       });
     } else {
@@ -305,7 +315,6 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
       timestamp: now.toISOString()
     };
     const encResult = encryptFormDataAndSign(sensitiveData);
-    const { encryptedPayload, signature, websiteBUrl } = encResult;
 
     // 2. Save ONLY 4 lightweight metadata fields in Supabase
     const metadata = {
@@ -322,7 +331,6 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
     setServerBSyncResult(syncRes);
     setCachedEncPayload({ result: encResult, metadata });
 
-    setSubmissionSecurityDetails({ encryptedPayload, signature, websiteBUrl });
     setIsSubmitted(true);
     ttsService.stop();
     stopServiceVoice();
@@ -375,7 +383,13 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
         </h1>
       </div>
 
+      {/* Mode Tabs for Registrations */}
+      {isRegistrations && !isSubmitted && (
+        <FormRequestTabBar activeTab={activeTab} onChangeTab={setActiveTab} className="mb-6" />
+      )}
+
       {/* 1-Hour Call Back Guarantee & Direct Call/WhatsApp Strip */}
+      {(!isRegistrations || activeTab === 'form') && (
       <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/90 rounded-2xl p-4 sm:p-5 mb-6 shadow-2xs">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-start gap-3">
@@ -417,6 +431,7 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
           </div>
         </div>
       </div>
+      )}
 
       {isSubmitted ? (
         /* Submission Success Confirmation */
@@ -483,8 +498,19 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
             </button>
           </div>
         </div>
+      ) : isRegistrations && activeTab === 'request' ? (
+        <HorizontalSwipeContainer activeTab={activeTab} onChangeTab={setActiveTab}>
+          <QuickCallbackRequestPanel
+            mode="registration"
+            initialItemTitle={selectedTitle}
+            categoryLabel={category.title}
+            onBack={onBack}
+            onSwitchToForm={() => setActiveTab('form')}
+          />
+        </HorizontalSwipeContainer>
       ) : (
-        /* The Tailored Service Application Form */
+        <HorizontalSwipeContainer activeTab={isRegistrations ? activeTab : 'form'} onChangeTab={(tab) => { if (isRegistrations) setActiveTab(tab); }}>
+        {/* The Tailored Service Application Form */}
         <form
           onSubmit={handleSubmit}
           className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-2xs space-y-6"
@@ -907,16 +933,12 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
                     </div>
 
                     <div className="sm:col-span-2">
-                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                        Communication Address <span className="text-rose-600">*</span>
-                      </label>
-                      <textarea
-                        required
-                        rows={2}
-                        placeholder={getPlaceholder('House / Flat No, Street, Landmark, City, State, PIN')}
+                      <AddressFieldGroup
+                        label="Communication Address"
+                        variant="standard"
                         value={taxAddress}
-                        onChange={(e) => setTaxAddress(e.target.value)}
-                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                        onChangeAddress={(fullAddr) => setTaxAddress(fullAddr)}
+                        required
                       />
                     </div>
                   </div>
@@ -941,16 +963,12 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
                     </div>
 
                     <div className="sm:col-span-2">
-                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                        Address <span className="text-rose-600">*</span>
-                      </label>
-                      <textarea
-                        required
-                        rows={2}
-                        placeholder={getPlaceholder('Your full operational or postal address')}
+                      <AddressFieldGroup
+                        label="Address"
+                        variant="standard"
                         value={otherFilingAddress}
-                        onChange={(e) => setOtherFilingAddress(e.target.value)}
-                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                        onChangeAddress={(fullAddr) => setOtherFilingAddress(fullAddr)}
+                        required
                       />
                     </div>
 
@@ -1080,15 +1098,12 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
 
                 {/* Business Address */}
                 <div className="sm:col-span-2">
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                    Registered Business Address
-                  </label>
-                  <textarea
-                    rows={2}
-                    placeholder={getPlaceholder('Shop/Office No, Street, City, State, PIN')}
+                  <AddressFieldGroup
+                    label="Registered Business Address"
+                    variant="standard"
                     value={businessAddress}
-                    onChange={(e) => setBusinessAddress(e.target.value)}
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    onChangeAddress={(fullAddr) => setBusinessAddress(fullAddr)}
+                    required={false}
                   />
                 </div>
               </div>
@@ -1177,6 +1192,7 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
             </button>
           </div>
         </form>
+        </HorizontalSwipeContainer>
       )}
     </div>
   );

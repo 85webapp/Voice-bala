@@ -13,13 +13,20 @@ import {
   Layers,
   FileCheck2,
   AlertCircle,
-  MapPin
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { AadhaarInput } from './AadhaarInput';
+import { AddressFieldGroup } from './AddressFieldGroup';
+import {
+  PropertyBoundariesSection,
+  PropertyBoundariesState,
+  createInitialPropertyBoundaries,
+  formatSingleBoundary
+} from './PropertyBoundariesSection';
 import { LegalDocument, OrderItem } from '../types';
 import { STATE_CATEGORIES, getSafeStampDuty } from '../data/stampDutyMatrix';
-import { lookupGstJurisdiction } from '../data/gstJurisdictionData';
 import { useExampleDetails } from '../hooks/useExampleDetails';
 import {
   encryptFormDataAndSign,
@@ -30,12 +37,16 @@ import {
   ServerBSyncResult,
   UploadedDocumentPayload,
   fieldEntry,
+  checkboxEntry,
   buildSubmissionOverview,
   readFileAsUploadPayload
 } from '../services/encryptionService';
 import { Lock, ExternalLink } from 'lucide-react';
 import { showToast } from '../services/toastService';
 import { ServerBSyncStatusCard } from './ServerBSyncStatusCard';
+import { VoiceGuidanceButton } from './VoiceGuidanceButton';
+import { FormRequestTabBar, HorizontalSwipeContainer, WizardModeTab } from './FormRequestTabBar';
+import { QuickCallbackRequestPanel } from './QuickCallbackRequestPanel';
 
 interface GstNocWizardViewProps {
   document: LegalDocument;
@@ -67,51 +78,41 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
 }) => {
   const { showExampleDetails, getPlaceholder } = useExampleDetails();
   const showExample = showExampleDetails;
+  const [activeTab, setActiveTab] = useState<WizardModeTab>('form');
   const [currentPage, setCurrentPage] = useState<StepId>('1');
 
   // --- PAGE 1: PREMISES TYPE & GEOGRAPHIC JURISDICTION ---
   const [premisesType, setPremisesType] = useState<string>('Commercial Building / Shop / Office');
   const [selectedState, setSelectedState] = useState<string>('Uttar Pradesh');
 
-  // GST Jurisdiction Guide with PIN code lookup
-  const [pincode, setPincode] = useState('');
-  const [gstCommissionerate, setGstCommissionerate] = useState('');
-  const [gstDivision, setGstDivision] = useState('');
-  const [gstRange, setGstRange] = useState('');
-
-  useEffect(() => {
-    if (pincode.length === 6) {
-      const result = lookupGstJurisdiction(pincode, selectedState);
-      setGstCommissionerate(result.commissionerate);
-      setGstDivision(result.division);
-      setGstRange(result.range);
-    }
-  }, [pincode, selectedState]);
-
   // Recommended stamp
   const recommendedStamp = useMemo(() => {
     return getSafeStampDuty('Landlord NOC for GST', selectedState);
   }, [selectedState]);
 
-  // Stamp Selection
-  const [stampMode, setStampMode] = useState<'auto' | 'manual'>('auto');
-  const [manualStampValue, setManualStampValue] = useState<number>(100);
-  const [customManualStamp, setCustomManualStamp] = useState<string>('');
-  const [stampFeePaidBy, setStampFeePaidBy] = useState<'Landlord' | 'Business Owner' | 'Shared Equally'>('Landlord');
+  // Stamp Paper Procurement Mode & Denomination
+  const [stampProcurementMode, setStampProcurementMode] = useState<'estamp' | 'physical_upload'>('estamp');
+  const [physicalStampFile, setPhysicalStampFile] = useState<UploadedDocumentPayload | null>(null);
+  const physicalStampUploaded = Boolean(physicalStampFile);
+
+  const [stampValue, setStampValue] = useState<number>(100);
+  const [customStampValue, setCustomStampValue] = useState<string>('');
+  const [stampCostBorneBy, setStampCostBorneBy] = useState<string>('First Party (Landlord / Owner)');
+  const [customSplitText, setCustomSplitText] = useState<string>('');
 
   const activeStampValue = useMemo(() => {
-    if (stampMode === 'auto') return recommendedStamp;
-    return manualStampValue === -1 ? Number(customManualStamp) || 0 : manualStampValue;
-  }, [stampMode, recommendedStamp, manualStampValue, customManualStamp]);
+    return stampValue === -1 ? Number(customStampValue) || 0 : stampValue;
+  }, [stampValue, customStampValue]);
 
-  const isManualStampBelowThreshold = useMemo(() => {
-    return stampMode === 'manual' && activeStampValue < recommendedStamp;
-  }, [stampMode, activeStampValue, recommendedStamp]);
+  const isStampBelowThreshold = useMemo(() => {
+    return activeStampValue < recommendedStamp;
+  }, [activeStampValue, recommendedStamp]);
 
   // --- PAGE 2: THE GRANTOR - LANDLORD'S TAX IDENTITY ---
   const [ownershipStatus, setOwnershipStatus] = useState<string>('Sole Owner');
   const [landlordName, setLandlordName] = useState('');
   const [landlordFatherName, setLandlordFatherName] = useState('');
+  const [landlordAddress, setLandlordAddress] = useState('');
   const [landlordPan, setLandlordPan] = useState('');
   const [landlordAadhaarLast4, setLandlordAadhaarLast4] = useState('');
   const [landlordMobile, setLandlordMobile] = useState('');
@@ -150,6 +151,7 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
   const [constitutionOfBusiness, setConstitutionOfBusiness] = useState<string>('Proprietorship');
   const [granteePan, setGranteePan] = useState('');
   const [applicantName, setApplicantName] = useState('');
+  const [granteeAddress, setGranteeAddress] = useState('');
   const [signingAuthorityFile, setSigningAuthorityFile] = useState<UploadedDocumentPayload | null>(null);
   const signingAuthorityUploaded = Boolean(signingAuthorityFile);
 
@@ -160,8 +162,12 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
 
   // --- PAGE 3B: PREMISES & UTILITY DOCUMENT ---
   const [premisesAddress, setPremisesAddress] = useState('');
+  const [showOptionalPremisesDetails, setShowOptionalPremisesDetails] = useState(false);
   const [wardNumber, setWardNumber] = useState('');
   const [propertyTaxAssessmentNo, setPropertyTaxAssessmentNo] = useState('');
+  const [buildingBoundaries, setBuildingBoundaries] = useState<PropertyBoundariesState>(() =>
+    createInitialPropertyBoundaries()
+  );
   const [ownershipDocType, setOwnershipDocType] = useState<string>('Electricity Bill (Not older than 2 months)');
   const [utilityDocFile, setUtilityDocFile] = useState<UploadedDocumentPayload | null>(null);
   const utilityDocUploaded = Boolean(utilityDocFile);
@@ -276,8 +282,8 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
   // Page Navigation Validation
   const validateAndProceed = (targetNext: StepId) => {
     if (currentPage === '1') {
-      if (!pincode.trim() || pincode.length !== 6) {
-        showToast('Please enter a valid 6-digit PIN code.', 'warning');
+      if (stampProcurementMode === 'physical_upload' && !physicalStampUploaded) {
+        showToast('Please upload your pre-purchased Physical Stamp Paper before proceeding.', 'warning');
         return;
       }
     }
@@ -285,6 +291,10 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
     if (currentPage === '2') {
       if (!landlordName.trim()) {
         showToast('Please provide Landlord Name.', 'warning');
+        return;
+      }
+      if (!landlordAddress.trim()) {
+        showToast('Please provide complete Landlord Residential / Registered Address.', 'warning');
         return;
       }
       if (landlordPan.trim().length !== 10) {
@@ -310,6 +320,10 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
     if (currentPage === '3') {
       if (!proposedTradeName.trim() || !legalBusinessName.trim() || granteePan.trim().length !== 10 || !applicantName.trim()) {
         showToast('Please fill Proposed Trade Name, Legal Business Name, valid 10-char PAN, and Applicant Name.', 'warning');
+        return;
+      }
+      if (!granteeAddress.trim()) {
+        showToast('Please provide complete Applicant / Business Communication Address.', 'warning');
         return;
       }
     }
@@ -377,42 +391,47 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
       });
 
       const uploadedDocuments: UploadedDocumentPayload[] = [
+        physicalStampFile,
         boardResolutionFile,
         signingAuthorityFile,
         utilityDocFile
       ].filter((item): item is UploadedDocumentPayload => Boolean(item));
 
+      const eastBound = formatSingleBoundary(buildingBoundaries.east);
+      const westBound = formatSingleBoundary(buildingBoundaries.west);
+      const northBound = formatSingleBoundary(buildingBoundaries.north);
+      const southBound = formatSingleBoundary(buildingBoundaries.south);
+
+      const stateOptions = STATE_CATEGORIES.map((s) => s.name);
+      const stampBorneOptions = [
+        'First Party (Landlord / Owner)',
+        'Second Party (Applicant / GST Taxpayer)',
+        'Shared Equally (50-50 Split)',
+        'Custom Split'
+      ];
+
       const sections = [
         {
           pageNumber: 1,
-          sectionTitle: 'Page 1: Premises Type, Jurisdiction & Stamp Duty',
+          sectionTitle: 'Premises Type, Jurisdiction & Stamp Duty',
           fields: [
             fieldEntry('Type of Premises', premisesType, false, [
               'Commercial Building / Shop / Office',
               'Industrial Area / Shed / Warehouse',
               'Residential Property used for Business'
             ]),
-            fieldEntry('State / Union Territory', selectedState, false),
-            fieldEntry('PIN Code', pincode, false),
-            fieldEntry('GST Commissionerate', gstCommissionerate, true),
-            fieldEntry('GST Division', gstDivision, true),
-            fieldEntry('GST Range', gstRange, true),
-            fieldEntry('Stamp Duty Fee Paid By', stampFeePaidBy, false, [
-              'Landlord',
-              'Business Owner',
-              'Shared Equally'
-            ]),
-            fieldEntry('Stamp Paper Selection Mode', stampMode === 'auto' ? 'Recommended Stamp Paper Value' : 'Manual Stamp Value Selection', false, [
-              'Recommended Stamp Paper Value',
-              'Manual Stamp Value Selection'
-            ]),
-            fieldEntry('Selected Stamp Paper Value (INR)', `₹${pricing.stamp}`, false),
-            fieldEntry('Custom Stamp Input (if Custom selected)', stampMode === 'manual' && manualStampValue === -1 ? customManualStamp : '', true)
+            fieldEntry('State / Union Territory', selectedState, false, stateOptions),
+            fieldEntry('Stamp Paper Procurement Mode', stampProcurementMode === 'estamp' ? 'E-Stamp Paper / Digital Stamp' : 'Physical Stamp Paper (User Upload)', false, ['E-Stamp Paper / Digital Stamp', 'Physical Stamp Paper (User Upload)']),
+            fieldEntry('Physical Stamp File', physicalStampFile ? `${physicalStampFile.fileName}` : '', stampProcurementMode !== 'physical_upload'),
+            fieldEntry('Stamp Duty Cost Paid By', stampCostBorneBy, false, stampBorneOptions),
+            fieldEntry('Custom Stamp Cost Split Details', customSplitText, stampCostBorneBy !== 'Custom Split'),
+            fieldEntry('Selected Stamp Paper Value (INR)', `₹${pricing.stamp}`, false, ['₹10', '₹20', '₹50', '₹100', '₹500', '₹1000', 'Custom']),
+            fieldEntry('Custom Stamp Input (if Custom selected)', stampValue === -1 ? customStampValue : '', true)
           ]
         },
         {
           pageNumber: 2,
-          sectionTitle: 'Page 2: 1st Party (Landlord / Property Owner)',
+          sectionTitle: '1st Party (Landlord / Property Owner)',
           fields: [
             fieldEntry('Landlord Standing & Entity Type', ownershipStatus, false, [
               'Sole Owner',
@@ -421,11 +440,12 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
             ]),
             fieldEntry('Landlord Full Legal Name', landlordName, false),
             fieldEntry("Father's / Husband's Name", landlordFatherName, false),
+            fieldEntry('Landlord Residential / Registered Address', landlordAddress, false),
             fieldEntry('Landlord PAN Card', landlordPan, false),
             fieldEntry('Aadhaar Number (12 Digits)', landlordAadhaarLast4, true),
             fieldEntry('Active Mobile Number', landlordMobile, false),
             fieldEntry('Email ID', landlordEmail, true),
-            fieldEntry('Co-Owners / Joint Owners List', coOwners.length > 0 ? coOwners : [], ownershipStatus !== 'Co-Owner / Joint Owner'),
+            fieldEntry('Co-Owners / Joint Owners List', coOwners.length > 0 ? coOwners : '', ownershipStatus !== 'Co-Owner / Joint Owner'),
             fieldEntry('Corporate Company / LLP Name', corpCompanyName, ownershipStatus !== 'Authorized Director / Partner / Trustee'),
             fieldEntry('Corporate CIN / LLPIN', corpCin, ownershipStatus !== 'Authorized Director / Partner / Trustee'),
             fieldEntry('Board Resolution / Authorization Upload', boardResolutionFile ? `${boardResolutionFile.fileName} (${boardResolutionFile.mimeType})` : '', true)
@@ -433,7 +453,7 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
         },
         {
           pageNumber: 3,
-          sectionTitle: 'Page 3: 2nd Party (Proposed GST Business Entity)',
+          sectionTitle: '2nd Party (Proposed GST Business Entity)',
           fields: [
             fieldEntry('Constitution of Business', constitutionOfBusiness, false, [
               'Proprietorship',
@@ -447,16 +467,21 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
             fieldEntry('Legal Name (As on PAN)', legalBusinessName, false),
             fieldEntry('Business / Grantee PAN Card', granteePan, false),
             fieldEntry('Applicant Full Name', applicantName, false),
+            fieldEntry('Applicant / Business Communication Address', granteeAddress, false),
             fieldEntry('Applicant Signing Authority / ID Proof Upload', signingAuthorityFile ? `${signingAuthorityFile.fileName} (${signingAuthorityFile.mimeType})` : '', true)
           ]
         },
         {
           pageNumber: '3B',
-          sectionTitle: 'Page 3B: Principal Place of Business & Utility Proof',
+          sectionTitle: 'Principal Place of Business & Utility Proof',
           fields: [
             fieldEntry('Principal Place of Business Address', premisesAddress, false),
             fieldEntry('Municipal Ward / Zone', wardNumber, true),
             fieldEntry('Property Tax / Assessment No.', propertyTaxAssessmentNo, true),
+            fieldEntry('East Building Boundary', eastBound, true),
+            fieldEntry('West Building Boundary', westBound, true),
+            fieldEntry('North Building Boundary', northBound, true),
+            fieldEntry('South Building Boundary', southBound, true),
             fieldEntry('Ownership / Utility Document Type', ownershipDocType, false, [
               'Electricity Bill (Not older than 2 months)',
               'Municipal Property Tax Receipt',
@@ -469,24 +494,24 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
         },
         {
           pageNumber: 4,
-          sectionTitle: 'Page 4: Statutory GST Compliance & Custom Clauses',
+          sectionTitle: 'Statutory GST Compliance & Custom Clauses',
           fields: [
-            fieldEntry('Rule 9 Physical Verification Consent', clauseRule9Physical, false),
-            fieldEntry('Rule 18 GSTIN Signboard Display Consent', clauseRule18Banner, false),
-            fieldEntry('Section 35 Books of Accounts Consent', clauseSec35Books, false),
-            fieldEntry('Tax Liability Indemnity Clause', clauseTaxIndemnity, false),
-            fieldEntry('Sub-meter / Utility Consent Clause', clauseSubmeterConsent, true),
-            fieldEntry('Custom Operational Clauses', customGstClauses.length > 0 ? customGstClauses : [], true)
+            checkboxEntry('Physical Verification by GST Officer (Rule 9)', clauseRule9Physical, true),
+            checkboxEntry('Display of GSTIN Signboard (Rule 18)', clauseRule18Banner, true),
+            checkboxEntry('Maintenance of Books of Accounts (Section 35)', clauseSec35Books, true),
+            checkboxEntry('Tax Liability Indemnity Clause', clauseTaxIndemnity, true),
+            checkboxEntry('Sub-meter / Utility Consent Clause', clauseSubmeterConsent, true),
+            fieldEntry('Custom Operational Clauses', customGstClauses.length > 0 ? customGstClauses : '', true)
           ]
         },
         {
           pageNumber: 5,
-          sectionTitle: 'Page 5: Delivery Mode, Courier Address & Fee Breakdown',
+          sectionTitle: 'Delivery Mode, Courier Address & Fee Breakdown',
           fields: [
             fieldEntry('Delivery & Execution Preference', deliveryPreference, false, ['digital', 'physical', 'hybrid']),
-            fieldEntry('Courier Shipping Address', deliveryPreference !== 'digital' ? shippingAddress : '', deliveryPreference === 'digital'),
-            fieldEntry('Courier Delivery PIN Code', deliveryPreference !== 'digital' ? shippingPincode : '', deliveryPreference === 'digital'),
-            fieldEntry('Courier Contact Mobile Number', deliveryPreference !== 'digital' ? shippingPhone : '', deliveryPreference === 'digital'),
+            fieldEntry('Courier Shipping Address', shippingAddress, deliveryPreference === 'digital'),
+            fieldEntry('Courier Delivery PIN Code', shippingPincode, deliveryPreference === 'digital'),
+            fieldEntry('Courier Contact Mobile Number', shippingPhone, deliveryPreference === 'digital'),
             fieldEntry('Total Payable Fee (Pay After Delivery)', `₹${pricing.totalPayable}`, false)
           ]
         }
@@ -505,18 +530,14 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
         category: initialDoc.category,
         premisesType,
         state: selectedState,
-        pincode,
-        stampMode,
-        stampFeePaidBy,
+        stampProcurementMode,
+        physicalStampFile,
+        stampCostBorneBy: stampCostBorneBy === 'Custom Split' ? customSplitText : stampCostBorneBy,
         stampDutyAmount: pricing.stamp,
-        gstJurisdiction: {
-          commissionerate: gstCommissionerate,
-          division: gstDivision,
-          range: gstRange
-        },
         landlord: {
           name: landlordName,
           fatherName: landlordFatherName,
+          address: landlordAddress,
           ownershipStatus,
           pan: landlordPan,
           aadhaar: landlordAadhaarLast4,
@@ -530,9 +551,9 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
         },
         premises: {
           address: premisesAddress,
-          pincode,
           wardNumber,
           propertyTaxAssessmentNo,
+          boundaries: { eastBound, westBound, northBound, southBound, structured: buildingBoundaries },
           ownershipDocType,
           utilityDocUploaded,
           utilityDocFile,
@@ -544,6 +565,7 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
           constitutionOfBusiness,
           granteePan,
           applicantName,
+          address: granteeAddress,
           signingAuthorityUploaded,
           signingAuthorityFile
         },
@@ -674,8 +696,8 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
               <span className="font-bold text-slate-900">{proposedTradeName}</span>
             </div>
             <div className="flex justify-between border-b border-slate-200/80 pb-2">
-              <span className="text-slate-500">GST Jurisdiction:</span>
-              <span className="font-bold text-slate-900">{gstCommissionerate} · {gstDivision}</span>
+              <span className="text-slate-500">State / Jurisdiction:</span>
+              <span className="font-bold text-slate-900">{submittedOrder.state}</span>
             </div>
             <div className="flex justify-between pt-1 font-bold text-base text-black">
               <span>Final Payment (Pay After Delivery):</span>
@@ -717,7 +739,7 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
     <div data-document-wizard className="w-full max-w-4xl mx-auto px-4 py-5 animate-fadeIn pb-28">
       {/* Top Header */}
       <div className="mb-6">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <button
             type="button"
             onClick={onBack}
@@ -726,14 +748,18 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
             <ArrowLeft className="w-4 h-4" />
             <span>Cancel &amp; Return</span>
           </button>
+
+          <VoiceGuidanceButton serviceTitle={initialDoc.title} />
         </div>
 
-        <div className="w-full bg-slate-200 h-1.5 rounded-full mt-3 overflow-hidden">
-          <div
-            className="bg-[#15803d] h-full transition-all duration-300"
-            style={{ width: `${progressPercent}%` }}
-          />
-        </div>
+        {activeTab === 'form' && (
+          <div className="w-full bg-slate-200 h-1.5 rounded-full mt-3 overflow-hidden">
+            <div
+              className="bg-[#15803d] h-full transition-all duration-300"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+        )}
 
         {/* Title Header */}
         <div className="mt-4">
@@ -744,8 +770,24 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
             Architecture
           </span>
         </div>
+
+        <FormRequestTabBar
+          activeTab={activeTab}
+          onChangeTab={setActiveTab}
+          className="mt-4"
+        />
       </div>
 
+      <HorizontalSwipeContainer activeTab={activeTab} onChangeTab={setActiveTab}>
+      {activeTab === 'request' ? (
+        <QuickCallbackRequestPanel
+          mode="document"
+          initialItemTitle={initialDoc.title}
+          categoryLabel={initialDoc.category}
+          onBack={onBack}
+          onSwitchToForm={() => setActiveTab('form')}
+        />
+      ) : (
       <div className="bg-white border border-slate-200 rounded-2xl shadow-xs p-5 sm:p-7">
         {/* ================= PAGE 1 ================= */}
         {currentPage === '1' && (
@@ -784,165 +826,188 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
               </select>
             </div>
 
-            {/* Pincode & GST Jurisdiction auto-mapping */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                PIN Code <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                maxLength={6}
-                required
-                value={pincode}
-                onChange={(e) => setPincode(e.target.value.replace(/\D/g, ''))}
-                placeholder="6-digit Area PIN"
-                className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-              />
 
-              {gstCommissionerate && (
-                <div className="mt-2.5 p-3 bg-blue-50/70 border border-blue-200 rounded-xl text-xs space-y-1 animate-fadeIn">
-                  <div className="flex items-center justify-between text-blue-900 font-bold">
-                    <span className="flex items-center gap-1.5">
-                      <MapPin className="w-3.5 h-3.5 text-blue-600" />
-                      Auto-Mapped GST Jurisdiction
-                    </span>
+
+            {/* Stamp Paper Procurement Mode (Identical to 11 Month Rent Agreement) */}
+            <div>
+              <label className="block text-xs font-bold text-slate-800 mb-2">
+                Stamp Paper Procurement Mode <span className="text-red-500 font-bold">*</span>
+              </label>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label
+                  className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                    stampProcurementMode === 'estamp'
+                      ? 'border-blue-600 bg-blue-50/60 ring-1 ring-blue-600'
+                      : 'border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="procurementMode"
+                    checked={stampProcurementMode === 'estamp'}
+                    onChange={() => setStampProcurementMode('estamp')}
+                    className="w-4 h-4 text-blue-600"
+                  />
+                  <div>
+                    <span className="text-xs font-bold text-black block">E-Stamp Paper / Digital Stamp</span>
+                    <span className="text-[11px] text-slate-500">System generated official state e-stamp</span>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 pt-1 text-[11px] text-slate-700">
-                    <div>Commissionerate: <strong>{gstCommissionerate}</strong></div>
-                    <div>Division: <strong>{gstDivision}</strong></div>
-                    <div>Range: <strong>{gstRange}</strong></div>
+                </label>
+
+                <label
+                  className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                    stampProcurementMode === 'physical_upload'
+                      ? 'border-blue-600 bg-blue-50/60 ring-1 ring-blue-600'
+                      : 'border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="procurementMode"
+                    checked={stampProcurementMode === 'physical_upload'}
+                    onChange={() => setStampProcurementMode('physical_upload')}
+                    className="w-4 h-4 text-blue-600"
+                  />
+                  <div>
+                    <span className="text-xs font-bold text-black block">Physical Stamp Paper (User Upload)</span>
+                    <span className="text-[11px] text-slate-500">Upload your own pre-purchased physical stamp</span>
+                  </div>
+                </label>
+              </div>
+
+              {stampProcurementMode === 'physical_upload' && (
+                <div className="mt-3 p-4 bg-blue-50/70 border border-blue-300 rounded-xl space-y-3 animate-fadeIn">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <span className="text-xs font-bold text-slate-900 block">
+                        Upload Pre-Purchased Physical Stamp Paper <span className="text-red-500 font-bold">*</span>
+                      </span>
+                      <span className="text-[11px] text-slate-500">
+                        Attach scanned front page of physical non-judicial stamp paper (PDF/JPG/PNG)
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <label className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        physicalStampUploaded
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-300'
+                          : 'bg-blue-600 text-white hover:bg-blue-700'
+                      }`}>
+                        <UploadCloud className="w-3.5 h-3.5" />
+                        <span>{physicalStampFile ? `✓ ${physicalStampFile.fileName}` : 'Upload Stamp File'}</span>
+                        <input
+                          type="file"
+                          accept="image/*,.pdf"
+                          className="hidden"
+                          onChange={(e) => handleRealFileSelect(e, 'Pre-Purchased Physical Stamp Paper', setPhysicalStampFile)}
+                        />
+                      </label>
+                      {physicalStampFile && (
+                        <button
+                          type="button"
+                          onClick={() => setPhysicalStampFile(null)}
+                          className="text-xs text-rose-600 font-bold hover:underline cursor-pointer"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Stamp Duty Fee Paid By */}
+            {/* Stamp Paper Value Selection */}
             <div>
-              <label className="block text-xs font-bold text-slate-800 mb-1.5">
-                Who is paying the Stamp Duty Fee? <span className="text-red-500">*</span>
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                {[
-                  { key: 'Landlord', label: 'Landlord' },
-                  { key: 'Business Owner', label: 'Business Owner' },
-                  { key: 'Shared Equally', label: 'Shared (50-50%)' }
-                ].map((payer) => (
-                  <label
-                    key={payer.key}
-                    className={`p-3 rounded-xl border cursor-pointer text-center transition-all ${
-                      stampFeePaidBy === payer.key
-                        ? 'border-blue-600 bg-blue-50/60 ring-1 ring-blue-600'
-                        : 'border-slate-200 hover:border-slate-300'
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-bold text-slate-800">
+                  Stamp Paper Value Selection <span className="text-red-500 font-bold">*</span>
+                </label>
+                <span className="text-[11px] font-bold text-blue-600">
+                  Recommended for {selectedState}: ₹{recommendedStamp}
+                </span>
+              </div>
+
+              <div className="flex gap-2 overflow-x-auto pb-1.5 scrollbar-thin flex-nowrap sm:grid sm:grid-cols-7 sm:overflow-visible">
+                {[10, 20, 50, 100, 500, 1000].map((val) => (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => {
+                      setStampValue(val);
+                      setCustomStampValue('');
+                    }}
+                    className={`shrink-0 min-w-[70px] sm:min-w-0 py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                      stampValue === val
+                        ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                        : 'bg-white text-slate-700 border-slate-300 hover:border-blue-400'
                     }`}
                   >
-                    <input
-                      type="radio"
-                      name="stampFeePaidBy"
-                      checked={stampFeePaidBy === payer.key}
-                      onChange={() => setStampFeePaidBy(payer.key as any)}
-                      className="sr-only"
-                    />
-                    <span className="text-xs font-bold text-black block">{payer.label}</span>
-                  </label>
+                    ₹{val}
+                  </button>
                 ))}
+                <button
+                  type="button"
+                  onClick={() => setStampValue(-1)}
+                  className={`shrink-0 min-w-[70px] sm:min-w-0 py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                    stampValue === -1
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                      : 'bg-white text-slate-700 border-slate-300 hover:border-blue-400'
+                  }`}
+                >
+                  Custom
+                </button>
               </div>
+
+              {stampValue === -1 && (
+                <div className="mt-2.5">
+                  <input
+                    type="number"
+                    value={customStampValue}
+                    onChange={(e) => setCustomStampValue(e.target.value)}
+                    placeholder={showExample ? "Enter custom stamp value in Rupees" : ""}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  />
+                </div>
+              )}
+
+              {isStampBelowThreshold && (
+                <div className="mt-3 p-3.5 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 text-xs flex items-start gap-2.5 animate-fadeIn">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                  <span>
+                    <strong>Warning:</strong> Per {selectedState} statutory regulations, the recommended minimum stamp duty is <strong>₹{recommendedStamp}</strong>. GST authorities may issue a clarification notice if stamp paper value is below state minimum.
+                  </span>
+                </div>
+              )}
             </div>
 
-            {/* Stamp Paper Denomination */}
-            <div className="space-y-3 pt-2 border-t border-slate-200">
-              <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
-                Stamp Paper Value Selection
-              </span>
+            {/* Stamp Duty Cost Paid By */}
+            <div>
+              <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                Stamp Duty Cost Paid By <span className="text-red-500 font-bold">*</span>
+              </label>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <label
-                  className={`p-3 rounded-xl border cursor-pointer transition-all ${
-                    stampMode === 'auto' ? 'border-blue-600 bg-blue-50/60 ring-1 ring-blue-600' : 'border-slate-200'
-                  }`}
-                >
+              <select
+                value={stampCostBorneBy}
+                onChange={(e) => setStampCostBorneBy(e.target.value)}
+                className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+              >
+                <option value="First Party (Landlord / Owner)">First Party (Landlord / Owner)</option>
+                <option value="Second Party (Business Owner / Grantee)">Second Party (Business Owner / Grantee)</option>
+                <option value="Shared Equally (50-50 Split)">Shared Equally (50-50 Split)</option>
+                <option value="Custom Split">Custom Ratio or Fixed Amount Split</option>
+              </select>
+
+              {stampCostBorneBy === 'Custom Split' && (
+                <div className="mt-2">
                   <input
-                    type="radio"
-                    name="stampMode"
-                    checked={stampMode === 'auto'}
-                    onChange={() => setStampMode('auto')}
-                    className="sr-only"
+                    type="text"
+                    value={customSplitText}
+                    onChange={(e) => setCustomSplitText(e.target.value)}
+                    placeholder={showExample ? "Enter custom ratio or division" : ""}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
-                  <span className="text-xs font-bold text-black block">Recommended Stamp Paper Value</span>
-                  <span className="text-[11px] text-blue-700 font-semibold mt-0.5 block">
-                    Locked at ₹{recommendedStamp} for {selectedState}
-                  </span>
-                </label>
-
-                <label
-                  className={`p-3 rounded-xl border cursor-pointer transition-all ${
-                    stampMode === 'manual' ? 'border-blue-600 bg-blue-50/60 ring-1 ring-blue-600' : 'border-slate-200'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="stampMode"
-                    checked={stampMode === 'manual'}
-                    onChange={() => setStampMode('manual')}
-                    className="sr-only"
-                  />
-                  <span className="text-xs font-bold text-black block">Manual Stamp Value Selection</span>
-                  <span className="text-[11px] text-slate-500 mt-0.5 block">
-                    Choose from standard denominations
-                  </span>
-                </label>
-              </div>
-
-              {stampMode === 'manual' && (
-                <div className="space-y-2 animate-fadeIn">
-                  <div className="flex gap-2 overflow-x-auto pb-1.5 scrollbar-thin flex-nowrap sm:grid sm:grid-cols-7 sm:overflow-visible">
-                    {[10, 20, 50, 100, 500, 1000].map((val) => (
-                      <button
-                        key={val}
-                        type="button"
-                        onClick={() => {
-                          setManualStampValue(val);
-                          setCustomManualStamp('');
-                        }}
-                        className={`shrink-0 min-w-[70px] sm:min-w-0 py-1.5 px-3 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
-                          manualStampValue === val
-                            ? 'bg-blue-600 text-white border-blue-600'
-                            : 'bg-white text-slate-700 border-slate-300'
-                        }`}
-                      >
-                        ₹{val}
-                      </button>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={() => setManualStampValue(-1)}
-                      className={`shrink-0 min-w-[70px] sm:min-w-0 py-1.5 px-3 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
-                        manualStampValue === -1
-                          ? 'bg-blue-600 text-white border-blue-600'
-                          : 'bg-white text-slate-700 border-slate-300'
-                      }`}
-                    >
-                      Custom
-                    </button>
-                  </div>
-
-                  {manualStampValue === -1 && (
-                    <input
-                      type="number"
-                      value={customManualStamp}
-                      onChange={(e) => setCustomManualStamp(e.target.value)}
-                      placeholder="Custom Stamp Value (e.g. 200)"
-                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-mono"
-                    />
-                  )}
-
-                  {isManualStampBelowThreshold && (
-                    <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 text-xs flex items-start gap-2">
-                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                      <span>
-                        <strong>Warning:</strong> GST authorities may issue a clarification notice if stamp paper value is below statutory state limit.
-                      </span>
-                    </div>
-                  )}
                 </div>
               )}
             </div>
@@ -1070,6 +1135,14 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
                 />
               </div>
             </div>
+
+            <AddressFieldGroup
+              label="Landlord Residential / Registered Address"
+              variant="standard"
+              value={landlordAddress}
+              onChangeAddress={(addr) => setLandlordAddress(addr)}
+              required
+            />
 
             {/* Co-Owner Joint Landlords Extension */}
             {ownershipStatus === 'Co-Owner / Joint Owner' && (
@@ -1312,6 +1385,14 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
               </div>
             </div>
 
+            <AddressFieldGroup
+              label="Applicant / Business Communication Address"
+              variant="standard"
+              value={granteeAddress}
+              onChangeAddress={(addr) => setGranteeAddress(addr)}
+              required
+            />
+
             <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <label className="block text-xs font-bold text-slate-800">
@@ -1351,46 +1432,66 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
         {/* ================= PAGE 3B: PRINCIPAL PLACE OF BUSINESS & UTILITY DOCUMENT ================= */}
         {currentPage === '3B' && (
           <div className="space-y-4 animate-fadeIn">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                Principal Place of Business Address <span className="text-red-500">*</span>
-              </label>
-              <textarea
-                rows={3}
-                required
-                value={premisesAddress}
-                onChange={(e) => setPremisesAddress(e.target.value)}
-                placeholder={showExample ? "Shop/Office No., Floor, Building Name, Road, Sector/Area, City, Pincode" : ""}
-                className="w-full bg-white border border-slate-300 rounded-xl p-3 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 resize-none"
-              />
-            </div>
+            <AddressFieldGroup
+              label="Principal Place of Business Address"
+              variant="property"
+              value={premisesAddress}
+              onChangeAddress={(addr) => setPremisesAddress(addr)}
+              required
+            />
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Municipal Ward / Zone <span className="text-slate-400 font-normal">(Optional)</span>
-                </label>
-                <input
-                  type="text"
-                  value={wardNumber}
-                  onChange={(e) => setWardNumber(e.target.value)}
-                  placeholder={showExample ? "e.g. Ward 24, Zone 3" : ""}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                />
-              </div>
+            {/* Collapsible Optional Details (Ward, Property Tax No., Building Boundaries) */}
+            <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white">
+              <button
+                type="button"
+                onClick={() => setShowOptionalPremisesDetails((prev) => !prev)}
+                className="w-full px-4 py-3 flex items-center justify-between text-xs font-bold text-slate-800 hover:bg-slate-50 transition-colors cursor-pointer"
+              >
+                <span>Optional Details</span>
+                {showOptionalPremisesDetails ? (
+                  <ChevronUp className="w-4 h-4 text-slate-500" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 text-slate-500" />
+                )}
+              </button>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Property Tax / Assessment No. <span className="text-slate-400 font-normal">(Optional)</span>
-                </label>
-                <input
-                  type="text"
-                  value={propertyTaxAssessmentNo}
-                  onChange={(e) => setPropertyTaxAssessmentNo(e.target.value)}
-                  placeholder={showExample ? "e.g. TAX/2023/88910" : ""}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                />
-              </div>
+              {showOptionalPremisesDetails && (
+                <div className="p-4 pt-2 border-t border-slate-200 space-y-4 bg-slate-50/50 animate-fadeIn">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Municipal Ward / Zone <span className="text-slate-400 font-normal">(Optional)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={wardNumber}
+                        onChange={(e) => setWardNumber(e.target.value)}
+                        placeholder={showExample ? "e.g. Ward 24, Zone 3" : ""}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Property Tax / Assessment No. <span className="text-slate-400 font-normal">(Optional)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={propertyTaxAssessmentNo}
+                        onChange={(e) => setPropertyTaxAssessmentNo(e.target.value)}
+                        placeholder={showExample ? "e.g. TAX/2023/88910" : ""}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      />
+                    </div>
+                  </div>
+
+                  <PropertyBoundariesSection
+                    title="Building Boundaries"
+                    value={buildingBoundaries}
+                    onChange={setBuildingBoundaries}
+                  />
+                </div>
+              )}
             </div>
 
             {/* Utility Document Upload (Electricity Bill not older than 2 months) */}
@@ -1665,53 +1766,34 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
 
             {/* Courier Address Inputs */}
             {deliveryPreference !== 'digital' && (
-              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3 animate-fadeIn">
-                <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
-                  Courier Shipping Address
-                </span>
+              <div className="space-y-3 animate-fadeIn">
+                <AddressFieldGroup
+                  label="Courier Shipping Address"
+                  variant="standard"
+                  defaultState={selectedState}
+                  value={shippingAddress}
+                  onChangeAddress={(fullAddr, details) => {
+                    setShippingAddress(fullAddr);
+                    if (details?.pincode !== undefined) {
+                      setShippingPincode(details.pincode);
+                    }
+                  }}
+                  required
+                />
                 <div>
                   <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    Full Delivery Street Address <span className="text-red-500">*</span>
+                    Courier Contact Mobile Number <span className="text-red-500">*</span>
                   </label>
-                  <textarea
-                    rows={2}
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    maxLength={10}
                     required
-                    value={shippingAddress}
-                    onChange={(e) => setShippingAddress(e.target.value)}
-                    placeholder={showExample ? "Complete shipping address for physical delivery" : ""}
-                    className="w-full bg-white border border-slate-300 rounded-xl p-2.5 text-xs text-slate-900 resize-none"
+                    value={shippingPhone}
+                    onChange={(e) => setShippingPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    placeholder={showExample ? "9876543210" : ""}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono"
                   />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                      Delivery PIN Code <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      maxLength={6}
-                      required
-                      value={shippingPincode}
-                      onChange={(e) => setShippingPincode(e.target.value.replace(/\D/g, ''))}
-                      placeholder={showExample ? "Delivery PIN Code" : ""}
-                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                      Courier Contact Mobile Number <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="tel"
-                      inputMode="numeric"
-                      maxLength={10}
-                      required
-                      value={shippingPhone}
-                      onChange={(e) => setShippingPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                      placeholder={showExample ? "9876543210" : ""}
-                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono"
-                    />
-                  </div>
                 </div>
               </div>
             )}
@@ -1801,6 +1883,8 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
           )}
         </div>
       </div>
+      )}
+      </HorizontalSwipeContainer>
     </div>
   );
 };

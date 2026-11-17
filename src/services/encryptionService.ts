@@ -80,9 +80,15 @@ export interface UploadedDocumentPayload {
 
 export interface AnnotatedField {
   label: string;
+  rawLabel?: string;
   value: any;
+  displayValue?: any;
   optional: boolean;
+  requirement?: 'Mandatory' | 'Optional';
   filled: boolean;
+  fieldType?: 'input' | 'checkbox';
+  checked?: boolean;
+  tickStatus?: 'Ticked (Checked)' | 'Not Ticked (Unchecked)';
   status: 'Mandatory - Filled' | 'Mandatory - Not Filled' | 'Optional - Filled' | 'Optional - Not Filled';
   availableOptions?: string[];
 }
@@ -141,6 +147,7 @@ export function formatSubmissionDateTime(dateInput: Date = new Date()): {
 
 /**
  * Helper to create a structured annotated field so optional & empty fields are NEVER omitted.
+ * Marks Mandatory vs (Optional) in the label/metadata and leaves unfilled optional values blank ('') with explicit status.
  */
 export function fieldEntry(
   label: string,
@@ -152,7 +159,7 @@ export function fieldEntry(
   if (Array.isArray(value)) {
     filled = value.length > 0;
   } else if (typeof value === 'boolean') {
-    filled = value;
+    filled = true;
   } else if (typeof value === 'number') {
     filled = !Number.isNaN(value);
   } else if (value && typeof value === 'object') {
@@ -161,11 +168,11 @@ export function fieldEntry(
     filled = String(value).trim().length > 0;
   }
 
-  const normalizedValue = filled
-    ? value
-    : optional
-    ? 'Not Filled (Optional)'
-    : '';
+  const normalizedValue = filled ? value : '';
+  const requirement: 'Mandatory' | 'Optional' = optional ? 'Optional' : 'Mandatory';
+  const formattedLabel = /\((optional|mandatory)\)/i.test(label)
+    ? label
+    : `${label} (${requirement})`;
 
   const status: AnnotatedField['status'] = optional
     ? filled
@@ -176,12 +183,51 @@ export function fieldEntry(
     : 'Mandatory - Not Filled';
 
   return {
-    label,
+    label: formattedLabel,
+    rawLabel: label,
     value: normalizedValue,
+    displayValue: filled ? value : optional ? '' : '',
     optional,
+    requirement,
     filled,
+    fieldType: 'input',
     status,
     ...(availableOptions && availableOptions.length > 0 ? { availableOptions } : {})
+  };
+}
+
+/**
+ * Helper to explicitly emit every individual checkbox with its label/question
+ * and whether the user ticked it ('Ticked (Checked)') or left it unticked ('Not Ticked (Unchecked)').
+ * Never hides, alters, or inverts checkbox semantics.
+ */
+export function checkboxEntry(
+  label: string,
+  checked: boolean,
+  optional = false
+): AnnotatedField {
+  const isChecked = Boolean(checked);
+  const tickStatus: 'Ticked (Checked)' | 'Not Ticked (Unchecked)' = isChecked
+    ? 'Ticked (Checked)'
+    : 'Not Ticked (Unchecked)';
+  const requirement: 'Mandatory' | 'Optional' = optional ? 'Optional' : 'Mandatory';
+  const formattedLabel = /\((optional|mandatory)\)/i.test(label)
+    ? label
+    : `${label} (${requirement})`;
+
+  return {
+    label: formattedLabel,
+    rawLabel: label,
+    value: tickStatus,
+    displayValue: tickStatus,
+    optional,
+    requirement,
+    filled: true,
+    fieldType: 'checkbox',
+    checked: isChecked,
+    tickStatus,
+    status: optional ? 'Optional - Filled' : 'Mandatory - Filled',
+    availableOptions: ['Ticked (Checked)', 'Not Ticked (Unchecked)']
   };
 }
 

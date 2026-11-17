@@ -12,10 +12,21 @@ import {
   UploadCloud,
   Layers,
   FileCheck2,
-  AlertCircle
+  AlertCircle,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { AadhaarInput } from './AadhaarInput';
+import { AddressFieldGroup } from './AddressFieldGroup';
+import {
+  PropertyBoundariesSection,
+  PropertyBoundariesState,
+  createInitialPropertyBoundaries,
+  formatSingleBoundary,
+  areAllBoundariesFilled
+} from './PropertyBoundariesSection';
+import { WitnessDetailsCard } from './WitnessDetailsCard';
 import { LegalDocument, OrderItem } from '../types';
 import { STATE_CATEGORIES, getSafeStampDuty } from '../data/stampDutyMatrix';
 import { useExampleDetails } from '../hooks/useExampleDetails';
@@ -27,6 +38,7 @@ import {
   generateSequentialOrderId,
   buildSubmissionOverview,
   fieldEntry,
+  checkboxEntry,
   readFileAsUploadPayload,
   UploadedDocumentPayload,
   ServerBSyncResult
@@ -34,6 +46,9 @@ import {
 import { Lock, ExternalLink } from 'lucide-react';
 import { showToast } from '../services/toastService';
 import { ServerBSyncStatusCard } from './ServerBSyncStatusCard';
+import { VoiceGuidanceButton } from './VoiceGuidanceButton';
+import { FormRequestTabBar, HorizontalSwipeContainer, WizardModeTab } from './FormRequestTabBar';
+import { QuickCallbackRequestPanel } from './QuickCallbackRequestPanel';
 
 interface CommercialNocWizardViewProps {
   document: LegalDocument;
@@ -65,10 +80,11 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
 }) => {
   const { showExampleDetails, getPlaceholder } = useExampleDetails();
   const showExample = showExampleDetails;
+  const [activeTab, setActiveTab] = useState<WizardModeTab>('form');
   const [currentPage, setCurrentPage] = useState<StepId>('1');
 
   // --- PAGE 1: OBJECTIVE & STAMP JURISDICTION ---
-  const [selectedState, setSelectedState] = useState<string>('Maharashtra');
+  const [selectedState, setSelectedState] = useState<string>('Uttar Pradesh');
 
   // Purpose of NOC [Multi-Select Checkbox - Pre-select GST & Bank Account Opening]
   const [purposes, setPurposes] = useState<Record<string, boolean>>({
@@ -90,34 +106,45 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
   // Property Classification
   const [propertyClassification, setPropertyClassification] = useState<string>('Commercial Building');
 
-  // Stamp Duty Fee Paid By (New feature from user prompt)
-  const [stampFeePaidBy, setStampFeePaidBy] = useState<'Landlord' | 'Business Owner' | 'Shared Equally'>(
-    'Landlord'
-  );
+  // Stamp Paper Procurement Mode & Denomination
+  const [stampProcurementMode, setStampProcurementMode] = useState<'estamp' | 'physical_upload'>('estamp');
+  const [physicalStampFile, setPhysicalStampFile] = useState<UploadedDocumentPayload | null>(null);
+  const physicalStampUploaded = Boolean(physicalStampFile);
 
   // Recommended minimum state stamp duty
   const recommendedStamp = useMemo(() => {
     return getSafeStampDuty(initialDoc.title, selectedState);
   }, [initialDoc.title, selectedState]);
 
-  // Stamp Selection Engine
-  const [stampMode, setStampMode] = useState<'auto' | 'manual'>('auto');
-  const [manualStampValue, setManualStampValue] = useState<number>(100);
-  const [customManualStamp, setCustomManualStamp] = useState<string>('');
+  const [stampValue, setStampValue] = useState<number>(100);
+  const [customStampValue, setCustomStampValue] = useState<string>('');
+  const [stampCostBorneBy, setStampCostBorneBy] = useState<string>('First Party (Landlord / Lessor)');
+  const [customSplitText, setCustomSplitText] = useState<string>('');
 
   const activeStampValue = useMemo(() => {
-    if (stampMode === 'auto') return recommendedStamp;
-    return manualStampValue === -1 ? Number(customManualStamp) || 0 : manualStampValue;
-  }, [stampMode, recommendedStamp, manualStampValue, customManualStamp]);
+    return stampValue === -1 ? Number(customStampValue) || 0 : stampValue;
+  }, [stampValue, customStampValue]);
 
-  const isManualStampBelowThreshold = useMemo(() => {
-    return stampMode === 'manual' && activeStampValue < recommendedStamp;
-  }, [stampMode, activeStampValue, recommendedStamp]);
+  const isStampBelowThreshold = useMemo(() => {
+    return activeStampValue < recommendedStamp;
+  }, [activeStampValue, recommendedStamp]);
+
+  const handlePhysicalStampSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    const payload = await readFileAsUploadPayload(file, 'Pre-Purchased Physical Stamp Paper');
+    if (payload) {
+      setPhysicalStampFile(payload);
+      showToast(`${payload.fileName} attached successfully.`, 'success', 3000);
+    }
+  };
 
   // --- PAGE 2: THE GRANTOR (LANDLORD'S STANDING) ---
   const [landlordOwnershipType, setLandlordOwnershipType] = useState<string>('Sole Individual');
   const [landlordName, setLandlordName] = useState('');
   const [landlordFatherName, setLandlordFatherName] = useState('');
+  const [landlordAddress, setLandlordAddress] = useState('');
   const [landlordPan, setLandlordPan] = useState('');
   const [landlordAadhaarLast4, setLandlordAadhaarLast4] = useState('');
   const [landlordMobile, setLandlordMobile] = useState('');
@@ -156,10 +183,11 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
   );
   const [customNatureOfOperations, setCustomNatureOfOperations] = useState<string>('');
 
-  // Signatory Details
+  // Signatory & Grantee Communication Details
   const [granteeSignatoryName, setGranteeSignatoryName] = useState('');
   const [granteeSignatoryFatherName, setGranteeSignatoryFatherName] = useState('');
   const [granteeAadhaar, setGranteeAadhaar] = useState('');
+  const [granteeAddress, setGranteeAddress] = useState('');
   const [granteeDesignation, setGranteeDesignation] = useState<string>('Proprietor');
   const [authorizationDocFile, setAuthorizationDocFile] = useState<UploadedDocumentPayload | null>(null);
   const authorizationDocUploaded = Boolean(authorizationDocFile);
@@ -202,18 +230,19 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
       natureOfOperations.toLowerCase().includes('food');
   }, [natureOfOperations]);
 
-  // --- PAGE 3B: PREMISES LOCATION, DIMENSIONS & BOUNDARIES (Moved from Page 1 as requested) ---
+  // --- PAGE 3B: PREMISES LOCATION, DIMENSIONS & BOUNDARIES ---
   const [premisesAddress, setPremisesAddress] = useState('');
+  const [showOptionalPremisesDetails, setShowOptionalPremisesDetails] = useState(false);
   const [wardNumber, setWardNumber] = useState('');
   const [propertyTaxAssessmentNo, setPropertyTaxAssessmentNo] = useState('');
   const [superBuiltupArea, setSuperBuiltupArea] = useState('');
   const [carpetArea, setCarpetArea] = useState('');
 
-  // Boundaries in simple human words
-  const [eastBound, setEastBound] = useState('');
-  const [westBound, setWestBound] = useState('');
-  const [northBound, setNorthBound] = useState('');
-  const [southBound, setSouthBound] = useState('');
+  // Structured Property Boundaries + Optional Toggle
+  const [propertyBoundaries, setPropertyBoundaries] = useState<PropertyBoundariesState>(() =>
+    createInitialPropertyBoundaries()
+  );
+  const [boundariesOptional, setBoundariesOptional] = useState(false);
 
   // --- PAGE 4: OPERATIONAL CONDITIONS & STATUTORY CLAUSES ---
   const [clauseMultiAgency, setClauseMultiAgency] = useState(true);
@@ -225,10 +254,12 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
   const [clauseFireSafety, setClauseFireSafety] = useState(true);
   const [clauseHealthTrade, setClauseHealthTrade] = useState(true);
 
-  const [sublettingPermission, setSublettingPermission] = useState<'Strictly Prohibited' | 'Allowed'>('Strictly Prohibited');
+  const [nocDuration, setNocDuration] = useState<string>('1 Year');
+  const [customNocDuration, setCustomNocDuration] = useState<string>('');
+  const [sublettingPermission, setSublettingPermission] = useState<'Not Allowed' | 'Allowed'>('Not Allowed');
   const [propertyTaxEscalation, setPropertyTaxEscalation] = useState('Fully Paid by Landlord');
   const [meterLoadConsent, setMeterLoadConsent] = useState(true);
-  const [landlordIndemnityAccepted, setLandlordIndemnityAccepted] = useState(true);
+  const landlordIndemnityAccepted = true;
 
   // Custom Clauses
   const [customClauses, setCustomClauses] = useState<CustomOperationalClause[]>([]);
@@ -247,13 +278,17 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
 
   // --- PAGE 5: WITNESS ATTESTATION & DELIVERY (NO NOTARY PUBLIC) ---
   const [witness1Name, setWitness1Name] = useState('');
+  const [witness1FatherName, setWitness1FatherName] = useState('');
   const [witness1Profession, setWitness1Profession] = useState('');
+  const [witness1Age, setWitness1Age] = useState('');
   const [witness1Address, setWitness1Address] = useState('');
   const [witness1Id, setWitness1Id] = useState('');
   const [witness1Mobile, setWitness1Mobile] = useState('');
 
   const [witness2Name, setWitness2Name] = useState('');
+  const [witness2FatherName, setWitness2FatherName] = useState('');
   const [witness2Profession, setWitness2Profession] = useState('');
+  const [witness2Age, setWitness2Age] = useState('');
   const [witness2Address, setWitness2Address] = useState('');
   const [witness2Id, setWitness2Id] = useState('');
   const [witness2Mobile, setWitness2Mobile] = useState('');
@@ -315,6 +350,10 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
         showToast('Please select at least one Purpose of NOC.', 'warning');
         return;
       }
+      if (stampProcurementMode === 'physical_upload' && !physicalStampUploaded) {
+        showToast('Please upload your pre-purchased Physical Stamp Paper before proceeding.', 'warning');
+        return;
+      }
     }
 
     if (currentPage === '2') {
@@ -322,6 +361,10 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
       if (!isCorp) {
         if (!landlordName.trim()) {
           showToast('Please fill mandatory Landlord Legal Name.', 'warning');
+          return;
+        }
+        if (!landlordAddress.trim()) {
+          showToast('Please fill complete Landlord Residential Address.', 'warning');
           return;
         }
       } else {
@@ -353,6 +396,10 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
         showToast('Please provide Proposed Business Name and Signatory details.', 'warning');
         return;
       }
+      if (!granteeAddress.trim()) {
+        showToast('Please provide complete Applicant / Business Communication Address.', 'warning');
+        return;
+      }
       if (granteePan.trim().length !== 10) {
         showToast('Second Party (Grantee) 10-character PAN Card is mandatory.', 'warning');
         return;
@@ -370,6 +417,10 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
     if (currentPage === '3B') {
       if (!premisesAddress.trim()) {
         showToast('Please provide complete Premises Address.', 'warning');
+        return;
+      }
+      if (!boundariesOptional && !areAllBoundariesFilled(propertyBoundaries)) {
+        showToast('Please complete all four Property Boundaries or select "Change to Optional".', 'warning');
         return;
       }
     }
@@ -391,8 +442,8 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!witness1Name.trim() || !witness1Address.trim()) {
-      showToast('Witness 1 Full Legal Name and Residential Address are mandatory.', 'warning');
+    if (!witness1Name.trim() || !witness1FatherName.trim() || !witness1Address.trim()) {
+      showToast('Witness 1 Full Legal Name, Father/Husband Name, and Residential Address are mandatory.', 'warning');
       return;
     }
     if (witness1Mobile.replace(/\D/g, '').length !== 10) {
@@ -404,8 +455,8 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
       return;
     }
 
-    if (!witness2Name.trim() || !witness2Address.trim()) {
-      showToast('Witness 2 Full Legal Name and Residential Address are mandatory.', 'warning');
+    if (!witness2Name.trim() || !witness2FatherName.trim() || !witness2Address.trim()) {
+      showToast('Witness 2 Full Legal Name, Father/Husband Name, and Residential Address are mandatory.', 'warning');
       return;
     }
     if (witness2Mobile.replace(/\D/g, '').length !== 10) {
@@ -444,7 +495,16 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
       ].filter(Boolean) as string[];
 
       const isCorpLandlord = landlordOwnershipType !== 'Sole Individual' && landlordOwnershipType !== 'Joint Owners';
-      const uploadedDocuments: UploadedDocumentPayload[] = authorizationDocFile ? [authorizationDocFile] : [];
+      const uploadedDocuments: UploadedDocumentPayload[] = [
+        physicalStampFile,
+        authorizationDocFile
+      ].filter((item): item is UploadedDocumentPayload => Boolean(item));
+
+      const eastBound = formatSingleBoundary(propertyBoundaries.east);
+      const westBound = formatSingleBoundary(propertyBoundaries.west);
+      const northBound = formatSingleBoundary(propertyBoundaries.north);
+      const southBound = formatSingleBoundary(propertyBoundaries.south);
+      const effectiveNocDuration = nocDuration === 'Custom' ? customNocDuration || 'Custom Duration' : nocDuration;
 
       const submissionOverview = buildSubmissionOverview({
         orderId: newOrderId,
@@ -457,87 +517,151 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
         date: now
       });
 
+      const stateOptions = STATE_CATEGORIES.map((s) => s.name);
+      const propertyClassOptions = [
+        'Commercial Building',
+        'IT Park/SEZ',
+        'Industrial Land/Shed',
+        'Mixed-Use Urban Property',
+        'Residential Property Used for Business'
+      ];
+      const stampBorneOptions = [
+        'First Party (Landlord / Lessor)',
+        'Second Party (Grantee / Tenant)',
+        'Shared Equally (50-50 Split)',
+        'Custom Split'
+      ];
+      const landlordOwnershipOptions = [
+        'Sole Individual',
+        'Joint Owners',
+        'Partnership Firm / LLP',
+        'Private Limited / Public Limited Company',
+        'HUF',
+        'Trust / Society'
+      ];
+      const constitutionOptions = [
+        'Sole Proprietorship',
+        'Partnership Firm',
+        'Limited Liability Partnership (LLP)',
+        'Private Limited Company',
+        'Public Limited Company',
+        'One Person Company (OPC)',
+        'Trust / Society / NGO'
+      ];
+      const natureOptions = [
+        'IT / Software / Back Office / Consultancy',
+        'E-Commerce / Warehousing / Fulfillment',
+        'Retail Shop / Showroom / Trading',
+        'Restaurant / Cafe / Cloud Kitchen / Food Processing',
+        'Manufacturing / Industrial Workshop',
+        'Healthcare / Clinic / Pharmacy',
+        'Education / Coaching / Training Center',
+        'Other'
+      ];
+      const nocDurationOptions = [
+        '1 Month',
+        '2 Months',
+        '3 Months',
+        '6 Months',
+        '1 Year',
+        '2 Years',
+        '3 Years',
+        'Until Lease Validity',
+        'Custom'
+      ];
+
       const sections = [
         {
           pageNumber: 1,
-          sectionTitle: 'Page 1: Objective, Jurisdiction & Stamp Duty',
+          sectionTitle: 'Objective, Jurisdiction & Stamp Duty',
           fields: [
-            fieldEntry('Selected State / Union Territory', selectedState, false),
-            fieldEntry('Selected Purposes of NOC', selectedPurposeLabels, false),
-            fieldEntry('Property Classification', propertyClassification, false),
-            fieldEntry('Stamp Duty Paid By', stampFeePaidBy, false, ['Landlord', 'Business Owner', 'Shared Equally']),
-            fieldEntry('Stamp Selection Mode', stampMode === 'auto' ? `Auto Recommended (₹${recommendedStamp})` : `Manual (₹${activeStampValue})`, false),
-            fieldEntry('Final Stamp Paper Value (INR)', `₹${pricing.stamp}`, false)
+            fieldEntry('Selected State / Union Territory', selectedState, false, stateOptions),
+            checkboxEntry('Purpose — GST Registration (Tax Allotment)', Boolean(purposes.gst_reg), true),
+            checkboxEntry('Purpose — Business License / Gumasta / Shops & Est', Boolean(purposes.biz_license), true),
+            checkboxEntry('Purpose — Sub-Letting / Sub-Leasing Permissions', Boolean(purposes.subletting), true),
+            checkboxEntry('Purpose — Bank Account Opening / Corporate Address Proof', Boolean(purposes.bank_account), true),
+            checkboxEntry('Purpose — Central/State Statutory (FSSAI, MSME, Pollution, Fire)', Boolean(purposes.statutory_reg), true),
+            fieldEntry('Property Classification', propertyClassification, false, propertyClassOptions),
+            fieldEntry('Stamp Paper Procurement Mode', stampProcurementMode === 'estamp' ? 'E-Stamp Paper / Digital Stamp' : 'Physical Stamp Paper (User Upload)', false, ['E-Stamp Paper / Digital Stamp', 'Physical Stamp Paper (User Upload)']),
+            fieldEntry('Physical Stamp File', physicalStampFile ? `${physicalStampFile.fileName}` : '', stampProcurementMode !== 'physical_upload'),
+            fieldEntry('Stamp Duty Cost Paid By', stampCostBorneBy, false, stampBorneOptions),
+            fieldEntry('Custom Stamp Cost Split Details', customSplitText, stampCostBorneBy !== 'Custom Split'),
+            fieldEntry('Final Stamp Paper Value (INR)', `₹${pricing.stamp}`, false, ['₹10', '₹20', '₹50', '₹100', '₹500', '₹1000', 'Custom'])
           ]
         },
         {
           pageNumber: 2,
-          sectionTitle: 'Page 2: 1st Party / Grantor (Landlord) Details',
+          sectionTitle: '1st Party / Grantor (Landlord) Details',
           fields: [
-            fieldEntry('Landlord Ownership Type', landlordOwnershipType, false),
+            fieldEntry('Landlord Ownership Type', landlordOwnershipType, false, landlordOwnershipOptions),
             fieldEntry(isCorpLandlord ? 'Entity Legal Name' : 'Landlord Full Legal Name', landlordName, false),
-            ...(isCorpLandlord
-              ? [
-                  fieldEntry('CIN / LLPIN', corpCin, false),
-                  fieldEntry('Registered Office Address', corpRegAddress, false),
-                  fieldEntry('Authorised Representative Name', corpRepName, false),
-                  fieldEntry('Authorised Representative Designation', corpRepDesignation, false),
-                  fieldEntry('Resolution / Authorization Date', corpResolutionDate, false)
-                ]
-              : [
-                  fieldEntry("Father's / Husband's Name", landlordFatherName, false)
-                ]),
+            fieldEntry('CIN / LLPIN', corpCin, !isCorpLandlord),
+            fieldEntry('Registered Office Address', corpRegAddress, !isCorpLandlord),
+            fieldEntry('Authorised Representative Name', corpRepName, !isCorpLandlord),
+            fieldEntry('Authorised Representative Designation', corpRepDesignation, !isCorpLandlord),
+            fieldEntry('Resolution / Authorization Date', corpResolutionDate, !isCorpLandlord),
+            fieldEntry("Father's / Husband's Name", landlordFatherName, isCorpLandlord),
+            fieldEntry('Permanent Residential Address', landlordAddress, isCorpLandlord),
             fieldEntry('Landlord / Corporate PAN Card', landlordPan, false),
             fieldEntry('Aadhaar Number (12 Digits)', landlordAadhaarLast4, false),
             fieldEntry('Official Contact Mobile Number', landlordMobile, false),
             fieldEntry('Contact Email ID', landlordEmail, true),
             fieldEntry('Joint Co-Owners Added', coOwners.length > 0 ? coOwners : '', true),
-            fieldEntry('Clear Legal Title Declaration Accepted', clearTitleDeclared ? 'Yes' : 'No', false)
+            checkboxEntry('Clear Legal Title & Encumbrance Declaration Accepted', clearTitleDeclared, false)
           ]
         },
         {
           pageNumber: 3,
-          sectionTitle: 'Page 3: 2nd Party / Grantee (Business & Entity) Details',
+          sectionTitle: '2nd Party / Grantee (Business & Entity) Details',
           fields: [
-            fieldEntry('Business Constitution', businessConstitution, false),
+            fieldEntry('Business Constitution', businessConstitution, false, constitutionOptions),
             fieldEntry('Proposed Business Name / Trade Name', proposedBusinessName, false),
             fieldEntry('Entity / Proprietor PAN Card', granteePan, false),
             fieldEntry('Grantee / Signatory Aadhaar Number (12 Digits)', granteeAadhaar, false),
+            fieldEntry('Applicant / Business Communication Address', granteeAddress, false),
             fieldEntry('CIN / LLPIN', granteeCin, businessConstitution === 'Sole Proprietorship' || businessConstitution === 'Partnership Firm'),
-            fieldEntry('Nature of Business Operations', natureOfOperations === 'Other' ? customNatureOfOperations : natureOfOperations, false),
+            fieldEntry('Nature of Business Operations', natureOfOperations, false, natureOptions),
+            fieldEntry('Custom Nature of Operations Description', customNatureOfOperations, natureOfOperations !== 'Other'),
             fieldEntry('Signatory Full Legal Name', granteeSignatoryName, false),
             fieldEntry("Signatory Father's Name", granteeSignatoryFatherName, false),
-            fieldEntry('Signatory Designation', granteeDesignation, false),
+            fieldEntry('Signatory Designation', granteeDesignation, false, ['Proprietor', 'Partner', 'Director', 'Authorized Signatory via BR']),
             fieldEntry('Authorization Letter / Board Resolution File', authorizationDocFile ? `${authorizationDocFile.fileName} (${Math.round(authorizationDocFile.sizeBytes / 1024)} KB)` : '', true)
           ]
         },
         {
           pageNumber: '3B',
-          sectionTitle: 'Page 3B: Premises Location, Area & Boundaries',
+          sectionTitle: 'Premises Location, Area & Boundaries',
           fields: [
             fieldEntry('Premises Complete Address', premisesAddress, false),
             fieldEntry('Municipal Ward Number / Zone', wardNumber, true),
             fieldEntry('Property Tax Holding / Survey No.', propertyTaxAssessmentNo, true),
             fieldEntry('Super Built-up Area (Sq. Ft.)', superBuiltupArea, true),
             fieldEntry('Carpet Area (Sq. Ft.)', carpetArea, true),
-            fieldEntry('East Boundary', eastBound, true),
-            fieldEntry('West Boundary', westBound, true),
-            fieldEntry('North Boundary', northBound, true),
-            fieldEntry('South Boundary', southBound, true)
+            checkboxEntry('Boundaries Marked Optional', boundariesOptional, true),
+            fieldEntry('East Boundary', eastBound, boundariesOptional),
+            fieldEntry('West Boundary', westBound, boundariesOptional),
+            fieldEntry('North Boundary', northBound, boundariesOptional),
+            fieldEntry('South Boundary', southBound, boundariesOptional)
           ]
         },
         {
           pageNumber: 4,
-          sectionTitle: 'Page 4: Operational Clauses & Statutory Permissions',
+          sectionTitle: 'Operational Clauses & Statutory Permissions',
           fields: [
-            fieldEntry('Multi-Agency Govt Registration Permission', clauseMultiAgency ? 'Accepted' : 'Unchecked', false),
-            fieldEntry('Tax Officer Physical Verification Permission', clausePhysicalVerification ? 'Accepted' : 'Unchecked', false),
-            fieldEntry('Signboard Display Consent', clauseSignboard ? 'Accepted' : 'Unchecked', false),
-            fieldEntry('Books & Invoices Maintenance Consent', clauseBooks ? 'Accepted' : 'Unchecked', false),
-            fieldEntry('Temporary Cabin / Structural Boundaries', clauseStructural ? 'Accepted' : 'Unchecked', false),
-            fieldEntry('Sub-Letting & Co-Working Permission', sublettingPermission, false),
-            fieldEntry('Property Tax Escalation Responsibility', propertyTaxEscalation, false),
-            fieldEntry('Landlord Indemnity Accepted', landlordIndemnityAccepted ? 'Yes' : 'No', false),
+            checkboxEntry('Government Registration Permission (GST, MSME, Shop & Est, Trade License)', clauseMultiAgency, true),
+            checkboxEntry('Tax Officer Inspection Permission (Physical verification & spot inspection)', clausePhysicalVerification, true),
+            checkboxEntry('Signboard Display Permission (Display business name & GSTIN signboard)', clauseSignboard, true),
+            checkboxEntry('Books & Invoices Permission (Maintain tax invoices, ledgers & accounting records)', clauseBooks, true),
+            checkboxEntry('Structural Limits (Temporary partitions / false ceiling without beam damage)', clauseStructural, true),
+            checkboxEntry('FSSAI Licensing Consent', clauseFssai, true),
+            checkboxEntry('Fire Safety Compliance Consent', clauseFireSafety, true),
+            checkboxEntry('Health Trade License Consent', clauseHealthTrade, true),
+            checkboxEntry('Electricity Meter / Load Enhancement Consent', meterLoadConsent, true),
+            fieldEntry('NOC Validity / Duration', nocDuration, false, nocDurationOptions),
+            fieldEntry('Custom NOC Duration', customNocDuration, nocDuration !== 'Custom'),
+            fieldEntry('Sub-Letting & Co-Working Permission', sublettingPermission, false, ['Not Allowed', 'Allowed']),
+            fieldEntry('Property Tax Escalation Responsibility', propertyTaxEscalation, false, ['Fully Paid by Landlord', 'Reimbursed by Tenant', 'Divided on Pro-rata Basis']),
+            checkboxEntry('Landlord Indemnity Clause (Tenant solely responsible for taxes & liabilities)', landlordIndemnityAccepted, false),
             fieldEntry(
               'Custom Operational Conditions',
               customClauses.length > 0
@@ -549,15 +673,19 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
         },
         {
           pageNumber: 5,
-          sectionTitle: 'Page 5: Witnesses, Delivery & Pricing',
+          sectionTitle: 'Witnesses, Delivery & Pricing',
           fields: [
             fieldEntry('Witness 1 Full Legal Name', witness1Name, false),
+            fieldEntry("Witness 1 Father's / Husband's Name", witness1FatherName, false),
             fieldEntry('Witness 1 Profession', witness1Profession, true),
+            fieldEntry('Witness 1 Age / Date of Birth', witness1Age, true),
             fieldEntry('Witness 1 Residential Address', witness1Address, false),
             fieldEntry('Witness 1 Mobile Number', witness1Mobile, false),
             fieldEntry('Witness 1 Aadhaar Number (12 Digits)', witness1Id, false),
             fieldEntry('Witness 2 Full Legal Name', witness2Name, false),
+            fieldEntry("Witness 2 Father's / Husband's Name", witness2FatherName, false),
             fieldEntry('Witness 2 Profession', witness2Profession, true),
+            fieldEntry('Witness 2 Age / Date of Birth', witness2Age, true),
             fieldEntry('Witness 2 Residential Address', witness2Address, false),
             fieldEntry('Witness 2 Mobile Number', witness2Mobile, false),
             fieldEntry('Witness 2 Aadhaar Number (12 Digits)', witness2Id, false),
@@ -583,13 +711,15 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
         category: initialDoc.category,
         state: selectedState,
         purposes,
-        stampFeePaidBy,
-        stampMode,
+        stampProcurementMode,
+        physicalStampFile,
+        stampCostBorneBy: stampCostBorneBy === 'Custom Split' ? customSplitText : stampCostBorneBy,
         stampDutyAmount: pricing.stamp,
         landlord: {
           entityType: landlordOwnershipType,
           name: landlordName,
           fatherName: landlordFatherName,
+          address: isCorpLandlord ? corpRegAddress : landlordAddress,
           pan: landlordPan,
           aadhaar: landlordAadhaarLast4,
           mobile: landlordMobile,
@@ -609,6 +739,7 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
           constitutionType: businessConstitution,
           pan: granteePan,
           aadhaar: granteeAadhaar,
+          address: granteeAddress,
           cin: granteeCin,
           natureOfOperations: natureOfOperations === 'Other' ? customNatureOfOperations : natureOfOperations,
           authorizedPerson: granteeSignatoryName,
@@ -624,7 +755,8 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
           propertyTaxAssessmentNo,
           superBuiltupArea,
           carpetArea,
-          boundaries: { eastBound, westBound, northBound, southBound }
+          boundariesOptional,
+          boundaries: { eastBound, westBound, northBound, southBound, structured: propertyBoundaries }
         },
         clauses: {
           clauseMultiAgency,
@@ -635,6 +767,7 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
           clauseFssai,
           clauseFireSafety,
           clauseHealthTrade,
+          nocDuration: effectiveNocDuration,
           sublettingPermission,
           propertyTaxEscalation,
           meterLoadConsent,
@@ -642,8 +775,8 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
           customClauses
         },
         witnesses: [
-          { name: witness1Name, profession: witness1Profession, address: witness1Address, idNumber: witness1Id, mobile: witness1Mobile },
-          { name: witness2Name, profession: witness2Profession, address: witness2Address, idNumber: witness2Id, mobile: witness2Mobile }
+          { name: witness1Name, fatherName: witness1FatherName, profession: witness1Profession, age: witness1Age, address: witness1Address, idNumber: witness1Id, mobile: witness1Mobile },
+          { name: witness2Name, fatherName: witness2FatherName, profession: witness2Profession, age: witness2Age, address: witness2Address, idNumber: witness2Id, mobile: witness2Mobile }
         ],
         delivery: {
           deliveryPreference,
@@ -811,7 +944,7 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
     <div data-document-wizard className="w-full max-w-4xl mx-auto px-4 py-5 animate-fadeIn pb-28">
       {/* Top Header - Exact user specification: Dark Title + Blue Architecture subtitle */}
       <div className="mb-6">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <button
             type="button"
             onClick={onBack}
@@ -820,15 +953,19 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
             <ArrowLeft className="w-4 h-4" />
             <span>Cancel &amp; Return</span>
           </button>
+
+          <VoiceGuidanceButton serviceTitle={initialDoc.title} />
         </div>
 
         {/* Progress Bar */}
-        <div className="w-full bg-slate-200 h-1.5 rounded-full mt-3 overflow-hidden">
-          <div
-            className="bg-[#15803d] h-full transition-all duration-300"
-            style={{ width: `${progressPercent}%` }}
-          />
-        </div>
+        {activeTab === 'form' && (
+          <div className="w-full bg-slate-200 h-1.5 rounded-full mt-3 overflow-hidden">
+            <div
+              className="bg-[#15803d] h-full transition-all duration-300"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+        )}
 
         {/* Form Title & Green Architecture Subtitle */}
         <div className="mt-4">
@@ -839,8 +976,24 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
             Architecture
           </span>
         </div>
+
+        <FormRequestTabBar
+          activeTab={activeTab}
+          onChangeTab={setActiveTab}
+          className="mt-4"
+        />
       </div>
 
+      <HorizontalSwipeContainer activeTab={activeTab} onChangeTab={setActiveTab}>
+      {activeTab === 'request' ? (
+        <QuickCallbackRequestPanel
+          mode="document"
+          initialItemTitle={initialDoc.title}
+          categoryLabel={initialDoc.category}
+          onBack={onBack}
+          onSwitchToForm={() => setActiveTab('form')}
+        />
+      ) : (
       <div className="bg-white border border-slate-200 rounded-2xl shadow-xs p-5 sm:p-7">
         {/* ================= PAGE 1: OBJECTIVE & STAMP SELECTION ================= */}
         {currentPage === '1' && (
@@ -915,133 +1068,186 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
               </select>
             </div>
 
-            {/* Stamp Duty Fee Paid By */}
+            {/* Stamp Paper Procurement Mode (Identical to 11 Month Rent Agreement) */}
             <div>
-              <label className="block text-xs font-bold text-slate-800 mb-1.5">
-                Who is paying the Stamp Duty Fee? <span className="text-red-500 font-bold">*</span>
+              <label className="block text-xs font-bold text-slate-800 mb-2">
+                Stamp Paper Procurement Mode <span className="text-red-500 font-bold">*</span>
               </label>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                {[
-                  { key: 'Landlord', label: 'Landlord' },
-                  { key: 'Business Owner', label: 'Business Owner' },
-                  { key: 'Shared Equally', label: 'Shared (50-50%)' }
-                ].map((payer) => (
-                  <label
-                    key={payer.key}
-                    className={`p-3 rounded-xl border cursor-pointer text-center transition-all ${
-                      stampFeePaidBy === payer.key
-                        ? 'border-blue-600 bg-blue-50/60 ring-1 ring-blue-600'
-                        : 'border-slate-200 hover:border-slate-300'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="stampFeePaidBy"
-                      checked={stampFeePaidBy === payer.key}
-                      onChange={() => setStampFeePaidBy(payer.key as any)}
-                      className="sr-only"
-                    />
-                    <span className="text-xs font-bold text-black block">{payer.label}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            {/* Stamp Value Selection Engine */}
-            <div className="space-y-3 pt-2 border-t border-slate-200">
-              <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
-                Stamp Paper Value Selection
-              </span>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label
-                  className={`p-3 rounded-xl border cursor-pointer transition-all ${
-                    stampMode === 'auto' ? 'border-blue-600 bg-blue-50/60 ring-1 ring-blue-600' : 'border-slate-200'
+                  className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                    stampProcurementMode === 'estamp'
+                      ? 'border-blue-600 bg-blue-50/60 ring-1 ring-blue-600'
+                      : 'border-slate-200 hover:border-slate-300'
                   }`}
                 >
                   <input
                     type="radio"
-                    name="stampMode"
-                    checked={stampMode === 'auto'}
-                    onChange={() => setStampMode('auto')}
-                    className="sr-only"
+                    name="procurementMode"
+                    checked={stampProcurementMode === 'estamp'}
+                    onChange={() => setStampProcurementMode('estamp')}
+                    className="w-4 h-4 text-blue-600"
                   />
-                  <span className="text-xs font-bold text-black block">Recommended Stamp Paper Value</span>
-                  <span className="text-[11px] text-blue-700 font-semibold mt-0.5 block">
-                    Locked at ₹{recommendedStamp} for {selectedState}
-                  </span>
+                  <div>
+                    <span className="text-xs font-bold text-black block">E-Stamp Paper / Digital Stamp</span>
+                    <span className="text-[11px] text-slate-500">System generated official state e-stamp</span>
+                  </div>
                 </label>
 
                 <label
-                  className={`p-3 rounded-xl border cursor-pointer transition-all ${
-                    stampMode === 'manual' ? 'border-blue-600 bg-blue-50/60 ring-1 ring-blue-600' : 'border-slate-200'
+                  className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                    stampProcurementMode === 'physical_upload'
+                      ? 'border-blue-600 bg-blue-50/60 ring-1 ring-blue-600'
+                      : 'border-slate-200 hover:border-slate-300'
                   }`}
                 >
                   <input
                     type="radio"
-                    name="stampMode"
-                    checked={stampMode === 'manual'}
-                    onChange={() => setStampMode('manual')}
-                    className="sr-only"
+                    name="procurementMode"
+                    checked={stampProcurementMode === 'physical_upload'}
+                    onChange={() => setStampProcurementMode('physical_upload')}
+                    className="w-4 h-4 text-blue-600"
                   />
-                  <span className="text-xs font-bold text-black block">Manual Stamp Value Selection</span>
-                  <span className="text-[11px] text-slate-500 mt-0.5 block">
-                    Choose from standard denominations
-                  </span>
+                  <div>
+                    <span className="text-xs font-bold text-black block">Physical Stamp Paper (User Upload)</span>
+                    <span className="text-[11px] text-slate-500">Upload your own pre-purchased physical stamp</span>
+                  </div>
                 </label>
               </div>
 
-              {stampMode === 'manual' && (
-                <div className="space-y-2 animate-fadeIn">
-                  <div className="flex gap-2 overflow-x-auto pb-1.5 scrollbar-thin flex-nowrap sm:grid sm:grid-cols-7 sm:overflow-visible">
-                    {[10, 20, 50, 100, 500, 1000].map((val) => (
-                      <button
-                        key={val}
-                        type="button"
-                        onClick={() => {
-                          setManualStampValue(val);
-                          setCustomManualStamp('');
-                        }}
-                        className={`shrink-0 min-w-[70px] sm:min-w-0 py-1.5 px-3 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
-                          manualStampValue === val
-                            ? 'bg-blue-600 text-white border-blue-600'
-                            : 'bg-white text-slate-700 border-slate-300'
-                        }`}
-                      >
-                        ₹{val}
-                      </button>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={() => setManualStampValue(-1)}
-                      className={`shrink-0 min-w-[70px] sm:min-w-0 py-1.5 px-3 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
-                        manualStampValue === -1
-                          ? 'bg-blue-600 text-white border-blue-600'
-                          : 'bg-white text-slate-700 border-slate-300'
-                      }`}
-                    >
-                      Custom
-                    </button>
-                  </div>
-
-                  {manualStampValue === -1 && (
-                    <input
-                      type="number"
-                      value={customManualStamp}
-                      onChange={(e) => setCustomManualStamp(e.target.value)}
-                      placeholder={showExample ? "Custom Stamp Value (e.g. 200)" : ""}
-                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-mono"
-                    />
-                  )}
-
-                  {isManualStampBelowThreshold && (
-                    <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 text-xs flex items-start gap-2">
-                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                      <span>
-                        <strong>Warning:</strong> GST and municipal authorities may reject an NOC drafted on stamp paper below the state minimum.
+              {stampProcurementMode === 'physical_upload' && (
+                <div className="mt-3 p-4 bg-blue-50/70 border border-blue-300 rounded-xl space-y-3 animate-fadeIn">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <span className="text-xs font-bold text-slate-900 block">
+                        Upload Pre-Purchased Physical Stamp Paper <span className="text-red-500 font-bold">*</span>
+                      </span>
+                      <span className="text-[11px] text-slate-500">
+                        Attach scanned front page of physical non-judicial stamp paper (PDF/JPG/PNG)
                       </span>
                     </div>
-                  )}
+
+                    <div className="flex items-center gap-2">
+                      <label className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        physicalStampUploaded
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-300'
+                          : 'bg-blue-600 text-white hover:bg-blue-700'
+                      }`}>
+                        <UploadCloud className="w-3.5 h-3.5" />
+                        <span>{physicalStampFile ? `✓ ${physicalStampFile.fileName}` : 'Upload Stamp File'}</span>
+                        <input
+                          type="file"
+                          accept="image/*,.pdf"
+                          className="hidden"
+                          onChange={handlePhysicalStampSelect}
+                        />
+                      </label>
+                      {physicalStampFile && (
+                        <button
+                          type="button"
+                          onClick={() => setPhysicalStampFile(null)}
+                          className="text-xs text-rose-600 font-bold hover:underline cursor-pointer"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Stamp Paper Value Selection */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-bold text-slate-800">
+                  Stamp Paper Value Selection <span className="text-red-500 font-bold">*</span>
+                </label>
+                <span className="text-[11px] font-bold text-blue-600">
+                  Recommended for {selectedState}: ₹{recommendedStamp}
+                </span>
+              </div>
+
+              <div className="flex gap-2 overflow-x-auto pb-1.5 scrollbar-thin flex-nowrap sm:grid sm:grid-cols-7 sm:overflow-visible">
+                {[10, 20, 50, 100, 500, 1000].map((val) => (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => {
+                      setStampValue(val);
+                      setCustomStampValue('');
+                    }}
+                    className={`shrink-0 min-w-[70px] sm:min-w-0 py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                      stampValue === val
+                        ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                        : 'bg-white text-slate-700 border-slate-300 hover:border-blue-400'
+                    }`}
+                  >
+                    ₹{val}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setStampValue(-1)}
+                  className={`shrink-0 min-w-[70px] sm:min-w-0 py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                    stampValue === -1
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                      : 'bg-white text-slate-700 border-slate-300 hover:border-blue-400'
+                  }`}
+                >
+                  Custom
+                </button>
+              </div>
+
+              {stampValue === -1 && (
+                <div className="mt-2.5">
+                  <input
+                    type="number"
+                    value={customStampValue}
+                    onChange={(e) => setCustomStampValue(e.target.value)}
+                    placeholder={showExample ? "Enter custom stamp value in Rupees" : ""}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  />
+                </div>
+              )}
+
+              {isStampBelowThreshold && (
+                <div className="mt-3 p-3.5 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 text-xs flex items-start gap-2.5 animate-fadeIn">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                  <span>
+                    <strong>Warning:</strong> Per {selectedState} statutory regulations, the recommended minimum stamp duty is <strong>₹{recommendedStamp}</strong>. Authorities may reject an NOC drafted below the state minimum.
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Stamp Duty Cost Paid By */}
+            <div>
+              <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                Stamp Duty Cost Paid By <span className="text-red-500 font-bold">*</span>
+              </label>
+
+              <select
+                value={stampCostBorneBy}
+                onChange={(e) => setStampCostBorneBy(e.target.value)}
+                className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+              >
+                <option value="First Party (Landlord / Lessor)">First Party (Landlord / Lessor)</option>
+                <option value="Second Party (Business Owner / Grantee)">Second Party (Business Owner / Grantee)</option>
+                <option value="Shared Equally (50-50 Split)">Shared Equally (50-50 Split)</option>
+                <option value="Custom Split">Custom Ratio or Fixed Amount Split</option>
+              </select>
+
+              {stampCostBorneBy === 'Custom Split' && (
+                <div className="mt-2">
+                  <input
+                    type="text"
+                    value={customSplitText}
+                    onChange={(e) => setCustomSplitText(e.target.value)}
+                    placeholder={showExample ? "Enter custom ratio or division" : ""}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  />
                 </div>
               )}
             </div>
@@ -1124,19 +1330,13 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Registered Office Address <span className="text-red-500">*</span>
-                  </label>
-                  <textarea
-                    rows={2}
-                    required
-                    value={corpRegAddress}
-                    onChange={(e) => setCorpRegAddress(e.target.value)}
-                    placeholder={showExample ? "Full corporate registered office address" : ""}
-                    className="w-full bg-white border border-slate-300 rounded-xl p-2.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 resize-none"
-                  />
-                </div>
+                <AddressFieldGroup
+                  label="Registered Office Address"
+                  variant="standard"
+                  value={corpRegAddress}
+                  onChangeAddress={(addr) => setCorpRegAddress(addr)}
+                  required
+                />
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
@@ -1216,6 +1416,14 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
                     />
                   </div>
                 </div>
+
+                <AddressFieldGroup
+                  label="Permanent Residential Address"
+                  variant="standard"
+                  value={landlordAddress}
+                  onChangeAddress={(addr) => setLandlordAddress(addr)}
+                  required
+                />
               </div>
             )}
 
@@ -1539,6 +1747,14 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
                 placeholder={showExample ? "1234 - 5678 - 9012" : "12-digit Aadhaar number"}
               />
 
+              <AddressFieldGroup
+                label="Applicant / Business Communication Address"
+                variant="standard"
+                value={granteeAddress}
+                onChangeAddress={(addr) => setGranteeAddress(addr)}
+                required
+              />
+
               <div className="pt-2 border-t border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-800">
@@ -1576,7 +1792,7 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
           </div>
         )}
 
-        {/* ================= PAGE 3B: PREMISES LOCATION & BOUNDARIES (MOVED FROM PAGE 1) ================= */}
+        {/* ================= PAGE 3B: PREMISES LOCATION & BOUNDARIES ================= */}
         {currentPage === '3B' && (
           <div className="space-y-5 animate-fadeIn">
             <div>
@@ -1584,155 +1800,110 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
                 Premises Location &amp; Dimension Details
               </span>
               <p className="text-xs text-slate-500">
-                Provide the exact physical location of the commercial property and area measurements.
+                Provide the exact physical location of the commercial property and boundary details.
               </p>
             </div>
 
-            {/* Complete Premises Address with road/street/landmark */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                Premises Complete Address <span className="text-red-500">*</span>
-              </label>
-              <textarea
-                rows={3}
-                required
-                value={premisesAddress}
-                onChange={(e) => setPremisesAddress(e.target.value)}
-                placeholder={showExample ? "Shop/Office/Plot No, Floor, Building Name, Road/Street, Landmark, City, State, PIN" : ""}
-                className="w-full bg-white border border-slate-300 rounded-xl p-3 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 resize-none"
-              />
+            <AddressFieldGroup
+              label="Premises Address"
+              variant="property"
+              value={premisesAddress}
+              onChangeAddress={(addr) => setPremisesAddress(addr)}
+              required
+            />
+
+            {/* Collapsible Optional Details */}
+            <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white">
+              <button
+                type="button"
+                onClick={() => setShowOptionalPremisesDetails((prev) => !prev)}
+                className="w-full px-4 py-3 flex items-center justify-between text-xs font-bold text-slate-800 hover:bg-slate-50 transition-colors cursor-pointer"
+              >
+                <span>Optional Details</span>
+                {showOptionalPremisesDetails ? (
+                  <ChevronUp className="w-4 h-4 text-slate-500" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 text-slate-500" />
+                )}
+              </button>
+
+              {showOptionalPremisesDetails && (
+                <div className="p-4 pt-2 border-t border-slate-200 space-y-3 bg-slate-50/50 animate-fadeIn">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Municipal Ward Number / Zone Name <span className="text-slate-400 font-normal">(Optional)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={wardNumber}
+                        onChange={(e) => setWardNumber(e.target.value)}
+                        placeholder={showExample ? "e.g. Ward 42, West Zone" : ""}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Property Tax Holding / Khasra / Survey Number <span className="text-slate-400 font-normal">(Optional)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={propertyTaxAssessmentNo}
+                        onChange={(e) => setPropertyTaxAssessmentNo(e.target.value)}
+                        placeholder={showExample ? "e.g. TAX/2024/84910 or Survey 124/2" : ""}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Super Built-up Area (Sq. Ft.) <span className="text-slate-400 font-normal">(Optional)</span>
+                      </label>
+                      <input
+                        type="number"
+                        value={superBuiltupArea}
+                        onChange={(e) => setSuperBuiltupArea(e.target.value)}
+                        placeholder={showExample ? "e.g. 1200" : ""}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Carpet Area (Sq. Ft.) <span className="text-slate-400 font-normal">(Optional)</span>
+                      </label>
+                      <input
+                        type="number"
+                        value={carpetArea}
+                        onChange={(e) => setCarpetArea(e.target.value)}
+                        placeholder={showExample ? "e.g. 950" : ""}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Optional Ward Number & Property Tax Assessment */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Municipal Ward Number / Zone Name <span className="text-slate-400 font-normal">(Optional)</span>
-                </label>
-                <input
-                  type="text"
-                  value={wardNumber}
-                  onChange={(e) => setWardNumber(e.target.value)}
-                  placeholder={showExample ? "e.g. Ward 42, West Zone" : ""}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Property Tax Holding / Khasra / Survey Number <span className="text-slate-400 font-normal">(Optional)</span>
-                </label>
-                <input
-                  type="text"
-                  value={propertyTaxAssessmentNo}
-                  onChange={(e) => setPropertyTaxAssessmentNo(e.target.value)}
-                  placeholder={showExample ? "e.g. TAX/2024/84910 or Survey 124/2" : ""}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                />
-              </div>
-            </div>
-
-            {/* Optional Super Built-up Area & Carpet Area */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Super Built-up Area (Sq. Ft.) <span className="text-slate-400 font-normal">(Optional)</span>
-                </label>
-                <input
-                  type="number"
-                  value={superBuiltupArea}
-                  onChange={(e) => setSuperBuiltupArea(e.target.value)}
-                  placeholder={showExample ? "e.g. 1200" : ""}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Carpet Area (Sq. Ft.) <span className="text-slate-400 font-normal">(Optional)</span>
-                </label>
-                <input
-                  type="number"
-                  value={carpetArea}
-                  onChange={(e) => setCarpetArea(e.target.value)}
-                  placeholder={showExample ? "e.g. 950" : ""}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                />
-              </div>
-            </div>
-
-            {/* Property Boundaries (सरल भाषा में - पूर्व, पश्चिम, उत्तर, दक्षिण) (All Optional) */}
-            <div className="space-y-3 pt-3 border-t border-slate-200">
-              <div>
-                <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
-                  Property Boundaries (चारों तरफ क्या है) <span className="text-slate-400 font-normal lowercase">(optional)</span>
-                </span>
-                <p className="text-[11px] text-slate-500 mt-0.5">
-                  आपकी प्रॉपर्टी के पूर्व, पश्चिम, उत्तर और दक्षिण में क्या चीज़ स्थित है (जैसे सड़क, खाली प्लॉट, दुकान या किसी का मकान)
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
-                    East (पूर्व दिशा में) <span className="text-slate-400 font-normal">(Optional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={eastBound}
-                    onChange={(e) => setEastBound(e.target.value)}
-                    placeholder={showExample ? "सड़क, प्लॉट, घर या पड़ोसी की दुकान" : ""}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
-                    West (पश्चिम दिशा में) <span className="text-slate-400 font-normal">(Optional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={westBound}
-                    onChange={(e) => setWestBound(e.target.value)}
-                    placeholder={showExample ? "सड़क, प्लॉट, घर या पड़ोसी की दुकान" : ""}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
-                    North (उत्तर दिशा में) <span className="text-slate-400 font-normal">(Optional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={northBound}
-                    onChange={(e) => setNorthBound(e.target.value)}
-                    placeholder={showExample ? "सड़क, प्लॉट, घर या पड़ोसी की दुकान" : ""}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
-                    South (दक्षिण दिशा में) <span className="text-slate-400 font-normal">(Optional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={southBound}
-                    onChange={(e) => setSouthBound(e.target.value)}
-                    placeholder={showExample ? "सड़क, प्लॉट, घर या पड़ोसी की दुकान" : ""}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
-                  />
-                </div>
-              </div>
-            </div>
+            {/* Structured Property Boundaries with "Change to Optional" toggle */}
+            <PropertyBoundariesSection
+              title="Property Boundaries"
+              value={propertyBoundaries}
+              onChange={setPropertyBoundaries}
+              showOptionalToggle
+              isOptional={boundariesOptional}
+              onToggleOptional={setBoundariesOptional}
+            />
           </div>
         )}
 
-        {/* ================= PAGE 4: OPERATIONAL CLAUSES IN SIMPLE LANGUAGE ================= */}
+        {/* ================= PAGE 4: OPERATIONAL CLAUSES IN SIMPLE ENGLISH ================= */}
         {currentPage === '4' && (
           <div className="space-y-5 animate-fadeIn">
-            {/* Simple Wording Statutory Permissions */}
+            {/* Simple English Statutory Permissions */}
             <div className="space-y-3">
               <span className="text-xs font-bold text-blue-700 uppercase tracking-wider block">
                 Business Clearances &amp; Statutory Permissions (Pre-checked)
@@ -1746,7 +1917,7 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
                   className="mt-0.5 w-4 h-4 text-blue-600 rounded"
                 />
                 <span className="text-xs text-slate-700">
-                  <strong>सरकारी रजिस्ट्रेशन की अनुमति:</strong> मकान मालिक को इस पते पर किरायेदार द्वारा जीएसटी, एमएसएमई, दुकान स्थापना या व्यापार लाइसेंस लेने पर कोई आपत्ति नहीं है।
+                  <strong>Government Registration Permission:</strong> The landlord has no objection to the tenant obtaining GST, MSME, Shop &amp; Establishment, or Trade License registrations at this address.
                 </span>
               </label>
 
@@ -1758,7 +1929,7 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
                   className="mt-0.5 w-4 h-4 text-blue-600 rounded"
                 />
                 <span className="text-xs text-slate-700">
-                  <strong>टैक्स अधिकारियों का निरीक्षण:</strong> जीएसटी व टैक्स अधिकारियों द्वारा इस पते पर आकर वेरिफिकेशन व स्पॉट जांच करने की पूर्ण अनुमति है।
+                  <strong>Tax Officer Inspection:</strong> GST and tax authorities have full permission to visit this address for physical verification and spot inspection.
                 </span>
               </label>
 
@@ -1770,7 +1941,7 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
                   className="mt-0.5 w-4 h-4 text-blue-600 rounded"
                 />
                 <span className="text-xs text-slate-700">
-                  <strong>साइनबोर्ड लगाने की अनुमति:</strong> किरायेदार दुकान या ऑफिस के बाहर अपनी फर्म का नाम व जीएसटी नंबर का बोर्ड लगा सकता है।
+                  <strong>Signboard Display Permission:</strong> The tenant may install their business name and GST number signboard outside the shop or office.
                 </span>
               </label>
 
@@ -1782,7 +1953,7 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
                   className="mt-0.5 w-4 h-4 text-blue-600 rounded"
                 />
                 <span className="text-xs text-slate-700">
-                  <strong>बिल व खाता-बही रखने की अनुमति:</strong> फर्म के टैक्स इनवॉइस व खाते इस पते पर रखे जा सकते हैं।
+                  <strong>Books &amp; Invoices Permission:</strong> The business's tax invoices, ledgers, and accounting records may be maintained at this address.
                 </span>
               </label>
 
@@ -1794,9 +1965,41 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
                   className="mt-0.5 w-4 h-4 text-blue-600 rounded"
                 />
                 <span className="text-xs text-slate-700">
-                  <strong>स्ट्रक्चरल सीमाएं:</strong> अस्थायी केबिन या फॉल्स सीलिंग का काम किया जा सकता है, मुख्य बीम या दीवार को नुकसान नहीं पहुँचाया जाएगा।
+                  <strong>Structural Limits:</strong> Temporary partitions or false ceiling work may be carried out without damaging any main structural beams or load-bearing walls.
                 </span>
               </label>
+            </div>
+
+            {/* NOC Duration */}
+            <div className="pt-3 border-t border-slate-200 space-y-2.5">
+              <label className="block text-xs font-bold text-slate-800">
+                NOC Validity / Duration <span className="text-red-500 font-bold">*</span>
+              </label>
+              <select
+                value={nocDuration}
+                onChange={(e) => setNocDuration(e.target.value)}
+                className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+              >
+                <option value="1 Month">1 Month</option>
+                <option value="2 Months">2 Months</option>
+                <option value="3 Months">3 Months</option>
+                <option value="6 Months">6 Months</option>
+                <option value="1 Year">1 Year</option>
+                <option value="2 Years">2 Years</option>
+                <option value="3 Years">3 Years</option>
+                <option value="Until Lease Validity">Until Lease Validity</option>
+                <option value="Custom">Custom Duration</option>
+              </select>
+
+              {nocDuration === 'Custom' && (
+                <input
+                  type="text"
+                  value={customNocDuration}
+                  onChange={(e) => setCustomNocDuration(e.target.value)}
+                  placeholder={showExample ? "e.g. 18 Months or Until GST Surrender" : ""}
+                  className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                />
+              )}
             </div>
 
             {/* Commercial Utilities & Indemnity */}
@@ -1815,8 +2018,8 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
                     onChange={(e) => setSublettingPermission(e.target.value as any)}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900"
                   >
-                    <option value="Strictly Prohibited">Strictly Prohibited</option>
-                    <option value="Allowed">Allowed (Authorizes co-working / desk licensing)</option>
+                    <option value="Not Allowed">Not Allowed</option>
+                    <option value="Allowed">Allowed</option>
                   </select>
                 </div>
 
@@ -1836,17 +2039,16 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
                 </div>
               </div>
 
-              <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl">
-                <label className="flex items-start gap-2.5 cursor-pointer select-none">
+              <div className="p-3.5 bg-slate-50 border border-slate-300 rounded-xl">
+                <label className="flex items-start gap-2.5 select-none">
                   <input
                     type="checkbox"
-                    required
-                    checked={landlordIndemnityAccepted}
-                    onChange={(e) => setLandlordIndemnityAccepted(e.target.checked)}
-                    className="mt-0.5 w-4 h-4 text-rose-600 rounded"
+                    checked={true}
+                    readOnly
+                    className="mt-0.5 w-4 h-4 text-blue-600 rounded cursor-default"
                   />
-                  <span className="text-xs text-rose-900 leading-relaxed">
-                    <strong>Landlord Indemnity:</strong> किरायेदार अपने व्यापार, टैक्स व देनदारियों के लिए स्वयं पूर्ण रूप से जिम्मेदार होगा। मकान मालिक की संपत्ति पर किसी भी प्रकार की टैक्स देनदारी या जब्ती लागू नहीं होगी।
+                  <span className="text-xs text-slate-800 leading-relaxed">
+                    <strong>Landlord Indemnity:</strong> The tenant shall remain solely responsible for all business operations, statutory taxes, GST filings, and commercial liabilities. No tax liability or attachment shall apply to the landlord's property.
                   </span>
                 </label>
               </div>
@@ -1909,158 +2111,43 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
         {/* ================= PAGE 5: WITNESSES & DELIVERY (NO NOTARY) ================= */}
         {currentPage === '5' && (
           <form onSubmit={handleSubmit} className="space-y-6 animate-fadeIn">
-            {/* Legal Witnesses (Mandatory) */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
-                    Witness Details (Both Witnesses Mandatory) <span className="text-red-500">*</span>
-                  </span>
-                  <span className="text-[11px] text-slate-500">
-                    Witness 1 &amp; Witness 2 full details with 12-digit Aadhaar and 10-digit Mobile are mandatory.
-                  </span>
-                </div>
-              </div>
+            {/* Standardized Witness Cards */}
+            <div className="space-y-4">
+              <WitnessDetailsCard
+                witnessNumber={1}
+                name={witness1Name}
+                onNameChange={setWitness1Name}
+                fatherName={witness1FatherName}
+                onFatherNameChange={setWitness1FatherName}
+                profession={witness1Profession}
+                onProfessionChange={setWitness1Profession}
+                ageOrDob={witness1Age}
+                onAgeOrDobChange={setWitness1Age}
+                mobile={witness1Mobile}
+                onMobileChange={setWitness1Mobile}
+                aadhaar={witness1Id}
+                onAadhaarChange={setWitness1Id}
+                address={witness1Address}
+                onAddressChange={setWitness1Address}
+              />
 
-              {/* Witness 1 */}
-              <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
-                <span className="text-xs font-bold text-slate-800 block">Witness 1 Details <span className="text-red-500">*</span></span>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
-                      Full Legal Name <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={witness1Name}
-                      onChange={(e) => setWitness1Name(e.target.value)}
-                      placeholder={showExample ? "Full Legal Name" : ""}
-                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
-                      Profession / Job Title <span className="text-slate-400 font-normal">(Optional)</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={witness1Profession}
-                      onChange={(e) => setWitness1Profession(e.target.value)}
-                      placeholder={showExample ? "Profession / Job Title" : ""}
-                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
-                    Complete Residential Address <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={witness1Address}
-                    onChange={(e) => setWitness1Address(e.target.value)}
-                    placeholder={showExample ? "Complete Residential Address" : ""}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
-                  />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
-                      Mobile Number (10 Digits) <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="tel"
-                      inputMode="numeric"
-                      required
-                      maxLength={10}
-                      value={witness1Mobile}
-                      onChange={(e) => setWitness1Mobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                      placeholder={showExample ? "9876543210" : ""}
-                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
-                    />
-                  </div>
-                  <div>
-                    <AadhaarInput
-                      label="Aadhaar Number (12 Digits)"
-                      value={witness1Id}
-                      onChange={(val) => setWitness1Id(val)}
-                      required
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Witness 2 */}
-              <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
-                <span className="text-xs font-bold text-slate-800 block">Witness 2 Details <span className="text-red-500">*</span></span>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
-                      Full Legal Name <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={witness2Name}
-                      onChange={(e) => setWitness2Name(e.target.value)}
-                      placeholder={showExample ? "Full Legal Name" : ""}
-                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
-                      Profession / Job Title <span className="text-slate-400 font-normal">(Optional)</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={witness2Profession}
-                      onChange={(e) => setWitness2Profession(e.target.value)}
-                      placeholder={showExample ? "Profession / Job Title" : ""}
-                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
-                    Complete Residential Address <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={witness2Address}
-                    onChange={(e) => setWitness2Address(e.target.value)}
-                    placeholder={showExample ? "Complete Residential Address" : ""}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
-                  />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
-                      Mobile Number (10 Digits) <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="tel"
-                      inputMode="numeric"
-                      required
-                      maxLength={10}
-                      value={witness2Mobile}
-                      onChange={(e) => setWitness2Mobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                      placeholder={showExample ? "9876543210" : ""}
-                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
-                    />
-                  </div>
-                  <div>
-                    <AadhaarInput
-                      label="Aadhaar Number (12 Digits)"
-                      value={witness2Id}
-                      onChange={(val) => setWitness2Id(val)}
-                      required
-                    />
-                  </div>
-                </div>
-              </div>
+              <WitnessDetailsCard
+                witnessNumber={2}
+                name={witness2Name}
+                onNameChange={setWitness2Name}
+                fatherName={witness2FatherName}
+                onFatherNameChange={setWitness2FatherName}
+                profession={witness2Profession}
+                onProfessionChange={setWitness2Profession}
+                ageOrDob={witness2Age}
+                onAgeOrDobChange={setWitness2Age}
+                mobile={witness2Mobile}
+                onMobileChange={setWitness2Mobile}
+                aadhaar={witness2Id}
+                onAadhaarChange={setWitness2Id}
+                address={witness2Address}
+                onAddressChange={setWitness2Address}
+              />
             </div>
 
             {/* Delivery & Execution Mode */}
@@ -2136,49 +2223,34 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
                   <div className="text-xs text-amber-900">
                     <strong>Physical Shipping Details:</strong> Speed Post dispatch in 2 business days.
                   </div>
+                  <AddressFieldGroup
+                    label="Shipping Postal Address"
+                    variant="standard"
+                    defaultState={selectedState || 'Uttar Pradesh'}
+                    value={shippingAddress}
+                    onChangeAddress={(fullAddr, details) => {
+                      setShippingAddress(fullAddr);
+                      if (details?.pincode !== undefined) {
+                        setShippingPincode(details.pincode);
+                      }
+                    }}
+                    required
+                    className="bg-white"
+                  />
                   <div>
                     <label className="block text-[11px] font-bold text-amber-900 mb-0.5">
-                      Shipping Postal Address <span className="text-red-500">*</span>
+                      Contact Phone Number <span className="text-red-500">*</span>
                     </label>
                     <input
-                      type="text"
+                      type="tel"
+                      inputMode="numeric"
+                      maxLength={10}
                       required
-                      value={shippingAddress}
-                      onChange={(e) => setShippingAddress(e.target.value)}
-                      placeholder={showExample ? "Shipping Postal Address *" : ""}
+                      value={shippingPhone}
+                      onChange={(e) => setShippingPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                      placeholder={showExample ? "9876543210" : ""}
                       className="w-full bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
                     />
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-[11px] font-bold text-amber-900 mb-0.5">
-                        6-Digit PIN Code <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        maxLength={6}
-                        required
-                        value={shippingPincode}
-                        onChange={(e) => setShippingPincode(e.target.value.replace(/\D/g, ''))}
-                        placeholder={showExample ? "6-Digit PIN Code *" : ""}
-                        className="w-full bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-xs font-mono text-slate-900"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold text-amber-900 mb-0.5">
-                        Contact Phone Number <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="tel"
-                        inputMode="numeric"
-                        maxLength={10}
-                        required
-                        value={shippingPhone}
-                        onChange={(e) => setShippingPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                        placeholder={showExample ? "9876543210" : ""}
-                        className="w-full bg-white border border-amber-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
-                      />
-                    </div>
                   </div>
                 </div>
               )}
@@ -2262,7 +2334,7 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
               className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-100 font-bold text-xs cursor-pointer transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
-              <span>{currentPage === '1' ? 'Cancel' : 'Previous Page'}</span>
+              <span>{currentPage === '1' ? 'Cancel' : 'Previous'}</span>
             </button>
 
             <button
@@ -2282,6 +2354,8 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
           </div>
         )}
       </div>
+      )}
+      </HorizontalSwipeContainer>
     </div>
   );
 };
