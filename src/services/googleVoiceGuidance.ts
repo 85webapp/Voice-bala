@@ -519,12 +519,193 @@ let currentAudioBufferSource: AudioBufferSourceNode | null = null;
 let isAudioElementUnlocked = false;
 let isWebAudioBufferPrimed = false;
 let currentBlobUrl: string | null = null;
-let currentFetchAbortController: AbortController | null = null;
 let currentPlayingServiceKey: string | null = null;
 let currentUtterance: SpeechSynthesisUtterance | null = null;
 let speechHeartbeatTimer: any = null;
 let ttsBackendStatus: 'unknown' | 'available' | 'unavailable' = 'unknown';
 let ttsProbeStarted = false;
+
+// In-memory client audio cache + in-flight dedup map so prefetched / hovered items speak instantaneously (< 5ms)
+const chunkAudioCache = new Map<string, ArrayBuffer>();
+const inFlightChunkFetches = new Map<string, Promise<ArrayBuffer | null>>();
+const MAX_CLIENT_AUDIO_CACHE = 200;
+
+function getChunkCacheKey(lang: VoiceLanguageCode, chunk: string): string {
+  return `${lang}:${chunk}`;
+}
+
+function storeChunkInCache(key: string, buffer: ArrayBuffer) {
+  if (chunkAudioCache.size >= MAX_CLIENT_AUDIO_CACHE) {
+    const oldestKey = chunkAudioCache.keys().next().value;
+    if (oldestKey) chunkAudioCache.delete(oldestKey);
+  }
+  chunkAudioCache.set(key, buffer);
+}
+
+function splitClientSpeechChunks(text: string, maxLength = 185): string[] {
+  if (text.length <= maxLength) return [text];
+  const sentences = text.split(/(?<=[।!?.\n])\s+/);
+  const chunks: string[] = [];
+  let cur = '';
+  for (const s of sentences) {
+    const trimmed = s.trim();
+    if (!trimmed) continue;
+    if ((cur + ' ' + trimmed).trim().length <= maxLength) {
+      cur = cur ? `${cur} ${trimmed}` : trimmed;
+    } else {
+      if (cur.trim()) chunks.push(cur.trim());
+      if (trimmed.length > maxLength) {
+        const subParts = trimmed.split(/(?<=[,;])\s+/);
+        let subCur = '';
+        for (const p of subParts) {
+          if ((subCur + ' ' + p).trim().length <= maxLength) {
+            subCur = subCur ? `${subCur} ${p}` : p;
+          } else {
+            if (subCur.trim()) chunks.push(subCur.trim());
+            subCur = p;
+          }
+        }
+        cur = subCur;
+      } else {
+        cur = trimmed;
+      }
+    }
+  }
+  if (cur.trim()) chunks.push(cur.trim());
+  return chunks.length > 0 ? chunks : [text];
+}
+
+function getResolvedVoicePayload(serviceKey: string): {
+  canonicalKey: string;
+  userLang: VoiceLanguageCode;
+  textToSpeak: string;
+  chunks: string[];
+} | null {
+  const canonicalKey = resolveServiceKey(serviceKey);
+  if (!canonicalKey || typeof window === 'undefined') return null;
+
+  const userLang = (localStorage.getItem('userAudioLanguage') || localStorage.getItem('ctc_audio_language_v2') || 'hi') as VoiceLanguageCode;
+  const serviceData = allServiceVoiceTexts[canonicalKey];
+  if (!serviceData) return null;
+
+  const rawText = serviceData[userLang] || serviceData['hi'] || '';
+  if (!rawText) return null;
+
+  const textToSpeak = rawText
+    .replace(/['"“”‘’]/g, '')
+    .replace(/सबमिट/g, 'सब्मिट')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!textToSpeak) return null;
+
+  return {
+    canonicalKey,
+    userLang,
+    textToSpeak,
+    chunks: splitClientSpeechChunks(textToSpeak, 185)
+  };
+}
+
+function fetchSingleTtsChunk(chunkText: string, userLang: VoiceLanguageCode): Promise<ArrayBuffer | null> {
+  const cacheKey = getChunkCacheKey(userLang, chunkText);
+  const cached = chunkAudioCache.get(cacheKey);
+  if (cached) {
+    return Promise.resolve(cached);
+  }
+  if (ttsBackendStatus === 'unavailable') {
+    return Promise.resolve(null);
+  }
+  const existing = inFlightChunkFetches.get(cacheKey);
+  if (existing) {
+    return existing;
+  }
+
+  const reqPromise = fetch('/api/tts-audio', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tl: userLang, q: chunkText })
+  })
+    .then(async (res) => {
+      const contentType = (res.headers.get('content-type') || '').toLowerCase();
+      if (!res.ok || !contentType.includes('audio')) {
+        if (res.status === 404 || res.status === 405) {
+          ttsBackendStatus = 'unavailable';
+        }
+        return null;
+      }
+      ttsBackendStatus = 'available';
+      const ab = await res.arrayBuffer();
+      if (!ab || ab.byteLength === 0) return null;
+      storeChunkInCache(cacheKey, ab);
+      return ab;
+    })
+    .catch(() => null)
+    .finally(() => {
+      inFlightChunkFetches.delete(cacheKey);
+    });
+
+  inFlightChunkFetches.set(cacheKey, reqPromise);
+  return reqPromise;
+}
+
+/**
+ * Quietly pre-warms the opening sentence (or full script on hover/pointerdown) into memory
+ * so clicking starts speaking instantaneously.
+ */
+export function prefetchServiceVoice(serviceKey: string, includeAllChunks = false): void {
+  if (typeof window === 'undefined' || ttsBackendStatus === 'unavailable') return;
+  const resolved = getResolvedVoicePayload(serviceKey);
+  if (!resolved) return;
+
+  const targets = includeAllChunks ? resolved.chunks : [resolved.chunks[0]];
+  for (const chunk of targets) {
+    const key = getChunkCacheKey(resolved.userLang, chunk);
+    if (!chunkAudioCache.has(key) && !inFlightChunkFetches.has(key)) {
+      void fetchSingleTtsChunk(chunk, resolved.userLang);
+    }
+  }
+}
+
+const queuedPrefetchKeys: string[] = [];
+const queuedPrefetchSet = new Set<string>();
+let activePrefetchWorkers = 0;
+
+function runPrefetchQueue() {
+  if (ttsBackendStatus === 'unavailable') {
+    queuedPrefetchKeys.length = 0;
+    queuedPrefetchSet.clear();
+    return;
+  }
+  while (activePrefetchWorkers < 3 && queuedPrefetchKeys.length > 0) {
+    const nextKey = queuedPrefetchKeys.shift()!;
+    queuedPrefetchSet.delete(nextKey);
+    const resolved = getResolvedVoicePayload(nextKey);
+    if (!resolved) continue;
+    const firstChunk = resolved.chunks[0];
+    const cacheKey = getChunkCacheKey(resolved.userLang, firstChunk);
+    if (chunkAudioCache.has(cacheKey)) continue;
+
+    activePrefetchWorkers++;
+    void fetchSingleTtsChunk(firstChunk, resolved.userLang).finally(() => {
+      activePrefetchWorkers--;
+      runPrefetchQueue();
+    });
+  }
+}
+
+export function prefetchBatchVoices(serviceKeys: string[]): void {
+  if (typeof window === 'undefined' || ttsBackendStatus === 'unavailable') return;
+  for (const key of serviceKeys) {
+    if (!key || queuedPrefetchSet.has(key)) continue;
+    const resolved = getResolvedVoicePayload(key);
+    if (!resolved) continue;
+    const cacheKey = getChunkCacheKey(resolved.userLang, resolved.chunks[0]);
+    if (chunkAudioCache.has(cacheKey) || inFlightChunkFetches.has(cacheKey)) continue;
+    queuedPrefetchSet.add(key);
+    queuedPrefetchKeys.push(key);
+  }
+  runPrefetchQueue();
+}
 
 type MicPermissionState = 'unknown' | 'prompt' | 'granted' | 'denied' | 'unsupported';
 let micPermissionStatus: MicPermissionState = 'unknown';
@@ -831,13 +1012,6 @@ function cleanupAudioElementHandlers(audio: HTMLAudioElement | null) {
 export function stopServiceVoice() {
   currentPlaySessionId++;
 
-  if (currentFetchAbortController) {
-    try {
-      currentFetchAbortController.abort();
-    } catch {}
-    currentFetchAbortController = null;
-  }
-
   if (speechHeartbeatTimer) {
     clearInterval(speechHeartbeatTimer);
     speechHeartbeatTimer = null;
@@ -881,12 +1055,13 @@ export function stopServiceVoice() {
   notifyListeners();
 }
 
-async function playBufferWithWebAudioFallback(
+async function playChunkWithWebAudioFallback(
   audioBuffer: ArrayBuffer,
   textToSpeak: string,
   userLang: VoiceLanguageCode,
   canonicalKey: string,
-  thisSession: number
+  thisSession: number,
+  onChunkComplete: () => void
 ) {
   if (thisSession !== currentPlaySessionId) return;
 
@@ -921,7 +1096,7 @@ async function playBufferWithWebAudioFallback(
         currentAudioBufferSource = null;
       }
       if (thisSession === currentPlaySessionId) {
-        stopServiceVoice();
+        onChunkComplete();
       }
     };
 
@@ -936,12 +1111,13 @@ async function playBufferWithWebAudioFallback(
   }
 }
 
-function playBufferWithHtmlAudioFirst(
+function playChunkWithHtmlAudioFirst(
   audioBuffer: ArrayBuffer,
   textToSpeak: string,
   userLang: VoiceLanguageCode,
   canonicalKey: string,
-  thisSession: number
+  thisSession: number,
+  onChunkComplete: () => void
 ) {
   if (thisSession !== currentPlaySessionId) return;
 
@@ -987,13 +1163,13 @@ function playBufferWithHtmlAudioFirst(
 
   audio.onended = () => {
     if (thisSession !== currentPlaySessionId) return;
-    stopServiceVoice();
+    onChunkComplete();
   };
 
   audio.onerror = () => {
     if (thisSession !== currentPlaySessionId) return;
     console.warn('[VoiceGuidance] HTML5 Blob audio failed, trying Web Audio API...');
-    void playBufferWithWebAudioFallback(audioBuffer, textToSpeak, userLang, canonicalKey, thisSession);
+    void playChunkWithWebAudioFallback(audioBuffer, textToSpeak, userLang, canonicalKey, thisSession, onChunkComplete);
   };
 
   const playPromise = audio.play();
@@ -1012,44 +1188,85 @@ function playBufferWithHtmlAudioFirst(
       .catch((playErr) => {
         if (thisSession !== currentPlaySessionId) return;
         console.warn('[VoiceGuidance] HTMLAudio play interrupted/blocked, trying Web Audio API:', playErr);
-        void playBufferWithWebAudioFallback(audioBuffer, textToSpeak, userLang, canonicalKey, thisSession);
+        void playChunkWithWebAudioFallback(audioBuffer, textToSpeak, userLang, canonicalKey, thisSession, onChunkComplete);
       });
   }
 }
 
+function playChunkSequence(
+  chunks: string[],
+  chunkPromises: Promise<ArrayBuffer | null>[],
+  index: number,
+  userLang: VoiceLanguageCode,
+  textToSpeak: string,
+  canonicalKey: string,
+  thisSession: number,
+  preloadedBuffer?: ArrayBuffer
+) {
+  if (thisSession !== currentPlaySessionId) return;
+  if (index >= chunks.length) {
+    stopServiceVoice();
+    return;
+  }
+
+  const advanceNext = () => {
+    if (thisSession !== currentPlaySessionId) return;
+    const nextIdx = index + 1;
+    if (nextIdx >= chunks.length) {
+      stopServiceVoice();
+      return;
+    }
+    const nextCached = chunkAudioCache.get(getChunkCacheKey(userLang, chunks[nextIdx]));
+    if (nextCached) {
+      playChunkSequence(chunks, chunkPromises, nextIdx, userLang, textToSpeak, canonicalKey, thisSession, nextCached);
+    } else {
+      void chunkPromises[nextIdx].then((nextBuf) => {
+        if (thisSession !== currentPlaySessionId) return;
+        if (!nextBuf) {
+          stopServiceVoice();
+          return;
+        }
+        playChunkSequence(chunks, chunkPromises, nextIdx, userLang, textToSpeak, canonicalKey, thisSession, nextBuf);
+      });
+    }
+  };
+
+  if (preloadedBuffer) {
+    playChunkWithHtmlAudioFirst(preloadedBuffer, textToSpeak, userLang, canonicalKey, thisSession, advanceNext);
+    return;
+  }
+
+  void chunkPromises[index].then((buf) => {
+    if (thisSession !== currentPlaySessionId) return;
+    if (!buf) {
+      if (index === 0) {
+        fallbackToSpeechSynthesis(textToSpeak, userLang, canonicalKey, thisSession);
+      } else {
+        stopServiceVoice();
+      }
+      return;
+    }
+    playChunkWithHtmlAudioFirst(buf, textToSpeak, userLang, canonicalKey, thisSession, advanceNext);
+  });
+}
+
 /**
- * Plays the voice guidance for the requested service.
+ * Plays the voice guidance for the requested service immediately:
  * 1. Synchronously unlocks Web Audio API Context + HTMLAudioElement in the click gesture.
- * 2. If TTS backend was probed unavailable, runs SpeechSynthesis synchronously to preserve user activation.
- * 3. Fetches MP3 audio via POST /api/tts-audio -> plays via HTMLAudioElement (1.3x preservesPitch),
- *    falling back cleanly to Web Audio API AudioContext, then Web SpeechSynthesis.
+ * 2. Fires parallel chunk fetches for all sentence segments, or plays instantaneously (0ms)
+ *    from chunkAudioCache if already prefetched / hovered.
+ * 3. Plays Sentence 1 the instant it is ready while Sentences 2..N finish downloading in parallel.
  */
 export function playServiceVoice(serviceKey: string) {
   stopServiceVoice();
 
-  const canonicalKey = resolveServiceKey(serviceKey);
-  if (!canonicalKey) {
+  const resolved = getResolvedVoicePayload(serviceKey);
+  if (!resolved) {
     return;
   }
 
+  const { canonicalKey, userLang, textToSpeak, chunks } = resolved;
   const thisSession = ++currentPlaySessionId;
-  const userLang = (localStorage.getItem('userAudioLanguage') || localStorage.getItem('ctc_audio_language_v2') || 'hi') as VoiceLanguageCode;
-  const serviceData = allServiceVoiceTexts[canonicalKey];
-  if (!serviceData) {
-    return;
-  }
-  const rawText = serviceData[userLang] || serviceData['hi'] || '';
-  if (!rawText) {
-    return;
-  }
-
-  const textToSpeak = rawText
-    .replace(/['"“”‘’]/g, '')
-    .replace(/सबमिट/g, 'सब्मिट')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  if (typeof window === 'undefined') return;
 
   // Synchronously mark active & unlock browser audio inside the click gesture
   currentPlayingServiceKey = canonicalKey;
@@ -1062,40 +1279,11 @@ export function playServiceVoice(serviceKey: string) {
     return;
   }
 
-  const abortController = new AbortController();
-  currentFetchAbortController = abortController;
+  // Launch parallel fetches for ALL sentence chunks immediately (deduped against any prefetch)
+  const chunkPromises = chunks.map((chunk) => fetchSingleTtsChunk(chunk, userLang));
+  const cachedFirst = chunkAudioCache.get(getChunkCacheKey(userLang, chunks[0]));
 
-  fetch('/api/tts-audio', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ tl: userLang, q: textToSpeak }),
-    signal: abortController.signal
-  })
-    .then(async (res) => {
-      if (thisSession !== currentPlaySessionId) return;
-      const contentType = (res.headers.get('content-type') || '').toLowerCase();
-      if (!res.ok || !contentType.includes('audio')) {
-        if (res.status === 404 || res.status === 405) {
-          ttsBackendStatus = 'unavailable';
-        }
-        throw new Error(`TTS proxy unavailable (${res.status} ${contentType})`);
-      }
-      ttsBackendStatus = 'available';
-      const arrayBuffer = await res.arrayBuffer();
-      if (thisSession !== currentPlaySessionId) return;
-      if (!arrayBuffer || arrayBuffer.byteLength === 0) {
-        throw new Error('Empty TTS audio buffer');
-      }
-
-      playBufferWithHtmlAudioFirst(arrayBuffer, textToSpeak, userLang, canonicalKey, thisSession);
-    })
-    .catch((err) => {
-      if (err?.name === 'AbortError' || thisSession !== currentPlaySessionId) {
-        return;
-      }
-      console.warn('[VoiceGuidance] POST /api/tts-audio failed, falling back to SpeechSynthesis:', err);
-      fallbackToSpeechSynthesis(textToSpeak, userLang, canonicalKey, thisSession);
-    });
+  playChunkSequence(chunks, chunkPromises, 0, userLang, textToSpeak, canonicalKey, thisSession, cachedFirst);
 }
 
 function splitSpeechChunks(text: string, maxLength = 160): string[] {

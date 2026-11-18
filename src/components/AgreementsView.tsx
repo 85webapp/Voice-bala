@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { ChevronDown, ChevronRight, FileText, Search, Mic, MicOff, X } from 'lucide-react';
 import { MASTER_CATEGORIES, INITIAL_FRONT_DOCUMENTS } from '../data/documentsData';
 import { LegalDocument } from '../types';
+import { prefetchBatchVoices, prefetchServiceVoice } from '../services/googleVoiceGuidance';
 
 interface AgreementsViewProps {
   onSelectDocument: (doc: LegalDocument) => void;
@@ -15,10 +16,19 @@ export const AgreementsView: React.FC<AgreementsViewProps> = ({ onSelectDocument
   const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({});
 
   const toggleCategory = (catId: string) => {
-    setOpenCategories((prev) => ({
-      ...prev,
-      [catId]: !prev[catId]
-    }));
+    setOpenCategories((prev) => {
+      const nextOpen = !prev[catId];
+      if (nextOpen) {
+        const cat = MASTER_CATEGORIES.find((c) => c.id === catId);
+        if (cat) {
+          prefetchBatchVoices(cat.items);
+        }
+      }
+      return {
+        ...prev,
+        [catId]: nextOpen
+      };
+    });
   };
 
   const handleVoiceSearch = () => {
@@ -179,6 +189,8 @@ export const AgreementsView: React.FC<AgreementsViewProps> = ({ onSelectDocument
                   {cat.items.map((item, idx) => (
                     <div
                       key={idx}
+                      onMouseEnter={() => prefetchServiceVoice(item)}
+                      onPointerDown={() => prefetchServiceVoice(item, true)}
                       onClick={() => handleItemClick(item, cat.name)}
                       role="button"
                       tabIndex={0}

@@ -24,7 +24,7 @@ import { SERVICE_CATEGORIES, ServiceCategory } from './data/servicesData';
 import { POLICIES_DATA } from './data/policiesData';
 import { LegalDocument, OrderItem, PolicySection, UserProfile } from './types';
 import { useDisplayLanguage } from './hooks/useDisplayLanguage';
-import { playServiceVoice, initVoiceAndMicPermissions } from './services/googleVoiceGuidance';
+import { playServiceVoice, initVoiceAndMicPermissions, prefetchServiceVoice, prefetchBatchVoices } from './services/googleVoiceGuidance';
 import { CategoryBanner } from './components/CategoryBanner';
 import { ToastContainer } from './components/ToastContainer';
 
@@ -182,6 +182,21 @@ export default function App() {
         d.description.toLowerCase().includes(q)
     );
   }, [searchQuery]);
+
+  // Pre-warm opening voice audio for visible items so clicks speak instantaneously
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (homeCategory === 'agreements') {
+        prefetchBatchVoices(filteredHomeDocs.slice(0, 11).map((d) => d.title));
+      } else if (homeCategory === 'support') {
+        prefetchServiceVoice('Call Support', true);
+      } else {
+        const cat = SERVICE_CATEGORIES.find((c) => c.id === homeCategory);
+        if (cat) prefetchBatchVoices(cat.services);
+      }
+    }, 150);
+    return () => window.clearTimeout(timer);
+  }, [homeCategory, filteredHomeDocs]);
 
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-900 flex flex-col font-['Plus_Jakarta_Sans',sans-serif] selection:bg-blue-600 selection:text-white pb-16">
@@ -383,6 +398,8 @@ export default function App() {
                 <div className="space-y-3 mb-8">
                   {/* 1. Contact Support Row -> Opens Dedicated Support Full Page */}
                   <div
+                    onMouseEnter={() => prefetchServiceVoice('Call Support')}
+                    onPointerDown={() => prefetchServiceVoice('Call Support', true)}
                     onClick={() => {
                       playServiceVoice('Call Support');
                       setIsSupportPageOpen(true);
@@ -511,6 +528,8 @@ export default function App() {
                           return (
                             <div
                               key={serviceName}
+                              onMouseEnter={() => prefetchServiceVoice(serviceName)}
+                              onPointerDown={() => prefetchServiceVoice(serviceName, true)}
                               onClick={() => {
                                 playServiceVoice(serviceName);
                                 setActiveService({ category: currentCat, title: serviceName });

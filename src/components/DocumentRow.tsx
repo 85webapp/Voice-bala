@@ -17,6 +17,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { LegalDocument } from '../types';
+import { prefetchServiceVoice } from '../services/googleVoiceGuidance';
 
 interface DocumentRowProps {
   document: LegalDocument;
@@ -72,6 +73,8 @@ export const DocumentRow: React.FC<DocumentRowProps> = ({ document, onClick }) =
 
   return (
     <div
+      onMouseEnter={() => prefetchServiceVoice(document.title)}
+      onPointerDown={() => prefetchServiceVoice(document.title, true)}
       onClick={() => onClick(document)}
       role="button"
       tabIndex={0}

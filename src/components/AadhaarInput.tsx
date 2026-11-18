@@ -43,6 +43,15 @@ export const AadhaarInput: React.FC<AadhaarInputProps> = ({
     onChange(inputDigits);
   };
 
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const pastedText = e.clipboardData.getData('text');
+    if (pastedText) {
+      e.preventDefault();
+      const inputDigits = pastedText.replace(/\D/g, '').slice(0, 12);
+      onChange(inputDigits);
+    }
+  };
+
   const displayValue = formatDisplay(rawDigits);
 
   return (
@@ -58,12 +67,14 @@ export const AadhaarInput: React.FC<AadhaarInputProps> = ({
           id={id}
           type="text"
           inputMode="numeric"
-          pattern="[0-9]*"
-          maxLength={19} // 12 digits + two ' - ' separators = 18 chars
+          pattern="[0-9]{4} - [0-9]{4} - [0-9]{4}"
+          title="Please enter a complete 12-digit Aadhaar number (e.g. 1234 - 5678 - 9012)"
+          maxLength={20}
           autoComplete="off"
           required={required}
           value={displayValue}
           onChange={handleChange}
+          onPaste={handlePaste}
           placeholder={placeholder}
           className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2 text-xs sm:text-sm font-mono tracking-wider text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 transition-all shadow-2xs"
         />
