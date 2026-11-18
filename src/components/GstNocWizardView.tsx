@@ -771,11 +771,13 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
           </span>
         </div>
 
-        <FormRequestTabBar
-          activeTab={activeTab}
-          onChangeTab={setActiveTab}
-          className="mt-4"
-        />
+        {(currentPage === '1' || activeTab === 'request') && (
+          <FormRequestTabBar
+            activeTab={activeTab}
+            onChangeTab={setActiveTab}
+            className="mt-4"
+          />
+        )}
       </div>
 
       <HorizontalSwipeContainer activeTab={activeTab} onChangeTab={setActiveTab}>

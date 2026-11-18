@@ -464,8 +464,10 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
         <h1 className="text-2xl font-black text-black">MSME Udyam Registration</h1>
       </div>
 
-      {/* Swipeable / Clickable Mode Switcher */}
-      <FormRequestTabBar activeTab={activeTab} onChangeTab={setActiveTab} className="mb-6" />
+      {/* Mode Switcher (Page 1 only) */}
+      {(currentStep === 1 || activeTab === 'request') && (
+        <FormRequestTabBar activeTab={activeTab} onChangeTab={setActiveTab} className="mb-6" />
+      )}
 
       <HorizontalSwipeContainer activeTab={activeTab} onChangeTab={setActiveTab}>
       {/* TAB 2: Upgraded Quick Callback Request */}

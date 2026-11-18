@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React from 'react';
 import { FileText, PhoneCall, ArrowLeftRight } from 'lucide-react';
 
 export type WizardModeTab = 'form' | 'request';
@@ -57,7 +57,7 @@ export const FormRequestTabBar: React.FC<FormRequestTabBarProps> = ({
       </div>
       <div className="mt-1.5 flex items-center justify-center gap-1.5 text-[11px] font-medium text-slate-500">
         <ArrowLeftRight className="w-3 h-3 text-slate-400" />
-        <span>Swipe left/right or tap a tab to switch between Form &amp; 1-Hour Callback Request</span>
+        <span>Tap a tab above to switch between Form &amp; 1-Hour Callback Request</span>
       </div>
     </div>
   );
@@ -71,44 +71,9 @@ interface HorizontalSwipeContainerProps {
 }
 
 export const HorizontalSwipeContainer: React.FC<HorizontalSwipeContainerProps> = ({
-  activeTab,
-  onChangeTab,
   children,
   className = ''
 }) => {
-  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    if (e.touches.length !== 1) return;
-    touchStartRef.current = {
-      x: e.touches[0].clientX,
-      y: e.touches[0].clientY
-    };
-  };
-
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    if (!touchStartRef.current || e.changedTouches.length !== 1) return;
-    const dx = e.changedTouches[0].clientX - touchStartRef.current.x;
-    const dy = e.changedTouches[0].clientY - touchStartRef.current.y;
-    touchStartRef.current = null;
-
-    // Require clear horizontal swipe (|dx| >= 56px) greater than vertical movement
-    if (Math.abs(dx) >= 56 && Math.abs(dx) > Math.abs(dy) * 1.4) {
-      if (dx < 0 && activeTab === 'form') {
-        onChangeTab('request');
-      } else if (dx > 0 && activeTab === 'request') {
-        onChangeTab('form');
-      }
-    }
-  };
-
-  return (
-    <div
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
-      className={className}
-    >
-      {children}
-    </div>
-  );
+  // Click/tap-only switching prevents accidental tab changes while scrolling or filling fields on touch devices
+  return <div className={className}>{children}</div>;
 };
