@@ -29,6 +29,7 @@ import {
 } from '../services/encryptionService';
 import { playServiceVoice } from '../services/googleVoiceGuidance';
 import { ServerBSyncStatusCard } from './ServerBSyncStatusCard';
+import { WhiteSelect } from './WhiteSelect';
 
 export const ALL_INDIAN_STATES_UTS: string[] = [
   'Uttar Pradesh',
@@ -634,17 +635,12 @@ export const QuickCallbackRequestPanel: React.FC<QuickCallbackRequestPanelProps>
             {mode === 'registration' ? 'Selected Registration / Service' : 'Selected Agreement / Affidavit'}
             <span className="text-rose-600">*</span>
           </label>
-          <select
+          <WhiteSelect
             value={selectedItem}
-            onChange={(e) => handleSelectedItemChange(e.target.value)}
-            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-slate-50 text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:bg-white"
-          >
-            {selectableItems.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </select>
+            onChange={(val) => handleSelectedItemChange(val)}
+            options={selectableItems}
+            aria-label={mode === 'registration' ? 'Selected Registration / Service' : 'Selected Agreement / Affidavit'}
+          />
         </div>
 
         {/* Name, Mobile, Email */}
@@ -731,17 +727,12 @@ export const QuickCallbackRequestPanel: React.FC<QuickCallbackRequestPanelProps>
               <label className="block text-xs font-bold text-slate-700 mb-1.5">
                 State / Union Territory <span className="text-slate-500 font-medium">(Default: Uttar Pradesh)</span>
               </label>
-              <select
+              <WhiteSelect
                 value={stateName}
-                onChange={(e) => handleStateSelectChange(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-600"
-              >
-                {ALL_INDIAN_STATES_UTS.map((st) => (
-                  <option key={st} value={st}>
-                    {st}
-                  </option>
-                ))}
-              </select>
+                onChange={(val) => handleStateSelectChange(val)}
+                options={ALL_INDIAN_STATES_UTS}
+                aria-label="State / Union Territory"
+              />
               {stateName === 'Custom / Other State' && (
                 <input
                   type="text"

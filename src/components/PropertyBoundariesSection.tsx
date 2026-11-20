@@ -1,6 +1,8 @@
 import React from 'react';
 import { Compass } from 'lucide-react';
 import { useExampleDetails } from '../hooks/useExampleDetails';
+import { WhiteSelect } from './WhiteSelect';
+import { CircleIndicator } from './OptionControl';
 
 export type BoundaryPlaceType = 'Home' | 'Road' | 'Blank Plot' | 'Others';
 
@@ -138,13 +140,18 @@ export const PropertyBoundariesSection: React.FC<PropertyBoundariesSectionProps>
         </div>
 
         {showOptionalToggle && onToggleOptional && (
-          <label className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white border border-slate-300 text-xs font-semibold text-slate-700 cursor-pointer shrink-0 select-none hover:border-blue-400 transition-colors">
+          <label
+            className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 cursor-pointer shrink-0 select-none transition-colors ${
+              isOptional ? 'bg-blue-50/75 text-slate-900' : 'bg-white hover:bg-slate-50'
+            }`}
+          >
             <input
               type="checkbox"
               checked={isOptional}
               onChange={(e) => onToggleOptional(e.target.checked)}
-              className="w-3.5 h-3.5 text-blue-600 rounded border-slate-300"
+              className="sr-only"
             />
+            <CircleIndicator checked={isOptional} />
             <span>Change to Optional</span>
           </label>
         )}
@@ -162,17 +169,19 @@ export const PropertyBoundariesSection: React.FC<PropertyBoundariesSectionProps>
                 <label className="block text-[11px] font-bold text-slate-800 mb-1">
                   {label} Side {!isOptional && <span className="text-red-500">*</span>}
                 </label>
-                <select
+                <WhiteSelect
+                  variant="compact"
                   value={item.placeType}
-                  onChange={(e) => updateDirectionType(key, e.target.value as BoundaryPlaceType | '')}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                >
-                  <option value="">Select Boundary Type</option>
-                  <option value="Home">Home</option>
-                  <option value="Road">Road</option>
-                  <option value="Blank Plot">Blank Plot</option>
-                  <option value="Others">Others</option>
-                </select>
+                  onChange={(val) => updateDirectionType(key, val as BoundaryPlaceType | '')}
+                  placeholder="Select Boundary Type"
+                  options={[
+                    { value: 'Home', label: 'Home' },
+                    { value: 'Road', label: 'Road' },
+                    { value: 'Blank Plot', label: 'Blank Plot' },
+                    { value: 'Others', label: 'Others' }
+                  ]}
+                  aria-label={`${label} Side Boundary Type`}
+                />
               </div>
 
               {item.placeType === 'Road' && (

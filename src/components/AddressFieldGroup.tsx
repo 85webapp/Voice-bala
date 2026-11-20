@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { MapPin, Loader2 } from 'lucide-react';
 import { useExampleDetails } from '../hooks/useExampleDetails';
 import { lookupPincodeAsync, lookupPincodeSync } from '../utils/pincodeLookup';
+import { WhiteSelect } from './WhiteSelect';
 
 // 28 States of India (Uttar Pradesh first / default)
 export const INDIAN_28_STATES = [
@@ -206,26 +207,24 @@ export const AddressFieldGroup: React.FC<AddressFieldGroupProps> = ({
           <label className="block text-[11px] font-bold text-slate-700 mb-1">
             State / Union Territory {required && <span className="text-red-500">*</span>}
           </label>
-          <select
+          <WhiteSelect
+            variant="compact"
             value={state}
-            onChange={(e) => setState(e.target.value)}
-            className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-600"
-          >
-            <optgroup label="28 Indian States">
-              {INDIAN_28_STATES.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </optgroup>
-            <optgroup label="8 Union Territories">
-              {INDIAN_8_UTS.map((ut) => (
-                <option key={ut} value={ut}>
-                  {ut}
-                </option>
-              ))}
-            </optgroup>
-          </select>
+            onChange={(val) => setState(val)}
+            options={[
+              ...INDIAN_28_STATES.map((s) => ({
+                value: s,
+                label: s,
+                group: '28 Indian States'
+              })),
+              ...INDIAN_8_UTS.map((ut) => ({
+                value: ut,
+                label: ut,
+                group: '8 Union Territories'
+              }))
+            ]}
+            aria-label="State or Union Territory"
+          />
         </div>
 
         <div>

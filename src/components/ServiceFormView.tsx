@@ -28,8 +28,10 @@ import {
 import { ServerBSyncStatusCard } from './ServerBSyncStatusCard';
 import { showToast } from '../services/toastService';
 import { AddressFieldGroup } from './AddressFieldGroup';
+import { CircleIndicator, optionCardClass } from './OptionControl';
 import { FormRequestTabBar, HorizontalSwipeContainer, WizardModeTab } from './FormRequestTabBar';
 import { QuickCallbackRequestPanel } from './QuickCallbackRequestPanel';
+import { WhiteSelect } from './WhiteSelect';
 
 interface ServiceFormViewProps {
   category: ServiceCategory;
@@ -148,12 +150,17 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!name.trim()) {
       showToast('Please enter your full legal name.', 'warning');
       return;
     }
     if (phone.replace(/\D/g, '').length !== 10) {
       showToast('Please enter a valid 10-digit mobile number.', 'warning');
+      return;
+    }
+    if (!emailRegex.test(email.trim())) {
+      showToast('Please enter a valid Email Address.', 'warning');
       return;
     }
     if (isItrFiling && !taxAddress.trim()) {
@@ -197,7 +204,7 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
           fieldEntry('Selected Service', selectedTitle, false, category.services),
           fieldEntry('Applicant Full Name', name, false),
           fieldEntry('10-Digit Mobile Number', phone, false),
-          fieldEntry('Email Address', email, true)
+          fieldEntry('Email Address', email, false)
         ]
       }
     ];
@@ -286,7 +293,7 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
       service: selectedTitle,
       name,
       phone,
-      email: email || 'Not Filled (Optional)',
+      email,
       // Insurance fields
       vehicleNumber: isInsurance ? vehicleNumber : undefined,
       chassisNumber: isInsurance ? chassisNumber : undefined,
@@ -524,21 +531,15 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
                   <label className="block text-xs font-bold text-slate-700 mb-1.5">
                     Which Vehicle Insurance? <span className="text-rose-600">*</span>
                   </label>
-                  <select
+                  <WhiteSelect
                     value={selectedTitle}
-                    onChange={(e) => {
-                      const nextTitle = e.target.value;
+                    onChange={(nextTitle) => {
                       setSelectedTitle(nextTitle);
                       playServiceVoice(nextTitle);
                     }}
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  >
-                    {insuranceServices.map((srv) => (
-                      <option key={srv} value={srv}>
-                        {srv}
-                      </option>
-                    ))}
-                  </select>
+                    options={insuranceServices}
+                    aria-label="Which Vehicle Insurance"
+                  />
                 </div>
 
                 {/* Name */}
@@ -577,13 +578,14 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
                   </div>
                 </div>
 
-                {/* Email (Optional) */}
+                {/* Email (Mandatory) */}
                 <div className="sm:col-span-2">
                   <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                    Email Address <span className="text-slate-400 font-normal">(Optional for policy soft-copy)</span>
+                    Email Address <span className="text-rose-600">*</span>
                   </label>
                   <input
                     type="email"
+                    required
                     placeholder={getPlaceholder('e.g. ramesh@example.com')}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -651,24 +653,18 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
                     <button
                       type="button"
                       onClick={() => setPolicyExpired('no')}
-                      className={`py-2 px-3 rounded-xl border text-xs font-bold cursor-pointer transition-colors ${
-                        policyExpired === 'no'
-                          ? 'border-blue-600 bg-blue-50 text-blue-700'
-                          : 'border-slate-300 text-slate-600 hover:border-slate-400'
-                      }`}
+                      className={optionCardClass(policyExpired === 'no', 'justify-center font-bold')}
                     >
-                      No (Active)
+                      <CircleIndicator checked={policyExpired === 'no'} />
+                      <span>No (Active)</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => setPolicyExpired('yes')}
-                      className={`py-2 px-3 rounded-xl border text-xs font-bold cursor-pointer transition-colors ${
-                        policyExpired === 'yes'
-                          ? 'border-amber-600 bg-amber-50 text-amber-800'
-                          : 'border-slate-300 text-slate-600 hover:border-slate-400'
-                      }`}
+                      className={optionCardClass(policyExpired === 'yes', 'justify-center font-bold')}
                     >
-                      Yes (Expired)
+                      <CircleIndicator checked={policyExpired === 'yes'} />
+                      <span>Yes (Expired)</span>
                     </button>
                   </div>
                 </div>
@@ -682,24 +678,18 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
                     <button
                       type="button"
                       onClick={() => setPolicyType('comprehensive')}
-                      className={`py-2 px-3 rounded-xl border text-xs font-bold cursor-pointer transition-colors ${
-                        policyType === 'comprehensive'
-                          ? 'border-blue-600 bg-blue-50 text-blue-700'
-                          : 'border-slate-300 text-slate-600 hover:border-slate-400'
-                      }`}
+                      className={optionCardClass(policyType === 'comprehensive', 'justify-center font-bold')}
                     >
-                      Comprehensive (1st Party)
+                      <CircleIndicator checked={policyType === 'comprehensive'} />
+                      <span>Comprehensive (1st Party)</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => setPolicyType('third_party')}
-                      className={`py-2 px-3 rounded-xl border text-xs font-bold cursor-pointer transition-colors ${
-                        policyType === 'third_party'
-                          ? 'border-blue-600 bg-blue-50 text-blue-700'
-                          : 'border-slate-300 text-slate-600 hover:border-slate-400'
-                      }`}
+                      className={optionCardClass(policyType === 'third_party', 'justify-center font-bold')}
                     >
-                      Third Party Only
+                      <CircleIndicator checked={policyType === 'third_party'} />
+                      <span>Third Party Only</span>
                     </button>
                   </div>
                 </div>
@@ -724,7 +714,7 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
           {/* B. FILINGS SPECIFIC FORMS */}
           {isFilings && (
             <div className="space-y-5">
-              {/* Common Name & Phone */}
+              {/* Common Name, Phone & Mandatory Email */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1.5">
@@ -759,6 +749,20 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
                     />
                   </div>
                 </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    Email Address <span className="text-rose-600">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    placeholder={getPlaceholder('e.g. ramesh@example.com')}
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  />
+                </div>
               </div>
 
               {/* GST Filing Form */}
@@ -787,24 +791,18 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
                         <button
                           type="button"
                           onClick={() => setGstFrequency('monthly')}
-                          className={`py-2 px-3 rounded-xl border text-xs font-bold cursor-pointer transition-colors ${
-                            gstFrequency === 'monthly'
-                              ? 'border-blue-600 bg-blue-50 text-blue-700'
-                              : 'border-slate-300 text-slate-600 hover:border-slate-400'
-                          }`}
+                          className={optionCardClass(gstFrequency === 'monthly', 'justify-center font-bold')}
                         >
-                          Monthly (GSTR-1 / 3B)
+                          <CircleIndicator checked={gstFrequency === 'monthly'} />
+                          <span>Monthly (GSTR-1 / 3B)</span>
                         </button>
                         <button
                           type="button"
                           onClick={() => setGstFrequency('quarterly')}
-                          className={`py-2 px-3 rounded-xl border text-xs font-bold cursor-pointer transition-colors ${
-                            gstFrequency === 'quarterly'
-                              ? 'border-blue-600 bg-blue-50 text-blue-700'
-                              : 'border-slate-300 text-slate-600 hover:border-slate-400'
-                          }`}
+                          className={optionCardClass(gstFrequency === 'quarterly', 'justify-center font-bold')}
                         >
-                          Quarterly (QRMP / CMP-08)
+                          <CircleIndicator checked={gstFrequency === 'quarterly'} />
+                          <span>Quarterly (QRMP / CMP-08)</span>
                         </button>
                       </div>
                     </div>
@@ -892,44 +890,35 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
                       <label className="block text-xs font-bold text-slate-700 mb-1.5">
                         Assessment Year
                       </label>
-                      <select
+                      <WhiteSelect
+                        variant="compact"
                         value={assessmentYear}
-                        onChange={(e) => setAssessmentYear(e.target.value)}
-                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                      >
-                        <option value="AY 2026-27 (FY 2025-26)">AY 2026-27 (FY 2025-26)</option>
-                        <option value="AY 2025-26 (FY 2024-25)">AY 2025-26 (FY 2024-25)</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                        Email Address <span className="text-slate-400 font-normal">(Optional)</span>
-                      </label>
-                      <input
-                        type="email"
-                        placeholder={getPlaceholder('e.g. ramesh@example.com')}
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                        onChange={(val) => setAssessmentYear(val)}
+                        options={[
+                          'AY 2026-27 (FY 2025-26)',
+                          'AY 2025-26 (FY 2024-25)'
+                        ]}
+                        aria-label="Assessment Year"
                       />
                     </div>
 
-                    <div>
+                    <div className="sm:col-span-2">
                       <label className="block text-xs font-bold text-slate-700 mb-1.5">
                         Primary Source of Income
                       </label>
-                      <select
+                      <WhiteSelect
+                        variant="compact"
                         value={incomeSource}
-                        onChange={(e) => setIncomeSource(e.target.value)}
-                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                      >
-                        <option value="Salary">Salary (Form 16)</option>
-                        <option value="Business / Profession">Business / Profession (44AD / 44ADA)</option>
-                        <option value="House Property">Rental / House Property</option>
-                        <option value="Capital Gain">Capital Gains (Stock / Mutual Fund / Property)</option>
-                        <option value="Other">Other Sources (Interest / Dividend)</option>
-                      </select>
+                        onChange={(val) => setIncomeSource(val)}
+                        options={[
+                          { value: 'Salary', label: 'Salary (Form 16)' },
+                          { value: 'Business / Profession', label: 'Business / Profession (44AD / 44ADA)' },
+                          { value: 'House Property', label: 'Rental / House Property' },
+                          { value: 'Capital Gain', label: 'Capital Gains (Stock / Mutual Fund / Property)' },
+                          { value: 'Other', label: 'Other Sources (Interest / Dividend)' }
+                        ]}
+                        aria-label="Primary Source of Income"
+                      />
                     </div>
 
                     <div className="sm:col-span-2">
@@ -949,19 +938,6 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
               {isOtherFiling && (
                 <div className="space-y-4 pt-2 border-t border-slate-200">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="sm:col-span-2">
-                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                        Email Address <span className="text-slate-400 font-normal">(Optional)</span>
-                      </label>
-                      <input
-                        type="email"
-                        placeholder={getPlaceholder('e.g. contact@example.com')}
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                      />
-                    </div>
-
                     <div className="sm:col-span-2">
                       <AddressFieldGroup
                         label="Address"
@@ -1000,21 +976,15 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
                   <label className="block text-xs font-bold text-slate-700 mb-1.5">
                     Registration Service <span className="text-rose-600">*</span>
                   </label>
-                  <select
+                  <WhiteSelect
                     value={selectedTitle}
-                    onChange={(e) => {
-                      const nextTitle = e.target.value;
+                    onChange={(nextTitle) => {
                       setSelectedTitle(nextTitle);
                       playServiceVoice(nextTitle);
                     }}
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  >
-                    {registrationServices.map((srv) => (
-                      <option key={srv} value={srv}>
-                        {srv}
-                      </option>
-                    ))}
-                  </select>
+                    options={registrationServices}
+                    aria-label="Registration Service"
+                  />
                 </div>
 
                 {/* Name */}
@@ -1068,13 +1038,14 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
                   />
                 </div>
 
-                {/* Email (Optional) */}
+                {/* Email (Mandatory) */}
                 <div className="sm:col-span-2">
                   <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                    Email Address <span className="text-slate-400 font-normal">(Optional for certificate delivery)</span>
+                    Email Address <span className="text-rose-600">*</span>
                   </label>
                   <input
                     type="email"
+                    required
                     placeholder={getPlaceholder('e.g. contact@apexsolutions.com')}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -1150,10 +1121,11 @@ export const ServiceFormView: React.FC<ServiceFormViewProps> = ({
 
                 <div className="sm:col-span-2">
                   <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                    Email Address <span className="text-slate-400 font-normal">(Optional)</span>
+                    Email Address <span className="text-rose-600">*</span>
                   </label>
                   <input
                     type="email"
+                    required
                     placeholder={getPlaceholder('e.g. contact@example.com')}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}

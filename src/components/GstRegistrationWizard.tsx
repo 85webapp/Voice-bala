@@ -15,8 +15,8 @@ import {
 } from 'lucide-react';
 import { SERVICE_CATEGORIES } from '../data/servicesData';
 import { VoiceGuidanceButton } from './VoiceGuidanceButton';
-import { AadhaarInput } from './AadhaarInput';
 import { useExampleDetails } from '../hooks/useExampleDetails';
+import { CircleIndicator, optionCardClass } from './OptionControl';
 import {
   encryptFormDataAndSign,
   saveLightweightMetadata,
@@ -34,6 +34,7 @@ import { showToast } from '../services/toastService';
 import { AddressFieldGroup } from './AddressFieldGroup';
 import { FormRequestTabBar, HorizontalSwipeContainer, WizardModeTab } from './FormRequestTabBar';
 import { QuickCallbackRequestPanel } from './QuickCallbackRequestPanel';
+import { WhiteSelect } from './WhiteSelect';
 
 interface GstRegistrationWizardProps {
   onBack: () => void;
@@ -94,7 +95,6 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
     mobile: '',
     email: '',
     pan: '',
-    aadhaar: '',
     address: '',
     pinCode: '',
     addressProofType: 'Electricity Bill',
@@ -108,7 +108,6 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
       fullName: '',
       designation: 'Director / Partner',
       dinPan: '',
-      aadhaar: '',
       mobile: '',
       email: '',
       isAuthorizedSignatory: true
@@ -145,20 +144,39 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
 
   const handleFinalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(step1.email.trim())) {
+      showToast('Please enter a valid Business Email Address in Step 1.', 'warning');
+      setCurrentStep(1);
+      return;
+    }
     if (step1.phone.replace(/\D/g, '').length !== 10) {
       showToast('Please enter a valid 10-digit business mobile number in Step 1.', 'warning');
       setCurrentStep(1);
       return;
     }
-    if (isSoleProp && proprietor.aadhaar.replace(/\D/g, '').length !== 12) {
-      showToast('Please enter a valid 12-digit Proprietor Aadhaar number in Step 2.', 'warning');
-      setCurrentStep(2);
-      return;
+    if (isSoleProp) {
+      if (!emailRegex.test(proprietor.email.trim())) {
+        showToast('Please enter a valid Proprietor Email Address in Step 2.', 'warning');
+        setCurrentStep(2);
+        return;
+      }
+      if (proprietor.pan.trim().length !== 10) {
+        showToast('Please enter a valid 10-character Proprietor PAN Card Number in Step 2.', 'warning');
+        setCurrentStep(2);
+        return;
+      }
     }
     if (!isSoleProp) {
       const invalidPartner = partners.find((p) => p.mobile.trim().length > 0 && p.mobile.replace(/\D/g, '').length !== 10);
       if (invalidPartner) {
         showToast('Each Partner/Director mobile number must be exactly 10 digits.', 'warning');
+        setCurrentStep(2);
+        return;
+      }
+      const missingPartnerEmail = partners.find((p) => !emailRegex.test(p.email.trim()));
+      if (missingPartnerEmail) {
+        showToast('Please enter a valid Email Address for every Partner / Director in Step 2.', 'warning');
         setCurrentStep(2);
         return;
       }
@@ -216,9 +234,8 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
               fieldEntry('Date of Birth', proprietor.dob, true),
               fieldEntry('Gender', proprietor.gender, false, ['Male', 'Female', 'Other']),
               fieldEntry('Proprietor Mobile', proprietor.mobile, true),
-              fieldEntry('Proprietor Email', proprietor.email, true),
-              fieldEntry('Proprietor PAN', proprietor.pan, true),
-              fieldEntry('Proprietor Aadhaar', proprietor.aadhaar, false),
+              fieldEntry('Proprietor Email', proprietor.email, false),
+              fieldEntry('Proprietor PAN', proprietor.pan, false),
               fieldEntry('Residential Address', proprietor.address, false),
               fieldEntry('Residential PIN Code', proprietor.pinCode, true),
               fieldEntry('Address Proof Type', proprietor.addressProofType, true),
@@ -230,9 +247,8 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
               fieldEntry(`Partner/Director #${idx + 1} Full Name`, p.fullName, true),
               fieldEntry(`Partner/Director #${idx + 1} Designation`, p.designation, true),
               fieldEntry(`Partner/Director #${idx + 1} DIN / PAN`, p.dinPan, true),
-              fieldEntry(`Partner/Director #${idx + 1} Aadhaar`, p.aadhaar, true),
               fieldEntry(`Partner/Director #${idx + 1} Mobile`, p.mobile, true),
-              fieldEntry(`Partner/Director #${idx + 1} Email`, p.email, true),
+              fieldEntry(`Partner/Director #${idx + 1} Email`, p.email, false),
               checkboxEntry(`Partner/Director #${idx + 1} Is Authorized Signatory`, p.isAuthorizedSignatory, true)
             ])
       },
@@ -318,7 +334,6 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
         fullName: '',
         designation: 'Director / Partner',
         dinPan: '',
-        aadhaar: '',
         mobile: '',
         email: '',
         isAuthorizedSignatory: false
@@ -469,34 +484,26 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     State <span className="text-rose-600">*</span>
                   </label>
-                  <select
+                  <WhiteSelect
+                    variant="compact"
                     value={step1.state}
-                    onChange={(e) => setStep1({ ...step1, state: e.target.value })}
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  >
-                    {INDIAN_STATES.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(val) => setStep1({ ...step1, state: val })}
+                    options={INDIAN_STATES}
+                    aria-label="State"
+                  />
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     District <span className="text-rose-600">*</span>
                   </label>
-                  <select
+                  <WhiteSelect
+                    variant="compact"
                     value={step1.district}
-                    onChange={(e) => setStep1({ ...step1, district: e.target.value })}
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  >
-                    {(SAMPLE_DISTRICTS[step1.state] || ['Mainpuri', 'Central', 'HQ District']).map((d) => (
-                      <option key={d} value={d}>
-                        {d}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(val) => setStep1({ ...step1, district: val })}
+                    options={SAMPLE_DISTRICTS[step1.state] || ['Mainpuri', 'Central', 'HQ District']}
+                    aria-label="District"
+                  />
                 </div>
 
                 <div>
@@ -567,22 +574,23 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     Constitution of Business <span className="text-rose-600">*</span>
                   </label>
-                  <select
+                  <WhiteSelect
                     value={step1.constitution}
-                    onChange={(e) =>
+                    onChange={(val) =>
                       setStep1({
                         ...step1,
-                        constitution: e.target.value as any
+                        constitution: val as any
                       })
                     }
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-sm text-slate-900 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  >
-                    <option value="Sole Proprietorship">Sole Proprietorship</option>
-                    <option value="Partnership">Partnership</option>
-                    <option value="Private Limited Company">Private Limited Company</option>
-                    <option value="LLP">LLP</option>
-                    <option value="HUF / Society / Trust / Others">HUF / Society / Trust / Others</option>
-                  </select>
+                    options={[
+                      'Sole Proprietorship',
+                      'Partnership',
+                      'Private Limited Company',
+                      'LLP',
+                      'HUF / Society / Trust / Others'
+                    ]}
+                    aria-label="Constitution of Business"
+                  />
                   <p className="text-[11px] text-slate-500 mt-1">
                     ⚡ {isSoleProp ? 'Sole Proprietorship requires single proprietor KYC in Step 2.' : 'Partnership/Company requires multiple Partner/Director details in Step 2.'}
                   </p>
@@ -593,6 +601,11 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
                 <button
                   type="button"
                   onClick={() => {
+                    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                    if (!emailRegex.test(step1.email.trim())) {
+                      showToast('Please enter a valid Email Address.', 'warning');
+                      return;
+                    }
                     if (step1.phone.replace(/\D/g, '').length !== 10) {
                       showToast('Please enter a valid 10-digit mobile number.', 'warning');
                       return;
@@ -661,24 +674,46 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
 
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">Gender</label>
-                    <select
+                    <WhiteSelect
+                      variant="compact"
                       value={proprietor.gender}
-                      onChange={(e) => setProprietor({ ...proprietor, gender: e.target.value })}
-                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                    >
-                      <option value="Male">Male</option>
-                      <option value="Female">Female</option>
-                      <option value="Other">Other</option>
-                    </select>
+                      onChange={(val) => setProprietor({ ...proprietor, gender: val })}
+                      options={['Male', 'Female', 'Other']}
+                      aria-label="Gender"
+                    />
                   </div>
 
                   <div>
-                    <AadhaarInput
-                      value={proprietor.aadhaar}
-                      onChange={(val) => setProprietor({ ...proprietor, aadhaar: val })}
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Proprietor Email Address <span className="text-rose-600">*</span>
+                    </label>
+                    <input
+                      type="email"
                       required
-                      label="Aadhaar Number"
-                      placeholder={getPlaceholder('1234 - 5678 - 9012')}
+                      placeholder={getPlaceholder('proprietor@business.com')}
+                      value={proprietor.email}
+                      onChange={(e) => setProprietor({ ...proprietor, email: e.target.value })}
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Proprietor PAN Card Number <span className="text-rose-600">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      maxLength={10}
+                      placeholder={getPlaceholder('ABCDE1234F')}
+                      value={proprietor.pan}
+                      onChange={(e) =>
+                        setProprietor({
+                          ...proprietor,
+                          pan: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10)
+                        })
+                      }
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm font-mono uppercase text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                     />
                   </div>
 
@@ -700,13 +735,14 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
                   </div>
 
                   <div className="sm:col-span-2 p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
-                    <label className="flex items-center gap-2 cursor-pointer">
+                    <label className={optionCardClass(proprietor.isAuthorizedSignatory)}>
                       <input
                         type="checkbox"
                         checked={proprietor.isAuthorizedSignatory}
                         onChange={(e) => setProprietor({ ...proprietor, isAuthorizedSignatory: e.target.checked })}
-                        className="w-4 h-4 text-blue-600 rounded"
+                        className="sr-only"
                       />
+                      <CircleIndicator checked={proprietor.isAuthorizedSignatory} />
                       <span className="text-xs font-bold text-slate-800">
                         Proprietor is the Primary Authorized Signatory
                       </span>
@@ -768,7 +804,7 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
                         )}
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                         <div>
                           <label className="block text-[11px] font-bold text-slate-700 mb-1">Full Name</label>
                           <input
@@ -813,6 +849,23 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
                             className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
                           />
                         </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                            Email Address <span className="text-rose-600">*</span>
+                          </label>
+                          <input
+                            type="email"
+                            required
+                            placeholder={getPlaceholder('partner@company.com')}
+                            value={partner.email}
+                            onChange={(e) => {
+                              const updated = [...partners];
+                              updated[index].email = e.target.value;
+                              setPartners(updated);
+                            }}
+                            className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
+                          />
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -839,14 +892,26 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
                 <button
                   type="button"
                   onClick={() => {
-                    if (isSoleProp && proprietor.aadhaar.replace(/\D/g, '').length !== 12) {
-                      showToast('Please enter a valid 12-digit Proprietor Aadhaar number.', 'warning');
-                      return;
+                    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                    if (isSoleProp) {
+                      if (!emailRegex.test(proprietor.email.trim())) {
+                        showToast('Please enter a valid Proprietor Email Address.', 'warning');
+                        return;
+                      }
+                      if (proprietor.pan.trim().length !== 10) {
+                        showToast('Please enter a valid 10-character Proprietor PAN Card Number.', 'warning');
+                        return;
+                      }
                     }
                     if (!isSoleProp) {
                       const invalidPartner = partners.find((p) => p.mobile.trim().length > 0 && p.mobile.replace(/\D/g, '').length !== 10);
                       if (invalidPartner) {
                         showToast('Partner/Director mobile number must be exactly 10 digits.', 'warning');
+                        return;
+                      }
+                      const missingPartnerEmail = partners.find((p) => !emailRegex.test(p.email.trim()));
+                      if (missingPartnerEmail) {
+                        showToast('Please enter a valid Email Address for every Partner / Director.', 'warning');
                         return;
                       }
                     }
@@ -893,16 +958,17 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     Nature of Possession of Premises <span className="text-rose-600">*</span>
                   </label>
-                  <select
+                  <WhiteSelect
                     value={step3.natureOfPossession}
-                    onChange={(e) => setStep3({ ...step3, natureOfPossession: e.target.value })}
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-sm text-slate-900 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  >
-                    <option value="Own">Own → Electricity Bill + Registry Copy</option>
-                    <option value="Rented / Leased">Rented / Leased → Rent Agreement + Electricity Bill + NOC</option>
-                    <option value="Consent / Shared">Consent / Shared → Consent Letter + Owner ID + Electricity Bill</option>
-                    <option value="Other">Other → Other documents</option>
-                  </select>
+                    onChange={(val) => setStep3({ ...step3, natureOfPossession: val })}
+                    options={[
+                      { value: 'Own', label: 'Own → Electricity Bill + Registry Copy' },
+                      { value: 'Rented / Leased', label: 'Rented / Leased → Rent Agreement + Electricity Bill + NOC' },
+                      { value: 'Consent / Shared', label: 'Consent / Shared → Consent Letter + Owner ID + Electricity Bill' },
+                      { value: 'Other', label: 'Other → Other documents' }
+                    ]}
+                    aria-label="Nature of Possession of Premises"
+                  />
                 </div>
 
                 {/* Nature of business activity checkboxes */}
@@ -918,28 +984,32 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
                       'Warehouse / Storage',
                       'Supply of Services',
                       'Office / Other'
-                    ].map((act) => (
-                      <label key={act} className="flex items-center gap-2 p-2 bg-slate-50 border border-slate-200 rounded-lg cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={step3.activities.includes(act)}
-                          onChange={() => toggleActivity(act)}
-                          className="w-4 h-4 text-blue-600 rounded"
-                        />
-                        <span className="font-semibold text-slate-800">{act}</span>
-                      </label>
-                    ))}
+                    ].map((act) => {
+                      const active = step3.activities.includes(act);
+                      return (
+                        <label key={act} className={optionCardClass(active, 'p-2')}>
+                          <input
+                            type="checkbox"
+                            checked={active}
+                            onChange={() => toggleActivity(act)}
+                            className="sr-only"
+                          />
+                          <CircleIndicator checked={active} />
+                          <span className="font-semibold text-slate-800">{act}</span>
+                        </label>
+                      );
+                    })}
                   </div>
                 </div>
 
                 {/* Additional Place of Business Toggle */}
                 <div className="sm:col-span-2 p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                  <label className="flex items-center justify-between cursor-pointer">
+                  <label className={optionCardClass(step3.hasAdditionalPlace, 'justify-between')}>
                     <div>
                       <div className="text-xs font-bold text-slate-900">
                         Are there any additional places of business (APOB)?
                       </div>
-                      <div className="text-[11px] text-slate-500">
+                      <div className="text-[11px] font-normal text-slate-500">
                         Check if you have any godown, branch, or factory outside the principal office
                       </div>
                     </div>
@@ -947,8 +1017,9 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
                       type="checkbox"
                       checked={step3.hasAdditionalPlace}
                       onChange={(e) => setStep3({ ...step3, hasAdditionalPlace: e.target.checked })}
-                      className="w-4 h-4 text-blue-600 rounded"
+                      className="sr-only"
                     />
+                    <CircleIndicator checked={step3.hasAdditionalPlace} />
                   </label>
 
                   {step3.hasAdditionalPlace && (
@@ -1091,7 +1162,7 @@ export const GstRegistrationWizard: React.FC<GstRegistrationWizardProps> = ({ on
                   <div className="text-xs text-blue-800 leading-relaxed">
                     {isSoleProp ? (
                       <span>
-                        ✅ <strong>E-Aadhaar OTP:</strong> Sole Proprietorship is verified via instantaneous OTP sent to Aadhaar-registered mobile number ({step1.phone || '9999999999'}).
+                        ✅ <strong>Mobile &amp; Email OTP Verification:</strong> Sole Proprietorship is verified via instantaneous OTP sent to registered mobile number ({step1.phone || '9999999999'}) and email.
                       </span>
                     ) : (
                       <span>

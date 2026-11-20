@@ -25,9 +25,9 @@ import { INITIAL_FRONT_DOCUMENTS } from '../data/documentsData';
 import { getDocumentIdRule } from '../data/documentIdRequirements';
 import { DateOfBirthPicker, calculateAgeInYears } from './DateOfBirthPicker';
 import { useExampleDetails } from '../hooks/useExampleDetails';
-import { AadhaarInput } from './AadhaarInput';
 import { AddressFieldGroup } from './AddressFieldGroup';
 import { WitnessDetailsCard } from './WitnessDetailsCard';
+import { CircleIndicator, optionCardClass, TOPIC_DIVIDER_CLASS } from './OptionControl';
 import {
   encryptFormDataAndSign,
   saveLightweightMetadata,
@@ -46,6 +46,129 @@ import { playServiceVoice } from '../services/googleVoiceGuidance';
 import { VoiceGuidanceButton } from './VoiceGuidanceButton';
 import { FormRequestTabBar, HorizontalSwipeContainer, WizardModeTab } from './FormRequestTabBar';
 import { QuickCallbackRequestPanel } from './QuickCallbackRequestPanel';
+import {
+  CreatorSponsorshipPage4,
+  CreatorSponsorshipDetails,
+  DEFAULT_CREATOR_SPONSORSHIP_DETAILS,
+  validateCreatorSponsorshipPage4,
+  WORK_TYPE_OPTIONS,
+  PAYMENT_RECEIVE_OPTIONS,
+  LIVE_VIDEO_VALIDITY_OPTIONS,
+  PLATFORM_OPTIONS,
+  TERRITORY_OPTIONS,
+  CANCELLING_AGREEMENT_OPTIONS,
+  CONTENT_APPROVAL_OPTIONS,
+  USAGE_RIGHTS_OPTIONS,
+  BREACH_PENALTY_OPTIONS,
+  LEGAL_COPYRIGHT_OPTIONS
+} from './CreatorSponsorshipPage4';
+import { WhiteSelect } from './WhiteSelect';
+import {
+  CompanyEntityFields,
+  CompanyEntityDetails,
+  DEFAULT_COMPANY_ENTITY_DETAILS,
+  validateCompanyEntityFields,
+  COMPANY_SUBTYPE_OPTIONS,
+  COMPANY_DESIGNATION_OPTIONS,
+  getCompanyRegFieldMeta
+} from './CompanyEntityFields';
+import {
+  ContentRightsPage4,
+  ContentRightsDetails,
+  DEFAULT_CONTENT_RIGHTS_DETAILS,
+  validateContentRightsPage4,
+  CONTENT_NATURE_OPTIONS,
+  RIGHT_TO_MODIFY_OPTIONS,
+  PAYMENT_MADE_HOW_OPTIONS,
+  TAXES_OPTIONS,
+  ORIGINALITY_CLAIM_OPTIONS,
+  USAGE_PLATFORM_OPTIONS,
+  TIME_PERIOD_OPTIONS,
+  REUSE_RESTRICTION_OPTIONS,
+  CREATOR_NAME_OPTIONS,
+  CONFIDENTIALITY_OPTIONS
+} from './ContentRightsPage4';
+import {
+  AgreementValiditySection,
+  AgreementValidityValue,
+  DEFAULT_AGREEMENT_VALIDITY,
+  AGREEMENT_VALIDITY_OPTIONS_LABELS,
+  formatAgreementValidity,
+  isAgreementValidityValid
+} from './AgreementValiditySection';
+import {
+  CopyrightTransferPage4,
+  CopyrightTransferDetails,
+  DEFAULT_COPYRIGHT_TRANSFER_DETAILS,
+  validateCopyrightTransferPage4,
+  COPYRIGHT_CONTENT_TYPES,
+  TRANSFER_EFFECT_OPTIONS,
+  RAW_SOURCE_FILE_OPTIONS,
+  EDITING_RETRANSFER_OPTIONS,
+  NAME_MENTION_OPTIONS,
+  AI_DISCLOSURE_OPTIONS,
+  EXISTING_COMMITMENTS_OPTIONS,
+  REFUND_CANCELLATION_OPTIONS,
+  MORAL_RESPECTFUL_USE_OPTIONS
+} from './CopyrightTransferPage4';
+import {
+  FreelancerServicePage4,
+  FreelancerOwnRulesSection,
+  FreelancerServiceDetails,
+  DEFAULT_FREELANCER_SERVICE_DETAILS,
+  validateFreelancerServicePage4,
+  getEffectiveOwnRules,
+  FREELANCER_WORK_KINDS,
+  FREELANCER_EXTRA_CHANGES_OPTIONS,
+  FREELANCER_PAYMENT_HOW_OPTIONS,
+  FREELANCER_TAXES_OPTIONS,
+  FREELANCER_OWNERSHIP_OPTIONS,
+  FREELANCER_CANCEL_MONEY_OPTIONS,
+  FREELANCER_CONFIDENTIALITY_OPTIONS,
+  FREELANCER_TOOLS_OPTIONS,
+  FREELANCER_EXTRA_COST_OPTIONS,
+  FREELANCER_DONE_CONFIRMATION_OPTIONS
+} from './FreelancerServicePage4';
+import {
+  NdaPage4,
+  NdaOwnRulesSection,
+  NdaDetails,
+  DEFAULT_NDA_DETAILS,
+  validateNdaPage4,
+  getEffectiveNdaOwnRules,
+  formatNdaSecretDuration,
+  NDA_WHO_SHARES_OPTIONS,
+  NDA_WHAT_IS_SECRET_OPTIONS,
+  NDA_WHY_SHARED_OPTIONS,
+  NDA_HANDLING_RULES_OPTIONS,
+  NDA_SHARE_WITH_TEAM_OPTIONS,
+  NDA_NOT_SECRET_OPTIONS,
+  NDA_RETURN_DELETE_OPTIONS,
+  NDA_BREACH_OPTIONS,
+  NDA_NOTICE_OPTIONS,
+  NDA_WRITTEN_TERMS_OPTIONS
+} from './NdaPage4';
+import {
+  VideoAudioReleasePage4,
+  VideoAudioOwnRulesSection,
+  VideoAudioReleaseDetails,
+  DEFAULT_VIDEO_AUDIO_DETAILS,
+  validateVideoAudioReleasePage4,
+  getEffectiveVideoAudioOwnRules,
+  formatVideoAudioDuration,
+  VIDEO_AUDIO_MEDIA_TYPES,
+  VIDEO_AUDIO_USAGE_TYPES,
+  VIDEO_AUDIO_TERRITORY_OPTIONS,
+  VIDEO_AUDIO_WHEN_PAID_OPTIONS,
+  VIDEO_AUDIO_HOW_COUNTED_OPTIONS,
+  VIDEO_AUDIO_EDITING_OPTIONS,
+  VIDEO_AUDIO_IDENTITY_OPTIONS,
+  VIDEO_AUDIO_RIGHTS_CONFIRM_OPTIONS,
+  VIDEO_AUDIO_NOTICE_OPTIONS,
+  VIDEO_AUDIO_WRITTEN_RULES_OPTIONS
+} from './VideoAudioReleasePage4';
+import { SignatoryAuthoritySection } from './SignatoryAuthoritySection';
+import { TopicHeader } from './TopicHeader';
 
 interface DocumentWizardViewProps {
   document: LegalDocument;
@@ -73,6 +196,47 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
   const isUnilateral = useMemo(() => {
     return isUnilateralDocument(selectedDocTitle) || docConfig.isUnilateral;
   }, [selectedDocTitle, docConfig]);
+
+  const isCreatorSponsorshipForm = useMemo(() => {
+    return (
+      selectedDocTitle === 'Brand Sponsorship & Promotion Agreement' ||
+      selectedDocTitle === 'Influencer Collaboration Agreement'
+    );
+  }, [selectedDocTitle]);
+
+  const isContentRightsForm = useMemo(() => {
+    return selectedDocTitle === 'Content Rights Agreement';
+  }, [selectedDocTitle]);
+
+  const isCopyrightTransferForm = useMemo(() => {
+    return selectedDocTitle === 'Copyright Transfer Agreement';
+  }, [selectedDocTitle]);
+
+  const isFreelancerForm = useMemo(() => {
+    return selectedDocTitle === 'Freelancer & Client Service Contract';
+  }, [selectedDocTitle]);
+
+  const isNdaForm = useMemo(() => {
+    return selectedDocTitle === 'Non-Disclosure Agreement (NDA)';
+  }, [selectedDocTitle]);
+
+  const isVideoAudioForm = useMemo(() => {
+    return selectedDocTitle === 'Video/Audio Release Form';
+  }, [selectedDocTitle]);
+
+  const isRentOrLeaseDoc = useMemo(() => {
+    const t = selectedDocTitle.toLowerCase();
+    return (
+      t.includes('rent') ||
+      t.includes('lease') ||
+      t.includes('tenan') ||
+      t.includes('sublease')
+    );
+  }, [selectedDocTitle]);
+
+  const isAffidavitDoc = useMemo(() => {
+    return selectedDocTitle.toLowerCase().includes('affidavit');
+  }, [selectedDocTitle]);
 
   // Page index (1 to 5). If isUnilateral, step 3 is skipped
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -110,6 +274,9 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
 
   // --- PAGE 2: First Party Details ---
   const [firstPartyEntityType, setFirstPartyEntityType] = useState<'Individual' | 'Company'>('Individual');
+  const [firstPartyCompanyDetails, setFirstPartyCompanyDetails] = useState<CompanyEntityDetails>(
+    DEFAULT_COMPANY_ENTITY_DETAILS
+  );
   const [firstPartyName, setFirstPartyName] = useState('');
   const [firstPartySignatory, setFirstPartySignatory] = useState('');
   const [firstPartyDesignation, setFirstPartyDesignation] = useState('Authorized Signatory');
@@ -117,12 +284,17 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
   const [firstPartyFatherName, setFirstPartyFatherName] = useState('');
   const [firstPartyAgeOrIncDate, setFirstPartyAgeOrIncDate] = useState('');
   const [firstPartyAddress, setFirstPartyAddress] = useState('');
-  const [firstPartyAadhaarLast4, setFirstPartyAadhaarLast4] = useState('');
+  const [firstPartyEmail, setFirstPartyEmail] = useState('');
   const [firstPartyMobile, setFirstPartyMobile] = useState('');
   const [firstPartyPan, setFirstPartyPan] = useState('');
+  const [firstPartyEntityAuthConfirmed, setFirstPartyEntityAuthConfirmed] = useState(false);
+  const [showFirstPartyEntityAuthError, setShowFirstPartyEntityAuthError] = useState(false);
 
   // --- PAGE 3: Second Party Details (Bilateral only) ---
   const [secondPartyEntityType, setSecondPartyEntityType] = useState<'Individual' | 'Company'>('Individual');
+  const [secondPartyCompanyDetails, setSecondPartyCompanyDetails] = useState<CompanyEntityDetails>(
+    DEFAULT_COMPANY_ENTITY_DETAILS
+  );
   const [secondPartyName, setSecondPartyName] = useState('');
   const [secondPartySignatory, setSecondPartySignatory] = useState('');
   const [secondPartyDesignation, setSecondPartyDesignation] = useState('Authorized Signatory');
@@ -130,9 +302,11 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
   const [secondPartyFatherName, setSecondPartyFatherName] = useState('');
   const [secondPartyAgeOrIncDate, setSecondPartyAgeOrIncDate] = useState('');
   const [secondPartyAddress, setSecondPartyAddress] = useState('');
-  const [secondPartyAadhaarLast4, setSecondPartyAadhaarLast4] = useState('');
+  const [secondPartyEmail, setSecondPartyEmail] = useState('');
   const [secondPartyMobile, setSecondPartyMobile] = useState('');
   const [secondPartyPan, setSecondPartyPan] = useState('');
+  const [secondPartyEntityAuthConfirmed, setSecondPartyEntityAuthConfirmed] = useState(false);
+  const [showSecondPartyEntityAuthError, setShowSecondPartyEntityAuthError] = useState(false);
 
   // Conditional Age Check (e.g., Name Change Affidavit: Age >= 18 makes PAN Mandatory)
   const firstPartyAge = useMemo(() => {
@@ -152,9 +326,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
     return docIdRule.pan;
   }, [docIdRule, firstPartyAge]);
 
-  const effectiveFirstPartyAadhaar = docIdRule.aadhaar;
   const effectiveSecondPartyPan = docIdRule.secondPartyPan ?? docIdRule.pan;
-  const effectiveSecondPartyAadhaar = docIdRule.secondPartyAadhaar ?? docIdRule.aadhaar;
   const requireWitnesses = docIdRule.requireWitnesses;
 
   // Strict 10-char PAN input sanitization
@@ -169,6 +341,29 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
   const [durationMonths, setDurationMonths] = useState('');
   const [exclusivityTerritory, setExclusivityTerritory] = useState('');
   const [noticePeriod, setNoticePeriod] = useState('');
+  const [creatorDetails, setCreatorDetails] = useState<CreatorSponsorshipDetails>(
+    DEFAULT_CREATOR_SPONSORSHIP_DETAILS
+  );
+  const [contentRightsDetails, setContentRightsDetails] = useState<ContentRightsDetails>(
+    DEFAULT_CONTENT_RIGHTS_DETAILS
+  );
+  const [copyrightTransferDetails, setCopyrightTransferDetails] = useState<CopyrightTransferDetails>(
+    DEFAULT_COPYRIGHT_TRANSFER_DETAILS
+  );
+  const [freelancerDetails, setFreelancerDetails] = useState<FreelancerServiceDetails>(
+    DEFAULT_FREELANCER_SERVICE_DETAILS
+  );
+  const [ndaDetails, setNdaDetails] = useState<NdaDetails>(
+    DEFAULT_NDA_DETAILS
+  );
+  const [videoAudioDetails, setVideoAudioDetails] = useState<VideoAudioReleaseDetails>(
+    DEFAULT_VIDEO_AUDIO_DETAILS
+  );
+  const [agreementValidity, setAgreementValidity] = useState<AgreementValidityValue>(
+    DEFAULT_AGREEMENT_VALIDITY
+  );
+  const [signatoryAuthorized, setSignatoryAuthorized] = useState(false);
+  const [showSignatoryError, setShowSignatoryError] = useState(false);
 
   // Key-Value Pair Custom Terms (Empty array by default)
   const [customTerms, setCustomTerms] = useState<CustomKeyValueTerm[]>([]);
@@ -199,19 +394,19 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
   const [w1Name, setW1Name] = useState('');
   const [w1FatherName, setW1FatherName] = useState('');
   const [w1Profession, setW1Profession] = useState('');
+  const [w1Email, setW1Email] = useState('');
+  const [w1Above18, setW1Above18] = useState(false);
   const [w1Address, setW1Address] = useState('');
   const [w1Mobile, setW1Mobile] = useState('');
-  const [w1Age, setW1Age] = useState('');
-  const [w1AadhaarLast4, setW1AadhaarLast4] = useState('');
 
   // Witness 2
   const [w2Name, setW2Name] = useState('');
   const [w2FatherName, setW2FatherName] = useState('');
   const [w2Profession, setW2Profession] = useState('');
+  const [w2Email, setW2Email] = useState('');
+  const [w2Above18, setW2Above18] = useState(false);
   const [w2Address, setW2Address] = useState('');
   const [w2Mobile, setW2Mobile] = useState('');
-  const [w2Age, setW2Age] = useState('');
-  const [w2AadhaarLast4, setW2AadhaarLast4] = useState('');
 
   // Delivery preference: 'digital' | 'physical'
   const [deliveryType, setDeliveryType] = useState<'digital' | 'physical'>('digital');
@@ -293,6 +488,8 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
 
   // Handle Page navigation with validation
   const validatePage = (pageNumber: number): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
     if (pageNumber === 1) {
       if (!selectedDocTitle.trim() || !selectedState.trim()) {
         showToast('Please confirm document type and state.', 'warning');
@@ -302,6 +499,30 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
     }
 
     if (pageNumber === 2) {
+      if (firstPartyEntityType === 'Company') {
+        const companyErr = validateCompanyEntityFields({
+          partyLabel: 'First Party',
+          entityName: firstPartyName,
+          signatoryName: firstPartySignatory,
+          designation: firstPartyDesignation,
+          customDesignation: firstPartyCustomDesignation,
+          registeredAddress: firstPartyAddress,
+          email: firstPartyEmail,
+          mobile: firstPartyMobile,
+          companyPan: firstPartyPan,
+          companyDetails: firstPartyCompanyDetails,
+          entityAuthConfirmed: firstPartyEntityAuthConfirmed
+        });
+        if (!firstPartyEntityAuthConfirmed) {
+          setShowFirstPartyEntityAuthError(true);
+        }
+        if (companyErr) {
+          showToast(companyErr, 'warning');
+          return false;
+        }
+        return true;
+      }
+
       if (!firstPartyName.trim()) {
         showToast('Please enter Full Legal Name for First Party.', 'warning');
         return false;
@@ -314,19 +535,13 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
         showToast('Please enter Address for First Party.', 'warning');
         return false;
       }
+      if (!emailRegex.test(firstPartyEmail.trim())) {
+        showToast('Please enter a valid Email Address for First Party.', 'warning');
+        return false;
+      }
       const cleanMobile1 = firstPartyMobile.replace(/\D/g, '');
       if (cleanMobile1.length !== 10) {
         showToast('Please enter a valid 10-digit Mobile Number for First Party.', 'warning');
-        return false;
-      }
-      const cleanAadhaar1 = firstPartyAadhaarLast4.replace(/\D/g, '');
-      if (effectiveFirstPartyAadhaar === 'mandatory') {
-        if (cleanAadhaar1.length !== 12) {
-          showToast(`12-digit Aadhaar Number is Mandatory for ${selectedDocTitle}.`, 'warning');
-          return false;
-        }
-      } else if (cleanAadhaar1.length > 0 && cleanAadhaar1.length !== 12) {
-        showToast('If entering First Party Aadhaar Number, please enter all 12 digits.', 'warning');
         return false;
       }
       if (effectiveFirstPartyPan === 'mandatory') {
@@ -346,6 +561,30 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
 
     if (pageNumber === 3) {
       if (!isUnilateral) {
+        if (secondPartyEntityType === 'Company') {
+          const companyErr = validateCompanyEntityFields({
+            partyLabel: 'Second Party',
+            entityName: secondPartyName,
+            signatoryName: secondPartySignatory,
+            designation: secondPartyDesignation,
+            customDesignation: secondPartyCustomDesignation,
+            registeredAddress: secondPartyAddress,
+            email: secondPartyEmail,
+            mobile: secondPartyMobile,
+            companyPan: secondPartyPan,
+            companyDetails: secondPartyCompanyDetails,
+            entityAuthConfirmed: secondPartyEntityAuthConfirmed
+          });
+          if (!secondPartyEntityAuthConfirmed) {
+            setShowSecondPartyEntityAuthError(true);
+          }
+          if (companyErr) {
+            showToast(companyErr, 'warning');
+            return false;
+          }
+          return true;
+        }
+
         if (!secondPartyName.trim()) {
           showToast('Please enter Full Legal Name for Second Party.', 'warning');
           return false;
@@ -354,19 +593,13 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
           showToast('Please enter Address for Second Party.', 'warning');
           return false;
         }
+        if (!emailRegex.test(secondPartyEmail.trim())) {
+          showToast('Please enter a valid Email Address for Second Party.', 'warning');
+          return false;
+        }
         const cleanMobile2 = secondPartyMobile.replace(/\D/g, '');
         if (cleanMobile2.length !== 10) {
           showToast('Please enter a valid 10-digit Mobile Number for Second Party.', 'warning');
-          return false;
-        }
-        const cleanAadhaar2 = secondPartyAadhaarLast4.replace(/\D/g, '');
-        if (effectiveSecondPartyAadhaar === 'mandatory') {
-          if (cleanAadhaar2.length !== 12) {
-            showToast(`Second Party 12-digit Aadhaar Number is Mandatory for ${selectedDocTitle}.`, 'warning');
-            return false;
-          }
-        } else if (cleanAadhaar2.length > 0 && cleanAadhaar2.length !== 12) {
-          showToast('If entering Second Party Aadhaar Number, please enter all 12 digits.', 'warning');
           return false;
         }
         if (effectiveSecondPartyPan === 'mandatory') {
@@ -383,6 +616,86 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
     }
 
     if (pageNumber === 4) {
+      if (isContentRightsForm) {
+        const err = validateContentRightsPage4(contentRightsDetails);
+        if (err) {
+          showToast(err, 'warning');
+          return false;
+        }
+      } else if (isCopyrightTransferForm) {
+        const err = validateCopyrightTransferPage4(copyrightTransferDetails);
+        if (err) {
+          showToast(err, 'warning');
+          return false;
+        }
+      } else if (isCreatorSponsorshipForm) {
+        const err = validateCreatorSponsorshipPage4(creatorDetails);
+        if (err) {
+          showToast(err, 'warning');
+          return false;
+        }
+        if (!isAgreementValidityValid(agreementValidity)) {
+          showToast('Please select Agreement Validity.', 'warning');
+          return false;
+        }
+      } else if (isFreelancerForm) {
+        const err = validateFreelancerServicePage4(freelancerDetails);
+        if (err) {
+          showToast(err, 'warning');
+          return false;
+        }
+      } else if (isNdaForm) {
+        const err = validateNdaPage4(ndaDetails);
+        if (err) {
+          showToast(err, 'warning');
+          return false;
+        }
+      } else if (isVideoAudioForm) {
+        const err = validateVideoAudioReleasePage4(videoAudioDetails);
+        if (err) {
+          showToast(err, 'warning');
+          return false;
+        }
+      } else {
+        if (!scopeOfWork.trim()) {
+          showToast('Please fill in Deliverables & Scope of Work.', 'warning');
+          return false;
+        }
+        if (!considerationAmount.trim()) {
+          showToast('Please enter Financial Consideration / Fee.', 'warning');
+          return false;
+        }
+        if (!isRentOrLeaseDoc && !durationMonths.trim()) {
+          showToast('Please enter Validity / Duration.', 'warning');
+          return false;
+        }
+        if (isRentOrLeaseDoc && !durationMonths.trim()) {
+          showToast('Please select Validity / Duration.', 'warning');
+          return false;
+        }
+        if (!exclusivityTerritory.trim()) {
+          showToast('Please enter Territory / Platforms.', 'warning');
+          return false;
+        }
+        if (!noticePeriod.trim()) {
+          showToast('Please enter Termination / Notice Period.', 'warning');
+          return false;
+        }
+        if (!isRentOrLeaseDoc && !isAgreementValidityValid(agreementValidity)) {
+          showToast('Please select Agreement Validity.', 'warning');
+          return false;
+        }
+      }
+
+      if (!signatoryAuthorized) {
+        setShowSignatoryError(true);
+        showToast(
+          'Please tick "Yes, I am authorized to enter this agreement." under Signatory Authority Confirmation.',
+          'warning'
+        );
+        return false;
+      }
+
       return true;
     }
 
@@ -413,18 +726,23 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
     if (requireWitnesses) {
       if (!w1Name.trim() || !w1FatherName.trim() || !w1Address.trim()) {
         showToast('Witness 1 Name, Father/Husband Name, and Address are mandatory.', 'warning');
         return;
       }
+      if (!emailRegex.test(w1Email.trim())) {
+        showToast('Please enter a valid Email Address for Witness 1.', 'warning');
+        return;
+      }
       if (w1Mobile.replace(/\D/g, '').length !== 10) {
         showToast('Please enter a valid 10-digit Mobile Number for Witness 1.', 'warning');
         return;
       }
-      if (w1AadhaarLast4.replace(/\D/g, '').length !== 12) {
-        showToast('Please enter Witness 1 complete 12-digit Aadhaar Number.', 'warning');
+      if (!w1Above18) {
+        showToast('Please confirm that Witness 1 is above 18+.', 'warning');
         return;
       }
 
@@ -432,12 +750,16 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
         showToast('Witness 2 Name, Father/Husband Name, and Address are mandatory.', 'warning');
         return;
       }
+      if (!emailRegex.test(w2Email.trim())) {
+        showToast('Please enter a valid Email Address for Witness 2.', 'warning');
+        return;
+      }
       if (w2Mobile.replace(/\D/g, '').length !== 10) {
         showToast('Please enter a valid 10-digit Mobile Number for Witness 2.', 'warning');
         return;
       }
-      if (w2AadhaarLast4.replace(/\D/g, '').length !== 12) {
-        showToast('Please enter Witness 2 complete 12-digit Aadhaar Number.', 'warning');
+      if (!w2Above18) {
+        showToast('Please confirm that Witness 2 is above 18+.', 'warning');
         return;
       }
     }
@@ -497,9 +819,9 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
       const docTitleOptions = INITIAL_FRONT_DOCUMENTS.map((d) => d.title);
       const declarationTexts = [
         '1. मैंने दस्तावेज़ के सभी नियम व शर्तें ध्यानपूर्वक पढ़ ली हैं और मैं इनसे सहमत हूँ। (I have carefully read and agreed to all terms and conditions of this legal draft.)',
-        '2. प्रस्तुत की गई दोनों पक्षों और गवाहों की व्यक्तिगत पहचान (PAN/Aadhaar) व पते की जानकारी पूर्णतः सत्य और प्रामाणिक है। (All personal identity and address details of parties and witnesses provided are true and verified.)',
+        '2. प्रस्तुत की गई दोनों पक्षों और गवाहों की व्यक्तिगत पहचान (PAN व ईमेल) व पते की जानकारी पूर्णतः सत्य और प्रामाणिक है। (All personal identity and address details of parties and witnesses provided are true and verified.)',
         '3. इस विलेख/करार का निष्पादन बिना किसी दबाव, कपट अथवा अनुचित प्रभाव के स्वतंत्र सहमति से किया जा रहा है। (This deed/agreement is being executed with free consent without any coercion, fraud, or undue influence.)',
-        '4. संबंधित राज्य सरकार की स्टाम्प ड्यूटी एवं ई-हस्ताक्षर (Aadhaar e-Sign) नियमों के अनुपालन की पूरी ज़िम्मेदारी मेरी है। (I understand and accept full responsibility for compliance with state stamp duty and Aadhaar e-Sign regulations.)',
+        '4. संबंधित राज्य सरकार की स्टाम्प ड्यूटी एवं डिजिटल ई-हस्ताक्षर (Digital e-Sign) नियमों के अनुपालन की पूरी ज़िम्मेदारी मेरी है। (I understand and accept full responsibility for compliance with state stamp duty and Digital e-Sign regulations.)',
         '5. मैं पुष्टि करता हूँ कि दस्तावेज़ डिलीवरी के पश्चात देय राशि का भुगतान नियमानुसार करूँगा। (I confirm and agree to pay the post-delivery fee upon receipt of the verified legal document.)'
       ];
 
@@ -520,18 +842,35 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
         {
           pageNumber: 2,
           sectionTitle: `Page 2: 1st Party Details (${docConfig.firstPartyRole})`,
-          fields: [
-            fieldEntry('First Party Entity Type', firstPartyEntityType, false, ['Individual', 'Company']),
-            fieldEntry(firstPartyEntityType === 'Company' ? 'Registered Company / Firm Name' : 'Full Legal Name', firstPartyName, false),
-            fieldEntry('Authorized Signatory Name', firstPartySignatory, firstPartyEntityType !== 'Company'),
-            fieldEntry('Authorized Signatory Designation', firstPartyDesignation === 'Other' ? firstPartyCustomDesignation : firstPartyDesignation, firstPartyEntityType !== 'Company', STANDARD_DESIGNATIONS),
-            fieldEntry("Father's / Husband's Name", firstPartyFatherName, true),
-            fieldEntry(firstPartyEntityType === 'Company' ? 'Date of Incorporation' : 'Age / Date of Birth', firstPartyAgeOrIncDate, true),
-            fieldEntry('Complete Address', firstPartyAddress, false),
-            fieldEntry('Aadhaar Number', firstPartyAadhaarLast4, effectiveFirstPartyAadhaar !== 'mandatory'),
-            fieldEntry('Mobile Number', firstPartyMobile, false),
-            fieldEntry('PAN Card Number', firstPartyPan, effectiveFirstPartyPan !== 'mandatory')
-          ]
+          fields:
+            firstPartyEntityType === 'Company'
+              ? [
+                  fieldEntry('First Party Entity Type', 'Company / Firm', false, ['Individual', 'Company / Firm']),
+                  fieldEntry('Company / Firm Type', firstPartyCompanyDetails.subType, false, COMPANY_SUBTYPE_OPTIONS),
+                  fieldEntry('Registered Company / Firm Name', firstPartyName, false),
+                  fieldEntry(getCompanyRegFieldMeta(firstPartyCompanyDetails.subType).label, firstPartyCompanyDetails.regNumber, !getCompanyRegFieldMeta(firstPartyCompanyDetails.subType).required),
+                  fieldEntry('Company / Firm GSTIN Number', firstPartyCompanyDetails.gstin, true),
+                  fieldEntry('Company / Firm PAN Card', firstPartyPan, false),
+                  fieldEntry('Date of Incorporation', firstPartyAgeOrIncDate, true),
+                  fieldEntry('Email Address', firstPartyEmail, false),
+                  fieldEntry('Registered Office / Business Address', firstPartyAddress, false),
+                  fieldEntry('Authorized Signatory / Proprietor Name', firstPartySignatory, false),
+                  fieldEntry('Signatory Designation', firstPartyDesignation === 'Other' ? firstPartyCustomDesignation : firstPartyDesignation, false, COMPANY_DESIGNATION_OPTIONS),
+                  fieldEntry('Authorized Mobile Number', firstPartyMobile, false),
+                  fieldEntry('Board Resolution / Auth Letter Date', firstPartyCompanyDetails.authLetterDate, true),
+                  fieldEntry('Authorization Ref No.', firstPartyCompanyDetails.authLetterRef, true),
+                  checkboxEntry('Entity Signing Authorization Confirmed', firstPartyEntityAuthConfirmed, false)
+                ]
+              : [
+                  fieldEntry('First Party Entity Type', firstPartyEntityType, false, ['Individual', 'Company']),
+                  fieldEntry('Full Legal Name', firstPartyName, false),
+                  fieldEntry("Father's / Husband's Name", firstPartyFatherName, true),
+                  fieldEntry('Age / Date of Birth', firstPartyAgeOrIncDate, true),
+                  fieldEntry('Email Address', firstPartyEmail, false),
+                  fieldEntry('Complete Address', firstPartyAddress, false),
+                  fieldEntry('Mobile Number', firstPartyMobile, false),
+                  fieldEntry('PAN Card Number', firstPartyPan, effectiveFirstPartyPan !== 'mandatory')
+                ]
         },
         {
           pageNumber: 3,
@@ -540,15 +879,31 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
             : `Page 3: 2nd Party Details (${docConfig.secondPartyRole})`,
           fields: isUnilateral
             ? [fieldEntry('Second Party Applicable', 'No — Unilateral Affidavit / Declaration', true)]
+            : secondPartyEntityType === 'Company'
+            ? [
+                fieldEntry('Second Party Entity Type', 'Company / Firm', false, ['Individual', 'Company / Firm']),
+                fieldEntry('Company / Firm Type', secondPartyCompanyDetails.subType, false, COMPANY_SUBTYPE_OPTIONS),
+                fieldEntry('Registered Company / Firm Name', secondPartyName, false),
+                fieldEntry(getCompanyRegFieldMeta(secondPartyCompanyDetails.subType).label, secondPartyCompanyDetails.regNumber, !getCompanyRegFieldMeta(secondPartyCompanyDetails.subType).required),
+                fieldEntry('Company / Firm GSTIN Number', secondPartyCompanyDetails.gstin, true),
+                fieldEntry('Company / Firm PAN Card', secondPartyPan, false),
+                fieldEntry('Date of Incorporation', secondPartyAgeOrIncDate, true),
+                fieldEntry('Email Address', secondPartyEmail, false),
+                fieldEntry('Registered Office / Business Address', secondPartyAddress, false),
+                fieldEntry('Authorized Signatory / Proprietor Name', secondPartySignatory, false),
+                fieldEntry('Signatory Designation', secondPartyDesignation === 'Other' ? secondPartyCustomDesignation : secondPartyDesignation, false, COMPANY_DESIGNATION_OPTIONS),
+                fieldEntry('Authorized Mobile Number', secondPartyMobile, false),
+                fieldEntry('Board Resolution / Auth Letter Date', secondPartyCompanyDetails.authLetterDate, true),
+                fieldEntry('Authorization Ref No.', secondPartyCompanyDetails.authLetterRef, true),
+                checkboxEntry('Entity Signing Authorization Confirmed', secondPartyEntityAuthConfirmed, false)
+              ]
             : [
                 fieldEntry('Second Party Entity Type', secondPartyEntityType, false, ['Individual', 'Company']),
-                fieldEntry(secondPartyEntityType === 'Company' ? 'Registered Company / Firm Name' : 'Full Legal Name', secondPartyName, false),
-                fieldEntry('Authorized Signatory Name', secondPartySignatory, secondPartyEntityType !== 'Company'),
-                fieldEntry('Authorized Signatory Designation', secondPartyDesignation === 'Other' ? secondPartyCustomDesignation : secondPartyDesignation, secondPartyEntityType !== 'Company', STANDARD_DESIGNATIONS),
+                fieldEntry('Full Legal Name', secondPartyName, false),
                 fieldEntry("Father's / Husband's Name", secondPartyFatherName, true),
-                fieldEntry(secondPartyEntityType === 'Company' ? 'Date of Incorporation' : 'Age / Date of Birth', secondPartyAgeOrIncDate, true),
+                fieldEntry('Age / Date of Birth', secondPartyAgeOrIncDate, true),
+                fieldEntry('Email Address', secondPartyEmail, false),
                 fieldEntry('Complete Address', secondPartyAddress, false),
-                fieldEntry('Aadhaar Number', secondPartyAadhaarLast4, effectiveSecondPartyAadhaar !== 'mandatory'),
                 fieldEntry('Mobile Number', secondPartyMobile, false),
                 fieldEntry('PAN Card Number', secondPartyPan, effectiveSecondPartyPan !== 'mandatory')
               ]
@@ -556,20 +911,620 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
         {
           pageNumber: 4,
           sectionTitle: 'Page 4: Core Legal Scope & Custom Terms',
-          fields: [
-            fieldEntry(docConfig.coreSectionTitle || 'Scope / Statement / Core Clauses', scopeOfWork, true),
-            fieldEntry('Consideration / Financial Terms', considerationAmount, true),
-            fieldEntry('Duration / Validity Months', durationMonths, true),
-            fieldEntry('Territory / Jurisdiction Scope', exclusivityTerritory, true),
-            fieldEntry('Notice Period / Termination Clause', noticePeriod, true),
-            fieldEntry(
-              'Custom Terms Added',
-              customTerms.length > 0
-                ? customTerms.map((t, i) => `${i + 1}. ${t.title || 'Untitled'}: ${t.description}`).join(' | ')
-                : '',
-              true
-            )
-          ]
+          fields: isContentRightsForm
+            ? [
+                fieldEntry(
+                  'Nature of Content',
+                  contentRightsDetails.natureOfContent === 'Others'
+                    ? `Others: ${contentRightsDetails.natureOfContentCustom}`
+                    : contentRightsDetails.natureOfContent,
+                  false,
+                  CONTENT_NATURE_OPTIONS
+                ),
+                fieldEntry('Content Title', contentRightsDetails.contentTitle, true),
+                fieldEntry('Content Description', contentRightsDetails.contentDescription, true),
+                fieldEntry(
+                  'Type of Rights Granted',
+                  contentRightsDetails.rightsGrantedType === 'full_ownership'
+                    ? 'Full ownership forever (Buyer becomes the owner)'
+                    : contentRightsDetails.rightsGrantedType === 'exclusive_timed'
+                    ? `Only buyer can use it for ${contentRightsDetails.exclusiveNumber} ${contentRightsDetails.exclusiveUnit} time (Exclusive)`
+                    : 'Buyer and other people can also use it (Non-Exclusive)',
+                  false
+                ),
+                fieldEntry('Right to Modify', contentRightsDetails.rightToModify, false, RIGHT_TO_MODIFY_OPTIONS),
+                fieldEntry(
+                  'Total Payment / Fee Amount (₹)',
+                  contentRightsDetails.paymentAmount ? `₹${contentRightsDetails.paymentAmount}` : '',
+                  true
+                ),
+                fieldEntry('How will the payment be made?', contentRightsDetails.paymentMadeHow, false, PAYMENT_MADE_HOW_OPTIONS),
+                fieldEntry(
+                  'When should the payment be cleared?',
+                  contentRightsDetails.paymentClearedWhen === 'immediate'
+                    ? 'Immediately on delivery'
+                    : contentRightsDetails.paymentClearedWhen === 'within'
+                    ? `Within ${contentRightsDetails.paymentClearedNumber} ${contentRightsDetails.paymentClearedUnit} of delivery`
+                    : `Custom: ${contentRightsDetails.paymentClearedCustom}`,
+                  false
+                ),
+                fieldEntry('Taxes / GST', contentRightsDetails.taxesIncluded, false, TAXES_OPTIONS),
+                fieldEntry('Late Fees Applicable', contentRightsDetails.hasLateFee, false, ['Yes', 'No']),
+                ...(contentRightsDetails.hasLateFee === 'Yes'
+                  ? [
+                      fieldEntry(
+                        'Grace Days Before Late Fees Start',
+                        `${contentRightsDetails.lateFeeGraceNumber} ${contentRightsDetails.lateFeeGraceUnit}`,
+                        false
+                      ),
+                      fieldEntry(
+                        'Late Fee Charge',
+                        contentRightsDetails.lateFeeType === 'Fixed'
+                          ? `Fixed: ₹${contentRightsDetails.lateFeeFixedAmount}`
+                          : `Percentage: ${contentRightsDetails.lateFeePercentValue}% ${contentRightsDetails.lateFeePercentPeriod}`,
+                        false
+                      )
+                    ]
+                  : []),
+                fieldEntry('Originality and Third Party Claim', contentRightsDetails.originalityClaim, false, ORIGINALITY_CLAIM_OPTIONS),
+                fieldEntry('Content Format and File Proof (Content Link)', contentRightsDetails.contentLink, true),
+                fieldEntry('Usage / Platform Limit', contentRightsDetails.usagePlatforms.join(', '), false, USAGE_PLATFORM_OPTIONS),
+                fieldEntry(
+                  'Time Period / Validity',
+                  contentRightsDetails.usageTimePeriod === 'Custom'
+                    ? `Custom: ${contentRightsDetails.usageTimePeriodCustom}`
+                    : contentRightsDetails.usageTimePeriod,
+                  false,
+                  TIME_PERIOD_OPTIONS
+                ),
+                fieldEntry('Reuse / Release Restriction', contentRightsDetails.reuseRestriction, false, REUSE_RESTRICTION_OPTIONS),
+                fieldEntry('Take Down / Removal if Dispute Happens', contentRightsDetails.takeDownOnDispute, false, ['Yes', 'No']),
+                fieldEntry('Creator Name Credit', contentRightsDetails.creatorNameCredit, false, CREATOR_NAME_OPTIONS),
+                fieldEntry('Confidentiality / Project Privacy', contentRightsDetails.confidentiality, false, CONFIDENTIALITY_OPTIONS),
+                fieldEntry('Agreement Validity', formatAgreementValidity(contentRightsDetails.agreementValidity), false, AGREEMENT_VALIDITY_OPTIONS_LABELS),
+                fieldEntry(
+                  'Termination / Cancellation Notice',
+                  contentRightsDetails.terminationNoticeType === 'immediate'
+                    ? 'Immediate'
+                    : contentRightsDetails.terminationNoticeType === '7_days'
+                    ? '7 days notice'
+                    : `${contentRightsDetails.terminationNoticeNumber} ${contentRightsDetails.terminationNoticeUnit} notice`,
+                  false
+                ),
+                checkboxEntry(
+                  'Signatory Authority Confirmation (Yes, I am authorized to enter this agreement.)',
+                  signatoryAuthorized,
+                  false
+                ),
+                fieldEntry(
+                  'Custom Terms Added',
+                  customTerms.length > 0
+                    ? customTerms.map((t, i) => `${i + 1}. ${t.title || 'Untitled'}: ${t.description}`).join(' | ')
+                    : '',
+                  true
+                )
+              ]
+            : isCopyrightTransferForm
+            ? [
+                fieldEntry(
+                  'Content Type',
+                  copyrightTransferDetails.contentType === 'Other'
+                    ? `Other: ${copyrightTransferDetails.contentTypeCustom}`
+                    : copyrightTransferDetails.contentType,
+                  false,
+                  COPYRIGHT_CONTENT_TYPES
+                ),
+                fieldEntry('Work Title', copyrightTransferDetails.workTitle, true),
+                fieldEntry('Project Name', copyrightTransferDetails.projectName, true),
+                fieldEntry('Description (Short Summary)', copyrightTransferDetails.workDescription, true),
+                fieldEntry('Content Link', copyrightTransferDetails.contentLink, true),
+                fieldEntry(
+                  'Transfer Scope and Type',
+                  copyrightTransferDetails.transferScope === 'complete_forever'
+                    ? 'Complete transfer forever (Full rights move to the buyer)'
+                    : copyrightTransferDetails.transferScope === 'specific_period'
+                    ? `Transfer for a specific time period: ${copyrightTransferDetails.transferPeriodNumber} ${copyrightTransferDetails.transferPeriodUnit}`
+                    : `Transfer only for specific uses or platform: ${copyrightTransferDetails.transferSpecificUses}`,
+                  false
+                ),
+                fieldEntry(
+                  'Past Use / Prior Publication',
+                  copyrightTransferDetails.pastUseStatus === 'new_unpublished'
+                    ? 'No, it is completely new and unpublished'
+                    : `Yes, it was published earlier (${copyrightTransferDetails.pastUseDetails})`,
+                  false
+                ),
+                fieldEntry(
+                  'When Does Transfer Take Effect?',
+                  copyrightTransferDetails.transferEffectTiming,
+                  false,
+                  TRANSFER_EFFECT_OPTIONS
+                ),
+                fieldEntry(
+                  'Raw / Source File',
+                  copyrightTransferDetails.rawSourceFile,
+                  false,
+                  RAW_SOURCE_FILE_OPTIONS
+                ),
+                fieldEntry(
+                  'Editing, Changes and Re-transfer',
+                  copyrightTransferDetails.editingAndRetransfer,
+                  false,
+                  EDITING_RETRANSFER_OPTIONS
+                ),
+                fieldEntry(
+                  'Name Mention',
+                  copyrightTransferDetails.nameMention,
+                  false,
+                  NAME_MENTION_OPTIONS
+                ),
+                fieldEntry(
+                  'Total Payment / Fee Amount (₹)',
+                  copyrightTransferDetails.paymentAmount ? `₹${copyrightTransferDetails.paymentAmount}` : '',
+                  true
+                ),
+                fieldEntry('How will the payment be made?', copyrightTransferDetails.paymentMadeHow, false, PAYMENT_MADE_HOW_OPTIONS),
+                fieldEntry(
+                  'When should the payment be cleared?',
+                  copyrightTransferDetails.paymentClearedWhen === 'immediate'
+                    ? 'Immediately on delivery'
+                    : copyrightTransferDetails.paymentClearedWhen === 'within'
+                    ? `Within ${copyrightTransferDetails.paymentClearedNumber} ${copyrightTransferDetails.paymentClearedUnit} of delivery`
+                    : `Custom: ${copyrightTransferDetails.paymentClearedCustom}`,
+                  false
+                ),
+                fieldEntry('Taxes / GST', copyrightTransferDetails.taxesIncluded, false, TAXES_OPTIONS),
+                fieldEntry('Late Fees Applicable', copyrightTransferDetails.hasLateFee, false, ['Yes', 'No']),
+                ...(copyrightTransferDetails.hasLateFee === 'Yes'
+                  ? [
+                      fieldEntry(
+                        'Grace Days Before Late Fees Start',
+                        `${copyrightTransferDetails.lateFeeGraceNumber} ${copyrightTransferDetails.lateFeeGraceUnit}`,
+                        false
+                      ),
+                      fieldEntry(
+                        'Late Fee Charge',
+                        copyrightTransferDetails.lateFeeType === 'Fixed'
+                          ? `Fixed: ₹${copyrightTransferDetails.lateFeeFixedAmount}`
+                          : `Percentage: ${copyrightTransferDetails.lateFeePercentValue}% ${copyrightTransferDetails.lateFeePercentPeriod}`,
+                        false
+                      )
+                    ]
+                  : []),
+                fieldEntry('Originality and Third Party Claim', copyrightTransferDetails.originalityClaim, false, ORIGINALITY_CLAIM_OPTIONS),
+                fieldEntry('AI Generated Content Disclosure', copyrightTransferDetails.aiDisclosure, false, AI_DISCLOSURE_OPTIONS),
+                fieldEntry('Existing Commitments / Conflict', copyrightTransferDetails.existingCommitments, false, EXISTING_COMMITMENTS_OPTIONS),
+                fieldEntry(
+                  'Delivery Proof / Acceptance',
+                  copyrightTransferDetails.deliveryAcceptance === 'on_delivery'
+                    ? 'As soon as files are delivered'
+                    : copyrightTransferDetails.deliveryAcceptance === 'within_days'
+                    ? `Within ${copyrightTransferDetails.deliveryAcceptanceDays} days unless objected`
+                    : 'Only after written confirmation from the buyer',
+                  false
+                ),
+                fieldEntry('Refund / Cancellation if Work is Not Done', copyrightTransferDetails.refundCancellation, false, REFUND_CANCELLATION_OPTIONS),
+                fieldEntry('Moral / Respectful Use Condition', copyrightTransferDetails.moralRespectfulUse, false, MORAL_RESPECTFUL_USE_OPTIONS),
+                fieldEntry('Confidentiality / Project Privacy', copyrightTransferDetails.confidentiality, false, CONFIDENTIALITY_OPTIONS),
+                fieldEntry('Agreement Validity', formatAgreementValidity(copyrightTransferDetails.agreementValidity), false, AGREEMENT_VALIDITY_OPTIONS_LABELS),
+                checkboxEntry(
+                  'Signatory Authority Confirmation (Yes, I am authorized to enter this agreement.)',
+                  signatoryAuthorized,
+                  false
+                ),
+                fieldEntry(
+                  'Custom Terms Added',
+                  customTerms.length > 0
+                    ? customTerms.map((t, i) => `${i + 1}. ${t.title || 'Untitled'}: ${t.description}`).join(' | ')
+                    : '',
+                  true
+                )
+              ]
+            : isCreatorSponsorshipForm
+            ? [
+                fieldEntry(
+                  'What work need to be done',
+                  creatorDetails.workType === 'Custom / Other'
+                    ? `Custom / Other: ${creatorDetails.workTypeCustom}`
+                    : creatorDetails.workType,
+                  false,
+                  WORK_TYPE_OPTIONS
+                ),
+                fieldEntry('Describe your work or video', creatorDetails.workDescription, true),
+                fieldEntry(
+                  'How much is the total payment?',
+                  creatorDetails.totalPayment
+                    ? `₹${creatorDetails.totalPayment}${creatorDetails.addExtraGst ? ` (+ ${creatorDetails.gstRate} Extra GST)` : ''}`
+                    : creatorDetails.addExtraGst
+                    ? `+ ${creatorDetails.gstRate} Extra GST`
+                    : '',
+                  true
+                ),
+                fieldEntry('Add extra GST', creatorDetails.addExtraGst ? `Yes (${creatorDetails.gstRate})` : 'No', true),
+                fieldEntry(
+                  'Payment receive',
+                  creatorDetails.paymentReceive === 'Custom'
+                    ? `Custom: ${creatorDetails.paymentReceiveCustom}`
+                    : creatorDetails.paymentReceive,
+                  false,
+                  PAYMENT_RECEIVE_OPTIONS
+                ),
+                fieldEntry(
+                  'Validity of live video',
+                  creatorDetails.liveVideoValidity === 'Custom'
+                    ? `Custom: ${creatorDetails.liveVideoCustomNumber} ${creatorDetails.liveVideoCustomUnit}`
+                    : creatorDetails.liveVideoValidity,
+                  false,
+                  LIVE_VIDEO_VALIDITY_OPTIONS
+                ),
+                fieldEntry(
+                  'Platform',
+                  creatorDetails.platforms
+                    .map((p) =>
+                      p === 'Custom / Other' && creatorDetails.platformCustom.trim()
+                        ? `Custom / Other: ${creatorDetails.platformCustom.trim()}`
+                        : p
+                    )
+                    .join(', '),
+                  false,
+                  PLATFORM_OPTIONS.map((p) => p.label)
+                ),
+                fieldEntry(
+                  'Territory',
+                  creatorDetails.territory === 'Specific State / City Only'
+                    ? `Specific State / City Only: ${creatorDetails.territorySpecific}`
+                    : creatorDetails.territory,
+                  false,
+                  TERRITORY_OPTIONS
+                ),
+                fieldEntry(
+                  'Cancelling the Agreement',
+                  creatorDetails.cancellingAgreement,
+                  false,
+                  CANCELLING_AGREEMENT_OPTIONS
+                ),
+                fieldEntry(
+                  'Content Approval',
+                  creatorDetails.contentApproval,
+                  false,
+                  CONTENT_APPROVAL_OPTIONS
+                ),
+                fieldEntry(
+                  'Exclusivity / Competitor',
+                  creatorDetails.exclusivityOption === 'yes'
+                    ? 'Yes, creator can work with anyone anytime'
+                    : `No, creator cannot promote competing brand during ${creatorDetails.exclusivityNumber} ${creatorDetails.exclusivityUnit} and after the campaign`,
+                  false,
+                  [
+                    'Yes, creator can work with anyone anytime',
+                    'No, creator cannot promote competing brand during [duration] and after the campaign'
+                  ]
+                ),
+                fieldEntry(
+                  'Usage Rights / Paid Ads',
+                  creatorDetails.usageRightsPaidAds,
+                  false,
+                  USAGE_RIGHTS_OPTIONS
+                ),
+                fieldEntry(
+                  'Video Modification',
+                  creatorDetails.videoModificationOption === 'unlimited'
+                    ? 'Unlimited'
+                    : `Maximum ${creatorDetails.videoModificationCount} edits`,
+                  false,
+                  ['Maximum [1-100] edits', 'Unlimited']
+                ),
+                fieldEntry(
+                  'Breach of Contract and Penalties',
+                  creatorDetails.breachPenalty,
+                  false,
+                  BREACH_PENALTY_OPTIONS
+                ),
+                fieldEntry(
+                  'Legal Problems or Copyright Problem — Who is Responsible?',
+                  creatorDetails.legalCopyrightResponsibility,
+                  false,
+                  LEGAL_COPYRIGHT_OPTIONS
+                ),
+                fieldEntry('Late Payment Fees', creatorDetails.latePayment.hasLateFee, false, ['Yes', 'No']),
+                ...(creatorDetails.latePayment.hasLateFee === 'Yes'
+                  ? [
+                      fieldEntry(
+                        'Grace Period',
+                        `${creatorDetails.latePayment.lateFeeGraceNumber} ${creatorDetails.latePayment.lateFeeGraceUnit}`,
+                        false
+                      ),
+                      fieldEntry(
+                        'Late Fee Charge',
+                        creatorDetails.latePayment.lateFeeType === 'Fixed'
+                          ? `Fixed: ₹${creatorDetails.latePayment.lateFeeFixedAmount}`
+                          : `Percentage: ${creatorDetails.latePayment.lateFeePercentValue}% ${creatorDetails.latePayment.lateFeePercentPeriod}`,
+                        false
+                      )
+                    ]
+                  : []),
+                fieldEntry('Agreement Validity', formatAgreementValidity(agreementValidity), false, AGREEMENT_VALIDITY_OPTIONS_LABELS),
+                checkboxEntry(
+                  'Signatory Authority Confirmation (Yes, I am authorized to enter this agreement.)',
+                  signatoryAuthorized,
+                  false
+                ),
+                fieldEntry(
+                  'Custom Terms Added',
+                  customTerms.length > 0
+                    ? customTerms.map((t, i) => `${i + 1}. ${t.title || 'Untitled'}: ${t.description}`).join(' | ')
+                    : '',
+                  true
+                )
+              ]
+            : isFreelancerForm
+            ? [
+                fieldEntry(
+                  'Work Type',
+                  freelancerDetails.workKind === 'Other Work'
+                    ? `Other Work: ${freelancerDetails.workKindCustom}`
+                    : freelancerDetails.workKind,
+                  false,
+                  FREELANCER_WORK_KINDS
+                ),
+                fieldEntry('What Work Will You Do', freelancerDetails.workTaskText, false),
+                fieldEntry('Description', freelancerDetails.workDescription, true),
+                fieldEntry('Finish & Delivery Time', `${freelancerDetails.finishNumber} ${freelancerDetails.finishUnit}`, false),
+                fieldEntry('Extra Changes', freelancerDetails.extraChanges, false, FREELANCER_EXTRA_CHANGES_OPTIONS),
+                fieldEntry('Total Agreed Fee (₹)', freelancerDetails.paymentAmount ? `₹${freelancerDetails.paymentAmount}` : '', true),
+                fieldEntry('Payment Method', freelancerDetails.paymentHow, false, FREELANCER_PAYMENT_HOW_OPTIONS),
+                fieldEntry(
+                  'When Payment Comes',
+                  freelancerDetails.paymentWhenType === 'before_start'
+                    ? 'Before starting / at the start.'
+                    : freelancerDetails.paymentWhenType === 'on_delivery'
+                    ? 'When work is delivered.'
+                    : `Within ${freelancerDetails.paymentWhenNumber} ${freelancerDetails.paymentWhenUnit} of getting the bill.`,
+                  false
+                ),
+                fieldEntry('Taxes / GST', freelancerDetails.taxesOption, false, FREELANCER_TAXES_OPTIONS),
+                fieldEntry('Late Payment Fees', freelancerDetails.hasLateFee, false, ['Yes', 'No']),
+                ...(freelancerDetails.hasLateFee === 'Yes'
+                  ? [
+                      fieldEntry('Grace Period', `${freelancerDetails.lateFeeGraceNumber} ${freelancerDetails.lateFeeGraceUnit}`, false),
+                      fieldEntry(
+                        'Late Fee Charge',
+                        freelancerDetails.lateFeeType === 'Fixed'
+                          ? `Fixed: ₹${freelancerDetails.lateFeeFixedAmount}`
+                          : `Percentage: ${freelancerDetails.lateFeePercentValue}% ${freelancerDetails.lateFeePercentPeriod}`,
+                        false
+                      )
+                    ]
+                  : []),
+                fieldEntry('Who Owns the Work', freelancerDetails.workOwnership, false, FREELANCER_OWNERSHIP_OPTIONS),
+                fieldEntry(
+                  'Canceling Notice Period',
+                  freelancerDetails.cancelNoticeType === 'stop_immediately'
+                    ? 'Stop right away.'
+                    : freelancerDetails.cancelNoticeType === 'cannot_stop'
+                    ? 'Cannot stop early.'
+                    : `${freelancerDetails.cancelNoticeNumber} ${freelancerDetails.cancelNoticeUnit} notice.`,
+                  false
+                ),
+                fieldEntry('Early Stop Money Rule', freelancerDetails.cancelMoneyRule, false, FREELANCER_CANCEL_MONEY_OPTIONS),
+                fieldEntry('Keep Things Private', freelancerDetails.keepPrivate, false, FREELANCER_CONFIDENTIALITY_OPTIONS),
+                fieldEntry('Tools and Materials', freelancerDetails.toolsAndMaterials, false, FREELANCER_TOOLS_OPTIONS),
+                fieldEntry('Extra Cost or Expenses', freelancerDetails.extraCostExpenses, false, FREELANCER_EXTRA_COST_OPTIONS),
+                fieldEntry('Work Completion Confirmation', freelancerDetails.workDoneConfirmation, false, FREELANCER_DONE_CONFIRMATION_OPTIONS),
+                fieldEntry('Agreement Validity', formatAgreementValidity(freelancerDetails.agreementValidity), false, AGREEMENT_VALIDITY_OPTIONS_LABELS),
+                checkboxEntry(
+                  'Signatory Authority Confirmation (Yes, I am authorized to enter this agreement.)',
+                  signatoryAuthorized,
+                  false
+                ),
+                fieldEntry('Has Own Rules?', freelancerDetails.hasOwnRules, false, ['Yes', 'No']),
+                fieldEntry(
+                  'Your Own Rules List',
+                  freelancerDetails.hasOwnRules === 'Yes'
+                    ? getEffectiveOwnRules(freelancerDetails).map((r, i) => `${i + 1}. ${r}`).join(' | ')
+                    : 'None',
+                  freelancerDetails.hasOwnRules !== 'Yes'
+                )
+              ]
+            : isNdaForm
+            ? [
+                fieldEntry('Who Shares Secret Information?', ndaDetails.whoSharesSecret, false, NDA_WHO_SHARES_OPTIONS),
+                fieldEntry(
+                  'What is Secret (Categories)',
+                  ndaDetails.secretCategories.join(', ') +
+                    (ndaDetails.secretCategories.includes('Other Secret Information') && ndaDetails.secretOtherDetail
+                      ? ` (${ndaDetails.secretOtherDetail})`
+                      : ''),
+                  false,
+                  NDA_WHAT_IS_SECRET_OPTIONS
+                ),
+                fieldEntry('Secret Topic', ndaDetails.secretTopicTitle, false),
+                fieldEntry('Secret Project Description', ndaDetails.secretProjectDescription, false),
+                fieldEntry(
+                  'Why Secret Information is Shared',
+                  ndaDetails.sharePurposeType === 'Other reason'
+                    ? `Other reason: ${ndaDetails.sharePurposeOther}`
+                    : ndaDetails.sharePurposeType,
+                  false,
+                  NDA_WHY_SHARED_OPTIONS
+                ),
+                fieldEntry('Purpose Details', ndaDetails.sharePurposeDetails, false),
+                fieldEntry(
+                  'How Secret Information Must Be Handled',
+                  ndaDetails.handlingRules.join(' | '),
+                  false,
+                  NDA_HANDLING_RULES_OPTIONS
+                ),
+                fieldEntry('Extra Care Rules', ndaDetails.handlingExtraRules, true),
+                fieldEntry('Share with Team or Staff', ndaDetails.shareWithTeam, false, NDA_SHARE_WITH_TEAM_OPTIONS),
+                fieldEntry(
+                  'What is Not Secret?',
+                  ndaDetails.notSecretExclusions.join(' | '),
+                  false,
+                  NDA_NOT_SECRET_OPTIONS
+                ),
+                fieldEntry('How long to hide secret information', formatNdaSecretDuration(ndaDetails), false),
+                fieldEntry(
+                  'Return or delete secret files',
+                  ndaDetails.returnOrDeleteFiles === 'Custom'
+                    ? `Custom: ${ndaDetails.returnOrDeleteCustom}`
+                    : ndaDetails.returnOrDeleteFiles,
+                  false,
+                  NDA_RETURN_DELETE_OPTIONS
+                ),
+                fieldEntry(
+                  'If NDA breaks',
+                  ndaDetails.breachConsequence === 'Pay a fixed penalty amount'
+                    ? `${ndaDetails.breachConsequence} (Fixed Penalty: ₹${ndaDetails.breachFixedPenaltyAmount})`
+                    : ndaDetails.breachConsequence,
+                  false,
+                  NDA_BREACH_OPTIONS
+                ),
+                fieldEntry('Official notice and proof', ndaDetails.officialNoticeMethod, false, NDA_NOTICE_OPTIONS),
+                fieldEntry(
+                  'Specific Notice Address',
+                  ndaDetails.specificNoticeAddress,
+                  ndaDetails.officialNoticeMethod !== 'Specific email or address for notice'
+                ),
+                fieldEntry(
+                  'Only written terms and changes',
+                  ndaDetails.writtenTermsRules.join(' | '),
+                  false,
+                  NDA_WRITTEN_TERMS_OPTIONS
+                ),
+                fieldEntry('Agreement Validity', formatAgreementValidity(ndaDetails.agreementValidity), false, AGREEMENT_VALIDITY_OPTIONS_LABELS),
+                checkboxEntry(
+                  'Signatory Authority Confirmation (Yes, I am authorized to enter this agreement.)',
+                  signatoryAuthorized,
+                  false
+                ),
+                fieldEntry('Has Own Rules?', ndaDetails.hasOwnRules, false, ['Yes', 'No']),
+                fieldEntry(
+                  'Your Extra Rules List',
+                  ndaDetails.hasOwnRules === 'Yes'
+                    ? getEffectiveNdaOwnRules(ndaDetails).map((r, i) => `${i + 1}. ${r}`).join(' | ')
+                    : 'None',
+                  ndaDetails.hasOwnRules !== 'Yes'
+                )
+              ]
+            : isVideoAudioForm
+            ? [
+                fieldEntry(
+                  'What video or audio is included?',
+                  videoAudioDetails.mediaTypes.join(', '),
+                  false,
+                  VIDEO_AUDIO_MEDIA_TYPES
+                ),
+                fieldEntry('Recording Details (Date, Place, Topic/Title)', videoAudioDetails.mediaDetails, false),
+                fieldEntry(
+                  'How it can be used?',
+                  videoAudioDetails.usageTypes.join(', ') +
+                    (videoAudioDetails.usageTypes.includes('Other uses') && videoAudioDetails.usageCustom
+                      ? ` (${videoAudioDetails.usageCustom})`
+                      : ''),
+                  false,
+                  VIDEO_AUDIO_USAGE_TYPES
+                ),
+                fieldEntry(
+                  'Where it can be used',
+                  videoAudioDetails.territoryType === 'Specific country or region'
+                    ? `Specific country or region: ${videoAudioDetails.territoryCustom}`
+                    : videoAudioDetails.territoryType,
+                  false,
+                  VIDEO_AUDIO_TERRITORY_OPTIONS
+                ),
+                fieldEntry('How long it can be used', formatVideoAudioDuration(videoAudioDetails), false),
+                fieldEntry(
+                  'Payment or free release',
+                  videoAudioDetails.releasePaymentType === 'paid'
+                    ? `Paid release — ₹${videoAudioDetails.paymentAmount}`
+                    : 'Free release (no payment)',
+                  false,
+                  ['Paid release', 'Free release (no payment)']
+                ),
+                fieldEntry(
+                  'When payment will be made',
+                  videoAudioDetails.paymentWhen,
+                  videoAudioDetails.releasePaymentType !== 'paid',
+                  VIDEO_AUDIO_WHEN_PAID_OPTIONS
+                ),
+                fieldEntry(
+                  'How payment will be counted as paid',
+                  videoAudioDetails.paymentCountedHow,
+                  videoAudioDetails.releasePaymentType !== 'paid',
+                  VIDEO_AUDIO_HOW_COUNTED_OPTIONS
+                ),
+                fieldEntry('Editing and changes', videoAudioDetails.editingAllowed, false, VIDEO_AUDIO_EDITING_OPTIONS),
+                fieldEntry(
+                  'Showing your name or identity',
+                  videoAudioDetails.identityDisplay === 'Other'
+                    ? `Other: ${videoAudioDetails.identityCustom}`
+                    : videoAudioDetails.identityDisplay,
+                  false,
+                  VIDEO_AUDIO_IDENTITY_OPTIONS
+                ),
+                fieldEntry(
+                  'No claim or objection confirmation',
+                  videoAudioDetails.rightsConfirmChecks.join(' | '),
+                  false,
+                  VIDEO_AUDIO_RIGHTS_CONFIRM_OPTIONS
+                ),
+                fieldEntry(
+                  'Official notice method',
+                  videoAudioDetails.officialNoticeMethod,
+                  false,
+                  VIDEO_AUDIO_NOTICE_OPTIONS
+                ),
+                fieldEntry(
+                  'Written rules confirmation',
+                  videoAudioDetails.writtenRulesChecks.join(' | '),
+                  false,
+                  VIDEO_AUDIO_WRITTEN_RULES_OPTIONS
+                ),
+                fieldEntry('Agreement Validity', formatAgreementValidity(videoAudioDetails.agreementValidity), false, AGREEMENT_VALIDITY_OPTIONS_LABELS),
+                checkboxEntry(
+                  'Signatory Authority Confirmation (Yes, I am authorized to enter this agreement.)',
+                  signatoryAuthorized,
+                  false
+                ),
+                fieldEntry('Has Own Rules?', videoAudioDetails.hasOwnRules, false, ['Yes', 'No']),
+                fieldEntry(
+                  'Your Extra Rules List',
+                  videoAudioDetails.hasOwnRules === 'Yes'
+                    ? getEffectiveVideoAudioOwnRules(videoAudioDetails).map((r, i) => `${i + 1}. ${r}`).join(' | ')
+                    : 'None',
+                  videoAudioDetails.hasOwnRules !== 'Yes'
+                )
+              ]
+            : [
+                fieldEntry(docConfig.coreSectionTitle || 'Scope / Statement / Core Clauses', scopeOfWork, true),
+                fieldEntry('Consideration / Financial Terms', considerationAmount, true),
+                fieldEntry('Duration / Validity Months', durationMonths, true),
+                fieldEntry('Territory / Jurisdiction Scope', exclusivityTerritory, true),
+                fieldEntry('Notice Period / Termination Clause', noticePeriod, true),
+                ...(!isRentOrLeaseDoc
+                  ? [
+                      fieldEntry(
+                        'Agreement Validity',
+                        formatAgreementValidity(agreementValidity),
+                        false,
+                        AGREEMENT_VALIDITY_OPTIONS_LABELS
+                      )
+                    ]
+                  : []),
+                checkboxEntry(
+                  'Signatory Authority Confirmation (Yes, I am authorized to enter this agreement.)',
+                  signatoryAuthorized,
+                  false
+                ),
+                fieldEntry(
+                  'Custom Terms Added',
+                  customTerms.length > 0
+                    ? customTerms.map((t, i) => `${i + 1}. ${t.title || 'Untitled'}: ${t.description}`).join(' | ')
+                    : '',
+                  true
+                )
+              ]
         },
         {
           pageNumber: 5,
@@ -581,18 +1536,18 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
               ? [
                   fieldEntry('Witness 1 Full Legal Name', w1Name, false),
                   fieldEntry("Witness 1 Father's / Husband's Name", w1FatherName, false),
+                  fieldEntry('Witness 1 Email Address', w1Email, false),
                   fieldEntry('Witness 1 Profession / Job Title', w1Profession, true),
                   fieldEntry('Witness 1 Residential Address', w1Address, false),
                   fieldEntry('Witness 1 Mobile Number', w1Mobile, false),
-                  fieldEntry('Witness 1 Age / Date of Birth', w1Age, true),
-                  fieldEntry('Witness 1 Aadhaar Number (12 Digits)', w1AadhaarLast4, false),
+                  checkboxEntry('Witness 1 is above 18+', w1Above18, false),
                   fieldEntry('Witness 2 Full Legal Name', w2Name, false),
                   fieldEntry("Witness 2 Father's / Husband's Name", w2FatherName, false),
+                  fieldEntry('Witness 2 Email Address', w2Email, false),
                   fieldEntry('Witness 2 Profession / Job Title', w2Profession, true),
                   fieldEntry('Witness 2 Residential Address', w2Address, false),
                   fieldEntry('Witness 2 Mobile Number', w2Mobile, false),
-                  fieldEntry('Witness 2 Age / Date of Birth', w2Age, true),
-                  fieldEntry('Witness 2 Aadhaar Number (12 Digits)', w2AadhaarLast4, false)
+                  checkboxEntry('Witness 2 is above 18+', w2Above18, false)
                 ]
               : [
                   fieldEntry('Witnesses Applicable', 'No — Unilateral Affidavit / Proprietorship Declaration Deed', true)
@@ -626,39 +1581,161 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
         stampDutyAmount: activeStampValue,
         firstParty: {
           entityType: firstPartyEntityType,
+          companyDetails: firstPartyEntityType === 'Company' ? firstPartyCompanyDetails : null,
           name: firstPartyName,
           signatory: firstPartySignatory,
           designation: firstPartyDesignation === 'Other' ? firstPartyCustomDesignation : firstPartyDesignation,
           fatherName: firstPartyFatherName,
           ageOrIncDate: firstPartyAgeOrIncDate,
           address: firstPartyAddress,
-          aadhaar: firstPartyAadhaarLast4,
+          email: firstPartyEmail,
           mobile: firstPartyMobile,
-          pan: firstPartyPan
+          pan: firstPartyPan,
+          entityAuthConfirmed: firstPartyEntityType === 'Company' ? firstPartyEntityAuthConfirmed : undefined
         },
         secondParty: isUnilateral ? null : {
           entityType: secondPartyEntityType,
+          companyDetails: secondPartyEntityType === 'Company' ? secondPartyCompanyDetails : null,
           name: secondPartyName,
           signatory: secondPartySignatory,
           designation: secondPartyDesignation === 'Other' ? secondPartyCustomDesignation : secondPartyDesignation,
           fatherName: secondPartyFatherName,
           ageOrIncDate: secondPartyAgeOrIncDate,
           address: secondPartyAddress,
-          aadhaar: secondPartyAadhaarLast4,
+          email: secondPartyEmail,
           mobile: secondPartyMobile,
-          pan: secondPartyPan
+          pan: secondPartyPan,
+          entityAuthConfirmed: secondPartyEntityType === 'Company' ? secondPartyEntityAuthConfirmed : undefined
         },
-        documentDetails: {
-          scopeOfWork,
-          considerationAmount,
-          durationMonths,
-          exclusivityTerritory,
-          noticePeriod
-        },
+        documentDetails: isContentRightsForm
+          ? {
+              scopeOfWork: `${contentRightsDetails.natureOfContent}${contentRightsDetails.contentTitle ? ` — ${contentRightsDetails.contentTitle}` : ''}`,
+              considerationAmount: contentRightsDetails.paymentAmount ? `₹${contentRightsDetails.paymentAmount}` : '',
+              durationMonths: formatAgreementValidity(contentRightsDetails.agreementValidity),
+              exclusivityTerritory: contentRightsDetails.usagePlatforms.join(', '),
+              noticePeriod:
+                contentRightsDetails.terminationNoticeType === 'immediate'
+                  ? 'Immediate'
+                  : contentRightsDetails.terminationNoticeType === '7_days'
+                  ? '7 days notice'
+                  : `${contentRightsDetails.terminationNoticeNumber} ${contentRightsDetails.terminationNoticeUnit} notice`,
+              contentRightsDetails,
+              signatoryAuthorized
+            }
+          : isCopyrightTransferForm
+          ? {
+              scopeOfWork: `${
+                copyrightTransferDetails.contentType === 'Other'
+                  ? copyrightTransferDetails.contentTypeCustom
+                  : copyrightTransferDetails.contentType
+              }${copyrightTransferDetails.workTitle ? ` — ${copyrightTransferDetails.workTitle}` : ''}`,
+              considerationAmount: copyrightTransferDetails.paymentAmount
+                ? `₹${copyrightTransferDetails.paymentAmount}`
+                : '',
+              durationMonths: formatAgreementValidity(copyrightTransferDetails.agreementValidity),
+              exclusivityTerritory:
+                copyrightTransferDetails.transferScope === 'complete_forever'
+                  ? 'Complete transfer forever'
+                  : copyrightTransferDetails.transferScope === 'specific_period'
+                  ? `${copyrightTransferDetails.transferPeriodNumber} ${copyrightTransferDetails.transferPeriodUnit}`
+                  : copyrightTransferDetails.transferSpecificUses,
+              noticePeriod: copyrightTransferDetails.refundCancellation,
+              copyrightTransferDetails,
+              signatoryAuthorized
+            }
+          : isCreatorSponsorshipForm
+          ? {
+              scopeOfWork: `${
+                creatorDetails.workType === 'Custom / Other'
+                  ? creatorDetails.workTypeCustom
+                  : creatorDetails.workType
+              }${creatorDetails.workDescription ? ` — ${creatorDetails.workDescription}` : ''}`,
+              considerationAmount: creatorDetails.totalPayment
+                ? `₹${creatorDetails.totalPayment}${creatorDetails.addExtraGst ? ` (+ ${creatorDetails.gstRate} Extra GST)` : ''}`
+                : '',
+              durationMonths: formatAgreementValidity(agreementValidity),
+              exclusivityTerritory: `${
+                creatorDetails.territory === 'Specific State / City Only'
+                  ? creatorDetails.territorySpecific
+                  : creatorDetails.territory
+              } | Platforms: ${creatorDetails.platforms.join(', ')}`,
+              noticePeriod: creatorDetails.cancellingAgreement,
+              creatorSponsorshipDetails: creatorDetails,
+              agreementValidity,
+              signatoryAuthorized
+            }
+          : isFreelancerForm
+          ? {
+              scopeOfWork: `${
+                freelancerDetails.workKind === 'Other Work'
+                  ? freelancerDetails.workKindCustom
+                  : freelancerDetails.workKind
+              } — ${freelancerDetails.workTaskText}`,
+              considerationAmount: freelancerDetails.paymentAmount
+                ? `₹${freelancerDetails.paymentAmount}`
+                : '',
+              durationMonths: formatAgreementValidity(freelancerDetails.agreementValidity),
+              exclusivityTerritory: 'As per Freelancer Service Contract',
+              noticePeriod:
+                freelancerDetails.cancelNoticeType === 'stop_immediately'
+                  ? 'Stop right away'
+                  : freelancerDetails.cancelNoticeType === 'cannot_stop'
+                  ? 'Cannot stop early'
+                  : `${freelancerDetails.cancelNoticeNumber} ${freelancerDetails.cancelNoticeUnit} notice`,
+              freelancerDetails: {
+                ...freelancerDetails,
+                ownRules: getEffectiveOwnRules(freelancerDetails)
+              },
+              signatoryAuthorized
+            }
+          : isNdaForm
+          ? {
+              scopeOfWork: `${ndaDetails.secretTopicTitle} — ${ndaDetails.secretProjectDescription}`,
+              considerationAmount: ndaDetails.breachFixedPenaltyAmount
+                ? `Fixed Penalty: ₹${ndaDetails.breachFixedPenaltyAmount}`
+                : 'Non-Disclosure Confidentiality Covenant',
+              durationMonths: formatAgreementValidity(ndaDetails.agreementValidity),
+              exclusivityTerritory: formatNdaSecretDuration(ndaDetails),
+              noticePeriod: ndaDetails.officialNoticeMethod,
+              ndaDetails: {
+                ...ndaDetails,
+                ownRules: getEffectiveNdaOwnRules(ndaDetails)
+              },
+              signatoryAuthorized
+            }
+          : isVideoAudioForm
+          ? {
+              scopeOfWork: `${videoAudioDetails.mediaTypes.join(', ')} — ${videoAudioDetails.mediaDetails}`,
+              considerationAmount:
+                videoAudioDetails.releasePaymentType === 'paid' && videoAudioDetails.paymentAmount
+                  ? `₹${videoAudioDetails.paymentAmount}`
+                  : 'Free Release (No Payment)',
+              durationMonths: formatAgreementValidity(videoAudioDetails.agreementValidity),
+              exclusivityTerritory: `${
+                videoAudioDetails.territoryType === 'Specific country or region'
+                  ? videoAudioDetails.territoryCustom
+                  : videoAudioDetails.territoryType
+              } | Duration: ${formatVideoAudioDuration(videoAudioDetails)}`,
+              noticePeriod: videoAudioDetails.officialNoticeMethod,
+              videoAudioDetails: {
+                ...videoAudioDetails,
+                ownRules: getEffectiveVideoAudioOwnRules(videoAudioDetails)
+              },
+              signatoryAuthorized
+            }
+          : {
+              scopeOfWork,
+              considerationAmount,
+              durationMonths,
+              exclusivityTerritory,
+              noticePeriod,
+              agreementValidity: !isRentOrLeaseDoc ? agreementValidity : undefined,
+              signatoryAuthorized
+            },
         witnesses: requireWitnesses
           ? [
-              { name: w1Name, fatherName: w1FatherName, profession: w1Profession, address: w1Address, mobile: w1Mobile, age: w1Age, aadhaar: w1AadhaarLast4 },
-              { name: w2Name, fatherName: w2FatherName, profession: w2Profession, address: w2Address, mobile: w2Mobile, age: w2Age, aadhaar: w2AadhaarLast4 }
+              { name: w1Name, fatherName: w1FatherName, email: w1Email, profession: w1Profession, address: w1Address, mobile: w1Mobile, isAbove18: w1Above18 },
+              { name: w2Name, fatherName: w2FatherName, email: w2Email, profession: w2Profession, address: w2Address, mobile: w2Mobile, isAbove18: w2Above18 }
             ]
           : [],
         pricing,
@@ -671,6 +1748,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
           shippingPhone: deliveryType === 'physical' ? shippingPhone : undefined
         },
         customTerms,
+        signatoryAuthorized,
         declarationsAccepted: declarations.every(Boolean),
         intermediaryDisclaimerAccepted,
         sections,
@@ -924,20 +2002,15 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
               <label className="block text-xs font-bold text-slate-800 mb-1.5">
                 Type of Document <span className="text-red-500 font-bold">*</span>
               </label>
-              <select
+              <WhiteSelect
                 value={selectedDocTitle}
-                onChange={(e) => {
-                  setSelectedDocTitle(e.target.value);
-                  playServiceVoice(e.target.value);
+                onChange={(val) => {
+                  setSelectedDocTitle(val);
+                  playServiceVoice(val);
                 }}
-                className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-black focus:outline-none focus:ring-2 focus:ring-blue-600"
-              >
-                {INITIAL_FRONT_DOCUMENTS.map((doc) => (
-                  <option key={doc.id} value={doc.title}>
-                    {doc.title}
-                  </option>
-                ))}
-              </select>
+                options={INITIAL_FRONT_DOCUMENTS.map((doc) => doc.title)}
+                aria-label="Type of Document"
+              />
               <span className="text-[11px] text-slate-400 mt-1 block">
                 Auto-selected from your previous click. You can switch to any agreement or affidavit.
               </span>
@@ -948,33 +2021,28 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
               <label className="block text-xs font-bold text-slate-800 mb-1.5">
                 State / Union Territory Selection <span className="text-red-500 font-bold">*</span>
               </label>
-              <select
+              <WhiteSelect
                 value={selectedState}
-                onChange={(e) => setSelectedState(e.target.value)}
-                className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-black focus:outline-none focus:ring-2 focus:ring-blue-600"
-              >
-                <optgroup label="1. Online Purchase & Download Available (Plain Text)">
-                  {STATE_CATEGORIES.filter((s) => s.category === 'online_download').map((s) => (
-                    <option key={s.name} value={s.name}>
-                      {s.label}
-                    </option>
-                  ))}
-                </optgroup>
-                <optgroup label="2. Online Purchase Available, Download Not Available (🔵 Blue Dot)">
-                  {STATE_CATEGORIES.filter((s) => s.category === 'online_nodownload').map((s) => (
-                    <option key={s.name} value={s.name}>
-                      {s.label}
-                    </option>
-                  ))}
-                </optgroup>
-                <optgroup label="3. Neither Online Purchase nor Download Available (⭐ Star)">
-                  {STATE_CATEGORIES.filter((s) => s.category === 'offline_only').map((s) => (
-                    <option key={s.name} value={s.name}>
-                      {s.label}
-                    </option>
-                  ))}
-                </optgroup>
-              </select>
+                onChange={setSelectedState}
+                aria-label="State / Union Territory Selection"
+                options={[
+                  ...STATE_CATEGORIES.filter((s) => s.category === 'online_download').map((s) => ({
+                    value: s.name,
+                    label: s.label,
+                    group: '1. Online Purchase & Download Available (Plain Text)'
+                  })),
+                  ...STATE_CATEGORIES.filter((s) => s.category === 'online_nodownload').map((s) => ({
+                    value: s.name,
+                    label: s.label,
+                    group: '2. Online Purchase Available, Download Not Available (🔵 Blue Dot)'
+                  })),
+                  ...STATE_CATEGORIES.filter((s) => s.category === 'offline_only').map((s) => ({
+                    value: s.name,
+                    label: s.label,
+                    group: '3. Neither Online Purchase nor Download Available (⭐ Star)'
+                  }))
+                ]}
+              />
               <span className="text-[11px] text-slate-500 mt-1 block">
                 Covers all 36 States &amp; UTs with state-specific automated e-stamp procurement.
               </span>
@@ -1022,19 +2090,20 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
               <label className="block text-xs font-bold text-slate-800 mb-1.5">
                 Stamp Duty Paid By
               </label>
-              <select
+              <WhiteSelect
                 value={paidBy}
-                onChange={(e) => setPaidBy(e.target.value as any)}
-                className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-              >
-                <option value="First Party">First Party ({docConfig.firstPartyRole})</option>
-                {!isUnilateral && (
-                  <>
-                    <option value="Second Party">Second Party ({docConfig.secondPartyRole})</option>
-                    <option value="50-50%">50-50% Shared Equally</option>
-                  </>
-                )}
-              </select>
+                onChange={(val) => setPaidBy(val as any)}
+                aria-label="Stamp Duty Paid By"
+                options={
+                  isUnilateral
+                    ? [{ value: 'First Party', label: `First Party (${docConfig.firstPartyRole})` }]
+                    : [
+                        { value: 'First Party', label: `First Party (${docConfig.firstPartyRole})` },
+                        { value: 'Second Party', label: `Second Party (${docConfig.secondPartyRole})` },
+                        { value: '50-50%', label: '50-50% Shared Equally' }
+                      ]
+                }
+              />
             </div>
           </div>
         )}
@@ -1097,154 +2166,151 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
               </div>
             </div>
 
-            {/* Full Legal Name */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                {firstPartyEntityType === 'Company' ? 'Registered Company / Firm Name' : 'Full Legal Name'} <span className="text-red-500 font-bold">*</span>
-              </label>
-              <input
-                type="text"
-                required
-                value={firstPartyName}
-                onChange={(e) => setFirstPartyName(e.target.value)}
-                placeholder={getPlaceholder(firstPartyEntityType === 'Company' ? 'e.g. Acme Media Private Limited' : 'e.g. Ramesh Kumar Sharma')}
-                className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+            {firstPartyEntityType === 'Company' ? (
+              <CompanyEntityFields
+                partyLabel="First Party"
+                companyDetails={firstPartyCompanyDetails}
+                onChangeCompanyDetails={setFirstPartyCompanyDetails}
+                entityName={firstPartyName}
+                onEntityNameChange={setFirstPartyName}
+                signatoryName={firstPartySignatory}
+                onSignatoryNameChange={setFirstPartySignatory}
+                designation={firstPartyDesignation}
+                onDesignationChange={setFirstPartyDesignation}
+                customDesignation={firstPartyCustomDesignation}
+                onCustomDesignationChange={setFirstPartyCustomDesignation}
+                incorporationDate={firstPartyAgeOrIncDate}
+                onIncorporationDateChange={setFirstPartyAgeOrIncDate}
+                registeredAddress={firstPartyAddress}
+                onRegisteredAddressChange={setFirstPartyAddress}
+                email={firstPartyEmail}
+                onEmailChange={setFirstPartyEmail}
+                mobile={firstPartyMobile}
+                onMobileChange={setFirstPartyMobile}
+                companyPan={firstPartyPan}
+                onCompanyPanChange={setFirstPartyPan}
+                entityAuthConfirmed={firstPartyEntityAuthConfirmed}
+                onEntityAuthConfirmedChange={(val) => {
+                  setFirstPartyEntityAuthConfirmed(val);
+                  if (val) setShowFirstPartyEntityAuthError(false);
+                }}
+                showEntityAuthError={showFirstPartyEntityAuthError}
               />
-            </div>
-
-            {/* Authorized Signatory (If Company) */}
-            {firstPartyEntityType === 'Company' && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            ) : (
+              <>
+                {/* Full Legal Name */}
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Authorized Signatory Name <span className="text-red-500">*</span>
+                    Full Legal Name <span className="text-red-500 font-bold">*</span>
                   </label>
                   <input
                     type="text"
-                    value={firstPartySignatory}
-                    onChange={(e) => setFirstPartySignatory(e.target.value)}
-                    placeholder={getPlaceholder('e.g. Vikram Malhotra')}
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    required
+                    value={firstPartyName}
+                    onChange={(e) => setFirstPartyName(e.target.value)}
+                    placeholder={getPlaceholder('e.g. Ramesh Kumar Sharma')}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Signatory Designation <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={firstPartyDesignation}
-                    onChange={(e) => setFirstPartyDesignation(e.target.value)}
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  >
-                    {STANDARD_DESIGNATIONS.map((desig) => (
-                      <option key={desig} value={desig}>{desig}</option>
-                    ))}
-                  </select>
-                  {firstPartyDesignation === 'Other' && (
+
+                {/* Father's / Husband's Name & Age / DOB Picker */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Father's / Husband's Name <span className="text-red-500">*</span>
+                    </label>
                     <input
                       type="text"
-                      value={firstPartyCustomDesignation}
-                      onChange={(e) => setFirstPartyCustomDesignation(e.target.value)}
-                      placeholder={getPlaceholder('Specify Designation')}
-                      className="mt-2 w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-600"
+                      value={firstPartyFatherName}
+                      onChange={(e) => setFirstPartyFatherName(e.target.value)}
+                      placeholder={getPlaceholder('e.g. Late Shri Prem Nath Sharma')}
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                     />
-                  )}
+                  </div>
+
+                  <div>
+                    <DateOfBirthPicker
+                      label="Age / Date of Birth"
+                      value={firstPartyAgeOrIncDate}
+                      onChange={setFirstPartyAgeOrIncDate}
+                      required={true}
+                      placeholder="DD/MM/YYYY"
+                      helperText={showExampleDetails ? 'Format: DD/MM/YYYY' : undefined}
+                    />
+                  </div>
                 </div>
-              </div>
-            )}
 
-            {/* Father's / Husband's Name & Age / DOB Picker */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Father's / Husband's Name {firstPartyEntityType === 'Individual' ? <span className="text-red-500">*</span> : <span className="text-slate-400 font-normal">(Optional)</span>}
-                </label>
-                <input
-                  type="text"
-                  value={firstPartyFatherName}
-                  onChange={(e) => setFirstPartyFatherName(e.target.value)}
-                  placeholder={getPlaceholder('e.g. Late Shri Prem Nath Sharma')}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                />
-              </div>
-
-              <div>
-                <DateOfBirthPicker
-                  label={firstPartyEntityType === 'Company' ? 'Date of Incorporation' : 'Age / Date of Birth'}
-                  value={firstPartyAgeOrIncDate}
-                  onChange={setFirstPartyAgeOrIncDate}
-                  required={true}
-                  placeholder="DD/MM/YYYY"
-                  helperText={showExampleDetails ? "Format: DD/MM/YYYY" : undefined}
-                />
-              </div>
-            </div>
-
-            {/* Permanent Address with Standardized 7-Field Group */}
-            <AddressFieldGroup
-              label="Permanent Registered Address"
-              value={firstPartyAddress}
-              onChangeAddress={setFirstPartyAddress}
-              required
-            />
-
-            {/* Aadhaar (12-Digit Seamless), Mobile (10-Digit), PAN */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <AadhaarInput
-                  label="Aadhaar Card Number"
-                  value={firstPartyAadhaarLast4}
-                  onChange={setFirstPartyAadhaarLast4}
-                  required={effectiveFirstPartyAadhaar === 'mandatory'}
-                  helperText="12-digit number"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Mobile (Aadhaar Linked) <span className="text-red-500 font-bold">*</span>
-                </label>
-                <input
-                  type="tel"
-                  inputMode="numeric"
-                  maxLength={10}
+                {/* Permanent Address with Standardized 7-Field Group */}
+                <AddressFieldGroup
+                  label="Permanent Registered Address"
+                  value={firstPartyAddress}
+                  onChangeAddress={setFirstPartyAddress}
                   required
-                  value={firstPartyMobile}
-                  onChange={(e) => setFirstPartyMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                  placeholder={getPlaceholder('9876543210')}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
-              </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  PAN Number{' '}
-                  {effectiveFirstPartyPan === 'mandatory' ? (
-                    <span className="text-red-500 font-bold">
-                      *{docIdRule.panMandatoryMinAge !== undefined ? ` (Age ${docIdRule.panMandatoryMinAge}+)` : ''}
-                    </span>
-                  ) : (
-                    <span className="text-slate-400 font-normal">
-                      {docIdRule.panMandatoryMinAge !== undefined ? `(Optional if Age < ${docIdRule.panMandatoryMinAge})` : '(Optional)'}
-                    </span>
-                  )}
-                </label>
-                <input
-                  type="text"
-                  required={effectiveFirstPartyPan === 'mandatory'}
-                  maxLength={10}
-                  value={firstPartyPan}
-                  onChange={(e) => handlePanInput(e.target.value, setFirstPartyPan)}
-                  onKeyDown={(e) => {
-                    if (firstPartyPan.length >= 10 && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
-                      e.preventDefault();
-                    }
-                  }}
-                  placeholder={getPlaceholder('ABCDE1234F')}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm font-mono uppercase text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                />
-              </div>
-            </div>
+                {/* Email, Mobile, PAN (No Aadhaar) */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Email Address <span className="text-red-500 font-bold">*</span>
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      value={firstPartyEmail}
+                      onChange={(e) => setFirstPartyEmail(e.target.value)}
+                      placeholder={getPlaceholder('ramesh@example.com')}
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Mobile Number <span className="text-red-500 font-bold">*</span>
+                    </label>
+                    <input
+                      type="tel"
+                      inputMode="numeric"
+                      maxLength={10}
+                      required
+                      value={firstPartyMobile}
+                      onChange={(e) => setFirstPartyMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                      placeholder={getPlaceholder('9876543210')}
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      PAN Number{' '}
+                      {effectiveFirstPartyPan === 'mandatory' ? (
+                        <span className="text-red-500 font-bold">
+                          *{docIdRule.panMandatoryMinAge !== undefined ? ` (Age ${docIdRule.panMandatoryMinAge}+)` : ''}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 font-normal">
+                          {docIdRule.panMandatoryMinAge !== undefined ? `(Optional if Age < ${docIdRule.panMandatoryMinAge})` : '(Optional)'}
+                        </span>
+                      )}
+                    </label>
+                    <input
+                      type="text"
+                      required={effectiveFirstPartyPan === 'mandatory'}
+                      maxLength={10}
+                      value={firstPartyPan}
+                      onChange={(e) => handlePanInput(e.target.value, setFirstPartyPan)}
+                      onKeyDown={(e) => {
+                        if (firstPartyPan.length >= 10 && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                          e.preventDefault();
+                        }
+                      }}
+                      placeholder={getPlaceholder('ABCDE1234F')}
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm font-mono uppercase text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    />
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -1306,145 +2372,142 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
               </div>
             </div>
 
-            {/* Full Legal Name */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                {secondPartyEntityType === 'Company' ? 'Registered Company / Firm Name' : 'Full Legal Name'} <span className="text-red-500 font-bold">*</span>
-              </label>
-              <input
-                type="text"
-                required
-                value={secondPartyName}
-                onChange={(e) => setSecondPartyName(e.target.value)}
-                placeholder={getPlaceholder(secondPartyEntityType === 'Company' ? 'e.g. Zenith Tech Solutions LLP' : 'e.g. Priya Sharma')}
-                className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+            {secondPartyEntityType === 'Company' ? (
+              <CompanyEntityFields
+                partyLabel="Second Party"
+                companyDetails={secondPartyCompanyDetails}
+                onChangeCompanyDetails={setSecondPartyCompanyDetails}
+                entityName={secondPartyName}
+                onEntityNameChange={setSecondPartyName}
+                signatoryName={secondPartySignatory}
+                onSignatoryNameChange={setSecondPartySignatory}
+                designation={secondPartyDesignation}
+                onDesignationChange={setSecondPartyDesignation}
+                customDesignation={secondPartyCustomDesignation}
+                onCustomDesignationChange={setSecondPartyCustomDesignation}
+                incorporationDate={secondPartyAgeOrIncDate}
+                onIncorporationDateChange={setSecondPartyAgeOrIncDate}
+                registeredAddress={secondPartyAddress}
+                onRegisteredAddressChange={setSecondPartyAddress}
+                email={secondPartyEmail}
+                onEmailChange={setSecondPartyEmail}
+                mobile={secondPartyMobile}
+                onMobileChange={setSecondPartyMobile}
+                companyPan={secondPartyPan}
+                onCompanyPanChange={setSecondPartyPan}
+                entityAuthConfirmed={secondPartyEntityAuthConfirmed}
+                onEntityAuthConfirmedChange={(val) => {
+                  setSecondPartyEntityAuthConfirmed(val);
+                  if (val) setShowSecondPartyEntityAuthError(false);
+                }}
+                showEntityAuthError={showSecondPartyEntityAuthError}
               />
-            </div>
-
-            {/* Authorized Signatory (If Company) */}
-            {secondPartyEntityType === 'Company' && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            ) : (
+              <>
+                {/* Full Legal Name */}
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Authorized Signatory Name <span className="text-red-500">*</span>
+                    Full Legal Name <span className="text-red-500 font-bold">*</span>
                   </label>
                   <input
                     type="text"
-                    value={secondPartySignatory}
-                    onChange={(e) => setSecondPartySignatory(e.target.value)}
-                    placeholder={getPlaceholder('e.g. Amit Kapoor')}
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    required
+                    value={secondPartyName}
+                    onChange={(e) => setSecondPartyName(e.target.value)}
+                    placeholder={getPlaceholder('e.g. Priya Sharma')}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Signatory Designation <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={secondPartyDesignation}
-                    onChange={(e) => setSecondPartyDesignation(e.target.value)}
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  >
-                    {STANDARD_DESIGNATIONS.map((desig) => (
-                      <option key={desig} value={desig}>{desig}</option>
-                    ))}
-                  </select>
-                  {secondPartyDesignation === 'Other' && (
+
+                {/* Father's / Husband's Name & Age / DOB Picker */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Father's / Husband's Name <span className="text-red-500">*</span>
+                    </label>
                     <input
                       type="text"
-                      value={secondPartyCustomDesignation}
-                      onChange={(e) => setSecondPartyCustomDesignation(e.target.value)}
-                      placeholder={getPlaceholder('Specify Designation')}
-                      className="mt-2 w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-600"
+                      value={secondPartyFatherName}
+                      onChange={(e) => setSecondPartyFatherName(e.target.value)}
+                      placeholder={getPlaceholder('e.g. Shri Rajesh Sharma')}
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                     />
-                  )}
+                  </div>
+
+                  <div>
+                    <DateOfBirthPicker
+                      label="Age / Date of Birth"
+                      value={secondPartyAgeOrIncDate}
+                      onChange={setSecondPartyAgeOrIncDate}
+                      required={true}
+                      placeholder="DD/MM/YYYY"
+                      helperText={showExampleDetails ? 'Format: DD/MM/YYYY' : undefined}
+                    />
+                  </div>
                 </div>
-              </div>
-            )}
 
-            {/* Father's / Husband's Name & Age / DOB Picker */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Father's / Husband's Name {secondPartyEntityType === 'Individual' ? <span className="text-red-500">*</span> : <span className="text-slate-400 font-normal">(Optional)</span>}
-                </label>
-                <input
-                  type="text"
-                  value={secondPartyFatherName}
-                  onChange={(e) => setSecondPartyFatherName(e.target.value)}
-                  placeholder={getPlaceholder('e.g. Shri Rajesh Sharma')}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                />
-              </div>
-
-              <div>
-                <DateOfBirthPicker
-                  label={secondPartyEntityType === 'Company' ? 'Date of Incorporation' : 'Age / Date of Birth'}
-                  value={secondPartyAgeOrIncDate}
-                  onChange={setSecondPartyAgeOrIncDate}
-                  required={true}
-                  placeholder="DD/MM/YYYY"
-                  helperText={showExampleDetails ? "Format: DD/MM/YYYY" : undefined}
-                />
-              </div>
-            </div>
-
-            {/* Permanent Address with Standardized 7-Field Group */}
-            <AddressFieldGroup
-              label="Permanent Registered Address"
-              value={secondPartyAddress}
-              onChangeAddress={setSecondPartyAddress}
-              required
-            />
-
-            {/* Aadhaar (12-Digit Seamless), Mobile (10-Digit), PAN */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <AadhaarInput
-                  label="Aadhaar Card Number"
-                  value={secondPartyAadhaarLast4}
-                  onChange={setSecondPartyAadhaarLast4}
-                  required={effectiveSecondPartyAadhaar === 'mandatory'}
-                  helperText="12-digit number"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Mobile (Aadhaar Linked) <span className="text-red-500 font-bold">*</span>
-                </label>
-                <input
-                  type="tel"
-                  inputMode="numeric"
-                  maxLength={10}
+                {/* Permanent Address with Standardized 7-Field Group */}
+                <AddressFieldGroup
+                  label="Permanent Registered Address"
+                  value={secondPartyAddress}
+                  onChangeAddress={setSecondPartyAddress}
                   required
-                  value={secondPartyMobile}
-                  onChange={(e) => setSecondPartyMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                  placeholder={getPlaceholder('9811122334')}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
-              </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  PAN Number {effectiveSecondPartyPan === 'mandatory' ? <span className="text-red-500 font-bold">*</span> : effectiveSecondPartyPan === 'optional' ? <span className="text-slate-400 font-normal">(Optional)</span> : <span className="text-slate-400 font-normal">(N/A)</span>}
-                </label>
-                <input
-                  type="text"
-                  required={effectiveSecondPartyPan === 'mandatory'}
-                  maxLength={10}
-                  value={secondPartyPan}
-                  onChange={(e) => handlePanInput(e.target.value, setSecondPartyPan)}
-                  onKeyDown={(e) => {
-                    if (secondPartyPan.length >= 10 && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
-                      e.preventDefault();
-                    }
-                  }}
-                  placeholder={getPlaceholder('FGHIJ5678K')}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm font-mono uppercase text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                />
-              </div>
-            </div>
+                {/* Email, Mobile, PAN (No Aadhaar) */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Email Address <span className="text-red-500 font-bold">*</span>
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      value={secondPartyEmail}
+                      onChange={(e) => setSecondPartyEmail(e.target.value)}
+                      placeholder={getPlaceholder('priya@example.com')}
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Mobile Number <span className="text-red-500 font-bold">*</span>
+                    </label>
+                    <input
+                      type="tel"
+                      inputMode="numeric"
+                      maxLength={10}
+                      required
+                      value={secondPartyMobile}
+                      onChange={(e) => setSecondPartyMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                      placeholder={getPlaceholder('9811122334')}
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      PAN Number {effectiveSecondPartyPan === 'mandatory' ? <span className="text-red-500 font-bold">*</span> : effectiveSecondPartyPan === 'optional' ? <span className="text-slate-400 font-normal">(Optional)</span> : <span className="text-slate-400 font-normal">(N/A)</span>}
+                    </label>
+                    <input
+                      type="text"
+                      required={effectiveSecondPartyPan === 'mandatory'}
+                      maxLength={10}
+                      value={secondPartyPan}
+                      onChange={(e) => handlePanInput(e.target.value, setSecondPartyPan)}
+                      onKeyDown={(e) => {
+                        if (secondPartyPan.length >= 10 && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                          e.preventDefault();
+                        }
+                      }}
+                      placeholder={getPlaceholder('FGHIJ5678K')}
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm font-mono uppercase text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    />
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -1460,105 +2523,281 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
               </p>
             </div>
 
-            {/* Scope / Deliverables */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                Deliverables &amp; Scope of Work
-              </label>
-              <textarea
-                rows={2}
-                value={scopeOfWork}
-                onChange={(e) => setScopeOfWork(e.target.value)}
-                placeholder={getPlaceholder('Detail the exact commitments, deliverables, or declaration facts...')}
-                className="w-full bg-white border border-slate-300 rounded-xl p-2.5 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 resize-none"
-              />
-            </div>
-
-            {/* Commercial Considerations */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Financial Consideration / Fee (₹)
-                </label>
-                <input
-                  type="text"
-                  value={considerationAmount}
-                  onChange={(e) => setConsiderationAmount(e.target.value)}
-                  placeholder={getPlaceholder('e.g. 50,000 or Nil (for family deeds)')}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+            {isContentRightsForm ? (
+              <div className="space-y-6">
+                <ContentRightsPage4
+                  value={contentRightsDetails}
+                  onChange={setContentRightsDetails}
                 />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Validity / Duration {selectedDocTitle.toLowerCase().includes('rent') || selectedDocTitle.toLowerCase().includes('lease') || selectedDocTitle.toLowerCase().includes('tenan') || selectedDocTitle.toLowerCase().includes('sublease') ? <span className="text-red-500 font-bold">(Max 11 Months)</span> : null}
-                </label>
-                {selectedDocTitle.toLowerCase().includes('rent') || selectedDocTitle.toLowerCase().includes('lease') || selectedDocTitle.toLowerCase().includes('tenan') || selectedDocTitle.toLowerCase().includes('sublease') ? (
-                  <div>
-                    <select
-                      value={durationMonths}
-                      onChange={(e) => setDurationMonths(e.target.value)}
-                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                    >
-                      <option value="11 Months">11 Months (Registration Exempt)</option>
-                      <option value="10 Months">10 Months</option>
-                      <option value="9 Months">9 Months</option>
-                      <option value="8 Months">8 Months</option>
-                      <option value="7 Months">7 Months</option>
-                      <option value="6 Months">6 Months</option>
-                      <option value="5 Months">5 Months</option>
-                      <option value="4 Months">4 Months</option>
-                      <option value="3 Months">3 Months</option>
-                      <option value="2 Months">2 Months</option>
-                      <option value="1 Month">1 Month</option>
-                    </select>
-                    <span className="text-[10px] text-blue-700 mt-1 block">
-                      Legal Rule: Under the Registration Act 1908, 11 months is the standard limit for unregistered lease agreements.
-                    </span>
-                  </div>
-                ) : (
-                  <input
-                    type="text"
-                    value={durationMonths}
-                    onChange={(e) => setDurationMonths(e.target.value)}
-                    placeholder={getPlaceholder('e.g. 11 Months / 1 Year / Perpetual')}
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                <div className={TOPIC_DIVIDER_CLASS}>
+                  <SignatoryAuthoritySection
+                    topicNumber={16}
+                    checked={signatoryAuthorized}
+                    onChange={(checked) => {
+                      setSignatoryAuthorized(checked);
+                      if (checked) setShowSignatoryError(false);
+                    }}
+                    showError={showSignatoryError}
                   />
+                </div>
+              </div>
+            ) : isCopyrightTransferForm ? (
+              <div className="space-y-6">
+                <CopyrightTransferPage4
+                  value={copyrightTransferDetails}
+                  onChange={setCopyrightTransferDetails}
+                />
+                <div className={TOPIC_DIVIDER_CLASS}>
+                  <SignatoryAuthoritySection
+                    topicNumber={18}
+                    checked={signatoryAuthorized}
+                    onChange={(checked) => {
+                      setSignatoryAuthorized(checked);
+                      if (checked) setShowSignatoryError(false);
+                    }}
+                    showError={showSignatoryError}
+                  />
+                </div>
+              </div>
+            ) : isCreatorSponsorshipForm ? (
+              <div className="space-y-6">
+                <CreatorSponsorshipPage4
+                  value={creatorDetails}
+                  onChange={setCreatorDetails}
+                />
+                <div className={TOPIC_DIVIDER_CLASS}>
+                  <AgreementValiditySection
+                    topicNumber={16}
+                    value={agreementValidity}
+                    onChange={setAgreementValidity}
+                  />
+                </div>
+                <div className={TOPIC_DIVIDER_CLASS}>
+                  <SignatoryAuthoritySection
+                    topicNumber={17}
+                    checked={signatoryAuthorized}
+                    onChange={(checked) => {
+                      setSignatoryAuthorized(checked);
+                      if (checked) setShowSignatoryError(false);
+                    }}
+                    showError={showSignatoryError}
+                  />
+                </div>
+              </div>
+            ) : isFreelancerForm ? (
+              <div className="space-y-6">
+                <FreelancerServicePage4
+                  value={freelancerDetails}
+                  onChange={setFreelancerDetails}
+                />
+                <div className={TOPIC_DIVIDER_CLASS}>
+                  <SignatoryAuthoritySection
+                    topicNumber={12}
+                    checked={signatoryAuthorized}
+                    onChange={(checked) => {
+                      setSignatoryAuthorized(checked);
+                      if (checked) setShowSignatoryError(false);
+                    }}
+                    showError={showSignatoryError}
+                  />
+                </div>
+                <FreelancerOwnRulesSection
+                  topicNumber={13}
+                  value={freelancerDetails}
+                  onChange={setFreelancerDetails}
+                />
+              </div>
+            ) : isNdaForm ? (
+              <div className="space-y-6">
+                <NdaPage4
+                  value={ndaDetails}
+                  onChange={setNdaDetails}
+                />
+                <div className={TOPIC_DIVIDER_CLASS}>
+                  <SignatoryAuthoritySection
+                    topicNumber={13}
+                    checked={signatoryAuthorized}
+                    onChange={(checked) => {
+                      setSignatoryAuthorized(checked);
+                      if (checked) setShowSignatoryError(false);
+                    }}
+                    showError={showSignatoryError}
+                  />
+                </div>
+                <NdaOwnRulesSection
+                  topicNumber={14}
+                  value={ndaDetails}
+                  onChange={setNdaDetails}
+                />
+              </div>
+            ) : isVideoAudioForm ? (
+              <div className="space-y-6">
+                <VideoAudioReleasePage4
+                  value={videoAudioDetails}
+                  onChange={setVideoAudioDetails}
+                />
+                <div className={TOPIC_DIVIDER_CLASS}>
+                  <SignatoryAuthoritySection
+                    topicNumber={10}
+                    checked={signatoryAuthorized}
+                    onChange={(checked) => {
+                      setSignatoryAuthorized(checked);
+                      if (checked) setShowSignatoryError(false);
+                    }}
+                    showError={showSignatoryError}
+                  />
+                </div>
+                <VideoAudioOwnRulesSection
+                  topicNumber={11}
+                  value={videoAudioDetails}
+                  onChange={setVideoAudioDetails}
+                />
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* 1. Deliverables & Scope of Work */}
+                <div className="space-y-2">
+                  <TopicHeader
+                    number={1}
+                    title="Deliverables & Scope of Work"
+                    question="What are the exact commitments, deliverables, or declaration facts?"
+                    required
+                  />
+                  <textarea
+                    rows={2}
+                    value={scopeOfWork}
+                    onChange={(e) => setScopeOfWork(e.target.value)}
+                    placeholder={getPlaceholder('Detail the exact commitments, deliverables, or declaration facts...')}
+                    className="w-full bg-white border border-slate-300 rounded-xl p-2.5 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 resize-none"
+                  />
+                </div>
+
+                {/* 2 & 3. Commercial Considerations & Duration */}
+                <div className={`${TOPIC_DIVIDER_CLASS} grid grid-cols-1 sm:grid-cols-2 gap-4`}>
+                  <div className="space-y-2">
+                    <TopicHeader
+                      number={2}
+                      title="Financial Consideration / Fee (₹)"
+                      question="What is the agreed fee or financial consideration?"
+                      required
+                    />
+                    <input
+                      type="text"
+                      value={considerationAmount}
+                      onChange={(e) => setConsiderationAmount(e.target.value)}
+                      placeholder={getPlaceholder('e.g. 50,000 or Nil (for family deeds)')}
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <TopicHeader
+                      number={3}
+                      title={isRentOrLeaseDoc ? 'Validity / Duration (Max 11 Months)' : 'Validity / Duration'}
+                      question="What is the term or validity duration?"
+                      required
+                    />
+                    {isRentOrLeaseDoc ? (
+                      <div>
+                        <WhiteSelect
+                          variant="compact"
+                          value={durationMonths}
+                          placeholder="Select duration"
+                          onChange={setDurationMonths}
+                          aria-label="Validity / Duration"
+                          options={[
+                            { value: '11 Months', label: '11 Months (Registration Exempt)' },
+                            '10 Months',
+                            '9 Months',
+                            '8 Months',
+                            '7 Months',
+                            '6 Months',
+                            '5 Months',
+                            '4 Months',
+                            '3 Months',
+                            '2 Months',
+                            '1 Month'
+                          ]}
+                        />
+                        <span className="text-[10px] text-blue-700 mt-1 block">
+                          Legal Rule: Under the Registration Act 1908, 11 months is the standard limit for unregistered lease agreements.
+                        </span>
+                      </div>
+                    ) : (
+                      <input
+                        type="text"
+                        value={durationMonths}
+                        onChange={(e) => setDurationMonths(e.target.value)}
+                        placeholder={getPlaceholder('e.g. 11 Months / 1 Year / Perpetual')}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      />
+                    )}
+                  </div>
+                </div>
+
+                {/* 4 & 5. Territory & Notice Period */}
+                <div className={`${TOPIC_DIVIDER_CLASS} grid grid-cols-1 sm:grid-cols-2 gap-4`}>
+                  <div className="space-y-2">
+                    <TopicHeader
+                      number={4}
+                      title="Territory / Platforms"
+                      question="Where will this agreement or deed apply?"
+                      required
+                    />
+                    <input
+                      type="text"
+                      value={exclusivityTerritory}
+                      onChange={(e) => setExclusivityTerritory(e.target.value)}
+                      placeholder={getPlaceholder('e.g. Pan India / Instagram & YouTube')}
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <TopicHeader
+                      number={5}
+                      title="Termination / Notice Period"
+                      question="How much notice is required to terminate early?"
+                      required
+                    />
+                    <input
+                      type="text"
+                      value={noticePeriod}
+                      onChange={(e) => setNoticePeriod(e.target.value)}
+                      placeholder={getPlaceholder('e.g. 15 Days written notice')}
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    />
+                  </div>
+                </div>
+
+                {!isRentOrLeaseDoc && (
+                  <div className={TOPIC_DIVIDER_CLASS}>
+                    <AgreementValiditySection
+                      topicNumber={6}
+                      value={agreementValidity}
+                      onChange={setAgreementValidity}
+                      isAffidavit={isAffidavitDoc}
+                    />
+                  </div>
                 )}
-              </div>
-            </div>
 
-            {/* Territory & Notice Period */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Territory / Platforms
-                </label>
-                <input
-                  type="text"
-                  value={exclusivityTerritory}
-                  onChange={(e) => setExclusivityTerritory(e.target.value)}
-                  placeholder={getPlaceholder('e.g. Pan India / Instagram & YouTube')}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                />
+                <div className={TOPIC_DIVIDER_CLASS}>
+                  <SignatoryAuthoritySection
+                    topicNumber={isRentOrLeaseDoc ? 6 : 7}
+                    checked={signatoryAuthorized}
+                    onChange={(checked) => {
+                      setSignatoryAuthorized(checked);
+                      if (checked) setShowSignatoryError(false);
+                    }}
+                    showError={showSignatoryError}
+                  />
+                </div>
               </div>
+            )}
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Termination / Notice Period
-                </label>
-                <input
-                  type="text"
-                  value={noticePeriod}
-                  onChange={(e) => setNoticePeriod(e.target.value)}
-                  placeholder={getPlaceholder('e.g. 15 Days written notice')}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                />
-              </div>
-            </div>
-
-            {/* Custom Terms / Policies: Key-Value Pair format */}
-            <div className="pt-3 border-t border-slate-200">
+            {/* Custom Terms / Policies: Key-Value Pair format (Hidden for Freelancer, NDA, and Video/Audio Release where Your Own Rules sits at bottom) */}
+            {!isFreelancerForm && !isNdaForm && !isVideoAudioForm && (
+            <div className="-mx-5 px-5 sm:-mx-7 sm:px-7 pt-4 border-t border-slate-200/80">
               <div className="flex items-center justify-between mb-3">
                 <div>
                   <span className="text-xs font-bold text-slate-800 block">
@@ -1632,6 +2871,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                 ))}
               </div>
             </div>
+            )}
           </div>
         )}
 
@@ -1649,12 +2889,12 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                   onFatherNameChange={setW1FatherName}
                   profession={w1Profession}
                   onProfessionChange={setW1Profession}
-                  ageOrDob={w1Age}
-                  onAgeOrDobChange={setW1Age}
+                  email={w1Email}
+                  onEmailChange={setW1Email}
+                  isAbove18={w1Above18}
+                  onIsAbove18Change={setW1Above18}
                   mobile={w1Mobile}
                   onMobileChange={setW1Mobile}
-                  aadhaar={w1AadhaarLast4}
-                  onAadhaarChange={setW1AadhaarLast4}
                   address={w1Address}
                   onAddressChange={setW1Address}
                 />
@@ -1667,12 +2907,12 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                   onFatherNameChange={setW2FatherName}
                   profession={w2Profession}
                   onProfessionChange={setW2Profession}
-                  ageOrDob={w2Age}
-                  onAgeOrDobChange={setW2Age}
+                  email={w2Email}
+                  onEmailChange={setW2Email}
+                  isAbove18={w2Above18}
+                  onIsAbove18Change={setW2Above18}
                   mobile={w2Mobile}
                   onMobileChange={setW2Mobile}
-                  aadhaar={w2AadhaarLast4}
-                  onAadhaarChange={setW2AadhaarLast4}
                   address={w2Address}
                   onAddressChange={setW2Address}
                 />
@@ -1691,13 +2931,14 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                   onClick={() => setDeliveryType('digital')}
                   role="button"
                   tabIndex={0}
-                  className={`p-4 rounded-xl border cursor-pointer transition-all ${
+                  className={`p-4 rounded-xl border cursor-pointer transition-colors ${
                     deliveryType === 'digital'
-                      ? 'bg-blue-50/70 border-blue-600 shadow-xs ring-1 ring-blue-600'
-                      : 'bg-white border-slate-200 hover:border-slate-300'
+                      ? 'bg-blue-50/75 border-slate-200'
+                      : 'bg-white border-slate-200 hover:bg-slate-50/70'
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
+                    <CircleIndicator checked={deliveryType === 'digital'} />
                     <Download className={`w-5 h-5 ${deliveryType === 'digital' ? 'text-blue-600' : 'text-slate-400'}`} />
                     <div>
                       <h4 className="text-sm font-bold text-black">
@@ -1718,13 +2959,14 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                   onClick={() => setDeliveryType('physical')}
                   role="button"
                   tabIndex={0}
-                  className={`p-4 rounded-xl border cursor-pointer transition-all ${
+                  className={`p-4 rounded-xl border cursor-pointer transition-colors ${
                     deliveryType === 'physical'
-                      ? 'bg-blue-50/70 border-blue-600 shadow-xs ring-1 ring-blue-600'
-                      : 'bg-white border-slate-200 hover:border-slate-300'
+                      ? 'bg-blue-50/75 border-slate-200'
+                      : 'bg-white border-slate-200 hover:bg-slate-50/70'
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
+                    <CircleIndicator checked={deliveryType === 'physical'} />
                     <Truck className={`w-5 h-5 ${deliveryType === 'physical' ? 'text-blue-600' : 'text-slate-400'}`} />
                     <div>
                       <h4 className="text-sm font-bold text-black">
@@ -1830,14 +3072,15 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                   onClick={() => setVerificationMode('self')}
                   role="button"
                   tabIndex={0}
-                  className={`p-4 rounded-xl border cursor-pointer transition-all ${
+                  className={`p-4 rounded-xl border cursor-pointer transition-colors ${
                     verificationMode === 'self'
-                      ? 'bg-blue-50/80 border-blue-600 shadow-xs ring-2 ring-blue-600/50'
-                      : 'bg-white border-slate-200 hover:border-slate-300'
+                      ? 'bg-blue-50/75 border-slate-200'
+                      : 'bg-white border-slate-200 hover:bg-slate-50/70'
                   }`}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
+                      <CircleIndicator checked={verificationMode === 'self'} />
                       <ShieldCheck className={`w-5 h-5 ${verificationMode === 'self' ? 'text-blue-600' : 'text-slate-400'}`} />
                       <h4 className="text-xs sm:text-sm font-bold text-slate-900">
                         Self-Verified (स्व-सत्यापित)
@@ -1857,14 +3100,15 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                   onClick={() => setVerificationMode('expert')}
                   role="button"
                   tabIndex={0}
-                  className={`p-4 rounded-xl border cursor-pointer transition-all ${
+                  className={`p-4 rounded-xl border cursor-pointer transition-colors ${
                     verificationMode === 'expert'
-                      ? 'bg-purple-50/80 border-purple-600 shadow-xs ring-2 ring-purple-600/50'
-                      : 'bg-white border-slate-200 hover:border-slate-300'
+                      ? 'bg-blue-50/75 border-slate-200'
+                      : 'bg-white border-slate-200 hover:bg-slate-50/70'
                   }`}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
+                      <CircleIndicator checked={verificationMode === 'expert'} />
                       <Sparkles className={`w-5 h-5 ${verificationMode === 'expert' ? 'text-purple-600' : 'text-slate-400'}`} />
                       <h4 className="text-xs sm:text-sm font-bold text-slate-900">
                         Expert Legal Re-check
@@ -1907,7 +3151,7 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                 </div>
                 <div className="flex justify-between">
                   <span>
-                    Aadhaar e-Sign ({isUnilateral ? '1 Party' : '2 Parties'} + GST):
+                    Digital e-Sign ({isUnilateral ? '1 Party' : '2 Parties'} + GST):
                   </span>
                   <span className="font-semibold text-slate-900">₹{pricing.eSign}</span>
                 </div>
@@ -1963,18 +3207,14 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
               <div className="space-y-2.5">
                 {[
                   "1. मैंने दस्तावेज़ के सभी नियम व शर्तें ध्यानपूर्वक पढ़ ली हैं और मैं इनसे सहमत हूँ। (I have carefully read and agreed to all terms and conditions of this legal draft.)",
-                  "2. प्रस्तुत की गई दोनों पक्षों और गवाहों की व्यक्तिगत पहचान (PAN/Aadhaar) व पते की जानकारी पूर्णतः सत्य और प्रामाणिक है। (All personal identity and address details of parties and witnesses provided are true and verified.)",
+                  "2. प्रस्तुत की गई दोनों पक्षों और गवाहों की व्यक्तिगत पहचान (PAN व ईमेल) व पते की जानकारी पूर्णतः सत्य और प्रामाणिक है। (All personal identity and address details of parties and witnesses provided are true and verified.)",
                   "3. इस विलेख/करार का निष्पादन बिना किसी दबाव, कपट अथवा अनुचित प्रभाव के स्वतंत्र सहमति से किया जा रहा है। (This deed/agreement is being executed with free consent without any coercion, fraud, or undue influence.)",
-                  "4. संबंधित राज्य सरकार की स्टाम्प ड्यूटी एवं ई-हस्ताक्षर (Aadhaar e-Sign) नियमों के अनुपालन की पूरी ज़िम्मेदारी मेरी है। (I understand and accept full responsibility for compliance with state stamp duty and Aadhaar e-Sign regulations.)",
+                  "4. संबंधित राज्य सरकार की स्टाम्प ड्यूटी एवं डिजिटल ई-हस्ताक्षर (Digital e-Sign) नियमों के अनुपालन की पूरी ज़िम्मेदारी मेरी है। (I understand and accept full responsibility for compliance with state stamp duty and Digital e-Sign regulations.)",
                   "5. मैं पुष्टि करता हूँ कि दस्तावेज़ डिलीवरी के पश्चात देय राशि का भुगतान नियमानुसार करूँगा। (I confirm and agree to pay the post-delivery fee upon receipt of the verified legal document.)"
                 ].map((declarationText, idx) => (
                   <label
                     key={idx}
-                    className={`flex items-start gap-3 p-2.5 rounded-xl border transition-all cursor-pointer select-none ${
-                      declarations[idx]
-                        ? 'bg-emerald-50/70 border-emerald-300 text-slate-900 shadow-2xs'
-                        : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
-                    }`}
+                    className={optionCardClass(Boolean(declarations[idx]), 'p-2.5 text-xs', true)}
                   >
                     <input
                       type="checkbox"
@@ -1985,29 +3225,35 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
                         next[idx] = e.target.checked;
                         setDeclarations(next);
                       }}
-                      className="mt-0.5 w-4 h-4 rounded text-blue-600 border-slate-300 focus:ring-blue-600 cursor-pointer shrink-0"
+                      className="sr-only"
                     />
-                    <span className="text-xs leading-relaxed">{declarationText}</span>
+                    <CircleIndicator checked={Boolean(declarations[idx])} className="mt-0.5" />
+                    <span className="leading-relaxed">{declarationText}</span>
                   </label>
                 ))}
               </div>
             </div>
 
             {/* Platform Intermediary Disclaimer Checkbox */}
-            <div className="p-4 bg-blue-50/50 border border-blue-200 rounded-xl">
-              <label className="flex items-start gap-3 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  required
-                  checked={intermediaryDisclaimerAccepted}
-                  onChange={(e) => setIntermediaryDisclaimerAccepted(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 rounded text-blue-600 border-slate-300 focus:ring-blue-600 cursor-pointer"
-                />
-                <span className="text-xs text-slate-700 leading-relaxed">
-                  I verify that all entries are correct. Cotex Compliance acts strictly as an automated processing intermediary under the IT Act, 2000.
-                </span>
-              </label>
-            </div>
+            <label
+              className={optionCardClass(
+                intermediaryDisclaimerAccepted,
+                'p-4 text-xs',
+                true
+              )}
+            >
+              <input
+                type="checkbox"
+                required
+                checked={intermediaryDisclaimerAccepted}
+                onChange={(e) => setIntermediaryDisclaimerAccepted(e.target.checked)}
+                className="sr-only"
+              />
+              <CircleIndicator checked={intermediaryDisclaimerAccepted} className="mt-0.5" />
+              <span className="text-xs text-slate-700 leading-relaxed">
+                I verify that all entries are correct. Cotex Compliance acts strictly as an automated processing intermediary under the IT Act, 2000.
+              </span>
+            </label>
 
             {/* Bottom Actions */}
             <div className="flex items-center justify-between pt-3 border-t border-slate-200">

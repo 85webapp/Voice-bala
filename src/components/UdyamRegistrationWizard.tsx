@@ -18,7 +18,7 @@ import {
 import { SERVICE_CATEGORIES } from '../data/servicesData';
 import { VoiceGuidanceButton } from './VoiceGuidanceButton';
 import { useExampleDetails } from '../hooks/useExampleDetails';
-import { AadhaarInput } from './AadhaarInput';
+import { CircleIndicator, optionCardClass } from './OptionControl';
 import {
   encryptFormDataAndSign,
   saveLightweightMetadata,
@@ -36,6 +36,7 @@ import { showToast } from '../services/toastService';
 import { AddressFieldGroup } from './AddressFieldGroup';
 import { FormRequestTabBar, HorizontalSwipeContainer, WizardModeTab } from './FormRequestTabBar';
 import { QuickCallbackRequestPanel } from './QuickCallbackRequestPanel';
+import { WhiteSelect } from './WhiteSelect';
 
 interface UdyamRegistrationWizardProps {
   onBack: () => void;
@@ -62,10 +63,11 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
     }
   };
 
-  // STEP 1 State: Aadhaar Authentication & PAN Gate
+  // STEP 1 State: Applicant Contact & PAN Verification
   const [step1, setStep1] = useState({
-    aadhaarNumber: '',
     entrepreneurName: '',
+    mobileNumber: '',
+    email: '',
     otpSent: false,
     otpValue: '',
     otpVerified: false,
@@ -123,7 +125,7 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
   const [step5, setStep5] = useState({
     preferredDIC: 'DIC Mainpuri, Uttar Pradesh',
     declarationAccepted: false,
-    finalAadhaarOtp: '',
+    finalConfirmationOtp: '',
     otpVerified: false
   });
 
@@ -173,14 +175,24 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
     (Number(step4.empFemale) || 0) +
     (Number(step4.empOther) || 0);
 
-  const handleSendAadhaarOtp = () => {
-    if (step1.aadhaarNumber.length === 12) {
+  const handleSendVerificationOtp = () => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (
+      step1.mobileNumber.replace(/\D/g, '').length === 10 &&
+      emailRegex.test(step1.email.trim()) &&
+      step1.entrepreneurName.trim()
+    ) {
       setStep1((prev) => ({ ...prev, otpSent: true, otpValue: '482910' }));
     }
   };
 
-  const handleVerifyAadhaarOtp = () => {
+  const handleVerifyOtp = () => {
     setStep1((prev) => ({ ...prev, otpVerified: true }));
+    setStep3((prev) => ({
+      ...prev,
+      officialMobile: prev.officialMobile || step1.mobileNumber,
+      officialEmail: prev.officialEmail || step1.email
+    }));
   };
 
   const addUnit = () => {
@@ -209,13 +221,24 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
 
   const handleFinalUdyamSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (step1.aadhaarNumber.replace(/\D/g, '').length !== 12) {
-      showToast('Please enter a valid 12-digit Aadhaar number in Step 1.', 'warning');
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(step1.email.trim())) {
+      showToast('Please enter a valid Email Address in Step 1.', 'warning');
+      setCurrentStep(1);
+      return;
+    }
+    if (step1.mobileNumber.replace(/\D/g, '').length !== 10) {
+      showToast('Please enter a valid 10-digit Mobile Number in Step 1.', 'warning');
       setCurrentStep(1);
       return;
     }
     if (step3.officialMobile.replace(/\D/g, '').length !== 10) {
       showToast('Please enter a valid 10-digit official mobile number in Step 3.', 'warning');
+      setCurrentStep(3);
+      return;
+    }
+    if (!emailRegex.test(step3.officialEmail.trim())) {
+      showToast('Please enter a valid official email address in Step 3.', 'warning');
       setCurrentStep(3);
       return;
     }
@@ -249,11 +272,12 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
     const sections: DossierSection[] = [
       {
         pageNumber: 1,
-        sectionTitle: 'Step 1: Aadhaar Authentication & PAN Gate',
+        sectionTitle: 'Step 1: Applicant Contact & PAN Verification',
         fields: [
-          fieldEntry('Aadhaar Number (12 Digits)', step1.aadhaarNumber, false),
-          fieldEntry('Name of Entrepreneur (As per Aadhaar)', step1.entrepreneurName, false),
-          checkboxEntry('Aadhaar OTP Verified', step1.otpVerified, false),
+          fieldEntry('Name of Entrepreneur (Full Legal Name)', step1.entrepreneurName, false),
+          fieldEntry('Mobile Number (10 Digits)', step1.mobileNumber, false),
+          fieldEntry('Email Address', step1.email, false),
+          checkboxEntry('OTP Verified via Mobile / Email', step1.otpVerified, false),
           fieldEntry('Do you have PAN?', step1.hasPan, false, ['Yes', 'No']),
           fieldEntry('PAN Number', step1.hasPan === 'Yes' ? step1.panNumber : '', step1.hasPan !== 'Yes')
         ]
@@ -274,7 +298,7 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
         sectionTitle: 'Step 3: Enterprise Contact, Bank & Plant/Unit Addresses',
         fields: [
           fieldEntry('Name of Enterprise', step3.enterpriseName, false),
-          fieldEntry('Official Email ID', step3.officialEmail, true),
+          fieldEntry('Official Email ID', step3.officialEmail, false),
           fieldEntry('Official Mobile Number', step3.officialMobile, false),
           fieldEntry('Date of Commencement of Business', step3.dateOfCommencement, false),
           fieldEntry('Previous UAM / EM-II Number', step3.previousUamNumber, true),
@@ -315,7 +339,7 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
         fields: [
           fieldEntry('Selected District Industries Centre (DIC)', step5.preferredDIC, false, dicOptions),
           checkboxEntry('MSMED Act 2006 Self-Declaration Accepted', step5.declarationAccepted, false),
-          fieldEntry('Final Aadhaar OTP Entered', step5.finalAadhaarOtp, false)
+          fieldEntry('Final Confirmation OTP Entered', step5.finalConfirmationOtp, false)
         ]
       }
     ];
@@ -491,57 +515,83 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
             </div>
           </div>
 
-          {/* Aadhaar Authentication & PAN Gate */}
+          {/* Applicant Contact & PAN Verification */}
           {currentStep === 1 && (
             <div className="space-y-4">
               <h2 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-2 flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-blue-600" />
-                <span>Aadhaar Authentication &amp; PAN Verification</span>
+                <span>Applicant Contact &amp; PAN Verification</span>
               </h2>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <AadhaarInput
-                    value={step1.aadhaarNumber}
-                    onChange={(val) => setStep1({ ...step1, aadhaarNumber: val })}
-                    required
-                    label="Aadhaar Number (12 Digits)"
-                    placeholder={getPlaceholder('1234 - 5678 - 9012')}
-                  />
-                </div>
-
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Name of Entrepreneur (As per Aadhaar) <span className="text-rose-600">*</span>
+                    Name of Entrepreneur (Full Legal Name) <span className="text-rose-600">*</span>
                   </label>
                   <input
                     type="text"
                     required
-                    placeholder={getPlaceholder('Exact name on Aadhaar card')}
+                    placeholder={getPlaceholder('Exact name as on PAN')}
                     value={step1.entrepreneurName}
                     onChange={(e) => setStep1({ ...step1, entrepreneurName: e.target.value })}
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
 
-                <div className="sm:col-span-2 flex items-center gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Mobile Number (10-Digit) <span className="text-rose-600">*</span>
+                  </label>
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    maxLength={10}
+                    required
+                    placeholder={getPlaceholder('10-digit mobile number')}
+                    value={step1.mobileNumber}
+                    onChange={(e) =>
+                      setStep1({ ...step1, mobileNumber: e.target.value.replace(/\D/g, '').slice(0, 10) })
+                    }
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Email Address <span className="text-rose-600">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    placeholder={getPlaceholder('applicant@business.com')}
+                    value={step1.email}
+                    onChange={(e) => setStep1({ ...step1, email: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  />
+                </div>
+
+                <div className="sm:col-span-3 flex items-center gap-3 flex-wrap">
                   <button
                     type="button"
-                    onClick={handleSendAadhaarOtp}
-                    disabled={step1.aadhaarNumber.length !== 12 || !step1.entrepreneurName.trim()}
+                    onClick={handleSendVerificationOtp}
+                    disabled={
+                      step1.mobileNumber.replace(/\D/g, '').length !== 10 ||
+                      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(step1.email.trim()) ||
+                      !step1.entrepreneurName.trim()
+                    }
                     className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-bold text-xs rounded-xl cursor-pointer"
                   >
-                    {step1.otpSent ? 'Resend Aadhaar OTP' : 'Validate & Send OTP'}
+                    {step1.otpSent ? 'Resend OTP' : 'Validate & Send OTP'}
                   </button>
                   {step1.otpSent && (
                     <span className="text-xs text-emerald-600 font-semibold">
-                      OTP sent to Aadhaar linked mobile number!
+                      OTP sent to your mobile number and email address!
                     </span>
                   )}
                 </div>
 
                 {step1.otpSent && !step1.otpVerified && (
-                  <div className="sm:col-span-2 p-3 bg-blue-50/60 border border-blue-200 rounded-xl flex items-center gap-3">
+                  <div className="sm:col-span-3 p-3 bg-blue-50/60 border border-blue-200 rounded-xl flex items-center gap-3">
                     <input
                       type="text"
                       maxLength={6}
@@ -552,7 +602,7 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
                     />
                     <button
                       type="button"
-                      onClick={handleVerifyAadhaarOtp}
+                      onClick={handleVerifyOtp}
                       className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg cursor-pointer"
                     >
                       Verify OTP
@@ -562,37 +612,30 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
 
                 {/* Sub-section unlocked on OTP verification */}
                 {step1.otpVerified && (
-                  <div className="sm:col-span-2 p-4 bg-emerald-50/50 border border-emerald-200 rounded-xl space-y-3">
+                  <div className="sm:col-span-3 p-4 bg-emerald-50/50 border border-emerald-200 rounded-xl space-y-3">
                     <div className="flex items-center gap-2 text-emerald-800 font-bold text-xs">
                       <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                      <span>Aadhaar Verification Successful</span>
+                      <span>Mobile &amp; Email Verification Successful</span>
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
                         Do you have a PAN? (PAN Card Availability) <span className="text-rose-600">*</span>
                       </label>
-                      <div className="flex items-center gap-4">
-                        <label className="flex items-center gap-1.5 text-xs font-semibold cursor-pointer">
-                          <input
-                            type="radio"
-                            name="hasPan"
-                            checked={step1.hasPan === 'Yes'}
-                            onChange={() => setStep1({ ...step1, hasPan: 'Yes' })}
-                            className="text-blue-600"
-                          />
-                          <span>Yes</span>
-                        </label>
-                        <label className="flex items-center gap-1.5 text-xs font-semibold cursor-pointer">
-                          <input
-                            type="radio"
-                            name="hasPan"
-                            checked={step1.hasPan === 'No'}
-                            onChange={() => setStep1({ ...step1, hasPan: 'No' })}
-                            className="text-blue-600"
-                          />
-                          <span>No</span>
-                        </label>
+                      <div className="flex items-center gap-3">
+                        {(['Yes', 'No'] as const).map((choice) => (
+                          <label key={choice} className={optionCardClass(step1.hasPan === choice)}>
+                            <input
+                              type="radio"
+                              name="hasPan"
+                              checked={step1.hasPan === choice}
+                              onChange={() => setStep1({ ...step1, hasPan: choice })}
+                              className="sr-only"
+                            />
+                            <CircleIndicator checked={step1.hasPan === choice} />
+                            <span className="text-xs font-semibold">{choice}</span>
+                          </label>
+                        ))}
                       </div>
                     </div>
 
@@ -649,35 +692,39 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     Type of Organization <span className="text-rose-600">*</span>
                   </label>
-                  <select
+                  <WhiteSelect
+                    variant="compact"
                     value={step2.organizationType}
-                    onChange={(e) => setStep2({ ...step2, organizationType: e.target.value })}
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  >
-                    <option value="PROPRIETORY">Proprietorship</option>
-                    <option value="HUF">Hindu Undivided Family (HUF)</option>
-                    <option value="PARTNERSHIP">Partnership Firm</option>
-                    <option value="CO_OPERATIVE">Co-operative / Society / Trust</option>
-                    <option value="PVT_LTD">Private Limited Company</option>
-                    <option value="PUBLIC_LTD">Public Limited Company</option>
-                    <option value="LLP">Limited Liability Partnership (LLP)</option>
-                  </select>
+                    onChange={(val) => setStep2({ ...step2, organizationType: val })}
+                    options={[
+                      { value: 'PROPRIETORY', label: 'Proprietorship' },
+                      { value: 'HUF', label: 'Hindu Undivided Family (HUF)' },
+                      { value: 'PARTNERSHIP', label: 'Partnership Firm' },
+                      { value: 'CO_OPERATIVE', label: 'Co-operative / Society / Trust' },
+                      { value: 'PVT_LTD', label: 'Private Limited Company' },
+                      { value: 'PUBLIC_LTD', label: 'Public Limited Company' },
+                      { value: 'LLP', label: 'Limited Liability Partnership (LLP)' }
+                    ]}
+                    aria-label="Type of Organization"
+                  />
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     Social Category <span className="text-rose-600">*</span>
                   </label>
-                  <select
+                  <WhiteSelect
+                    variant="compact"
                     value={step2.socialCategory}
-                    onChange={(e) => setStep2({ ...step2, socialCategory: e.target.value })}
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  >
-                    <option value="GENERAL">General</option>
-                    <option value="SC">SC</option>
-                    <option value="ST">ST</option>
-                    <option value="OBC">OBC</option>
-                  </select>
+                    onChange={(val) => setStep2({ ...step2, socialCategory: val })}
+                    options={[
+                      { value: 'GENERAL', label: 'General' },
+                      { value: 'SC', label: 'SC' },
+                      { value: 'ST', label: 'ST' },
+                      { value: 'OBC', label: 'OBC' }
+                    ]}
+                    aria-label="Social Category"
+                  />
                 </div>
 
                 {step2.socialCategory !== 'GENERAL' && (
@@ -696,38 +743,40 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
                 )}
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Gender</label>
-                  <div className="flex items-center gap-4 pt-1">
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Gender</label>
+                  <div className="flex flex-wrap items-center gap-2.5 pt-1">
                     {['Male', 'Female', 'Other'].map((g) => (
-                      <label key={g} className="flex items-center gap-1.5 text-xs font-semibold cursor-pointer">
+                      <label key={g} className={optionCardClass(step2.gender === g)}>
                         <input
                           type="radio"
                           name="gender"
                           checked={step2.gender === g}
                           onChange={() => setStep2({ ...step2, gender: g })}
-                          className="text-blue-600"
+                          className="sr-only"
                         />
-                        <span>{g}</span>
+                        <CircleIndicator checked={step2.gender === g} />
+                        <span className="text-xs font-semibold">{g}</span>
                       </label>
                     ))}
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
                     Physically Handicapped?
                   </label>
-                  <div className="flex items-center gap-4 pt-1">
+                  <div className="flex flex-wrap items-center gap-2.5 pt-1">
                     {['Yes', 'No'].map((ph) => (
-                      <label key={ph} className="flex items-center gap-1.5 text-xs font-semibold cursor-pointer">
+                      <label key={ph} className={optionCardClass(step2.physicallyHandicapped === ph)}>
                         <input
                           type="radio"
                           name="physicallyHandicapped"
                           checked={step2.physicallyHandicapped === ph}
                           onChange={() => setStep2({ ...step2, physicallyHandicapped: ph })}
-                          className="text-blue-600"
+                          className="sr-only"
                         />
-                        <span>{ph}</span>
+                        <CircleIndicator checked={step2.physicallyHandicapped === ph} />
+                        <span className="text-xs font-semibold">{ph}</span>
                       </label>
                     ))}
                   </div>
@@ -794,9 +843,12 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Official Email Address</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Official Email Address <span className="text-rose-600">*</span>
+                  </label>
                   <input
                     type="email"
+                    required
                     placeholder={getPlaceholder('official@enterprise.com')}
                     value={step3.officialEmail}
                     onChange={(e) => setStep3({ ...step3, officialEmail: e.target.value })}
@@ -819,7 +871,7 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Previous UAM Number <span className="text-slate-400 font-normal">(If migrated from Udyog Aadhaar)</span>
+                    Previous UAM Number <span className="text-slate-400 font-normal">(If already registered on UAM portal)</span>
                   </label>
                   <input
                     type="text"
@@ -946,8 +998,13 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
                 <button
                   type="button"
                   onClick={() => {
+                    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
                     if (step3.officialMobile.replace(/\D/g, '').length !== 10) {
                       showToast('Please enter a valid 10-digit official mobile number.', 'warning');
+                      return;
+                    }
+                    if (!emailRegex.test(step3.officialEmail.trim())) {
+                      showToast('Please enter a valid official email address.', 'warning');
                       return;
                     }
                     setCurrentStep(4);
@@ -971,20 +1028,21 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
                     Major Activity <span className="text-rose-600">*</span>
                   </label>
-                  <div className="flex items-center gap-4 pt-1">
+                  <div className="flex flex-wrap items-center gap-2.5 pt-1">
                     {['MANUFACTURING', 'SERVICES', 'TRADING'].map((act) => (
-                      <label key={act} className="flex items-center gap-1.5 text-xs font-semibold cursor-pointer">
+                      <label key={act} className={optionCardClass(step4.majorActivity === act)}>
                         <input
                           type="radio"
                           name="majorActivity"
                           checked={step4.majorActivity === act}
                           onChange={() => setStep4({ ...step4, majorActivity: act })}
-                          className="text-blue-600"
+                          className="sr-only"
                         />
-                        <span>{act}</span>
+                        <CircleIndicator checked={step4.majorActivity === act} />
+                        <span className="text-xs font-semibold">{act}</span>
                       </label>
                     ))}
                   </div>
@@ -1121,44 +1179,45 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     District Industries Centre (DIC) <span className="text-rose-600">*</span>
                   </label>
-                  <select
+                  <WhiteSelect
+                    variant="compact"
                     value={step5.preferredDIC}
-                    onChange={(e) => setStep5({ ...step5, preferredDIC: e.target.value })}
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  >
-                    <option value="DIC Mainpuri, Uttar Pradesh">DIC Mainpuri, Uttar Pradesh</option>
-                    <option value="DIC Gautam Buddha Nagar (Noida)">DIC Gautam Buddha Nagar (Noida)</option>
-                    <option value="DIC Lucknow, Uttar Pradesh">DIC Lucknow, Uttar Pradesh</option>
-                    <option value="DIC Kanpur, Uttar Pradesh">DIC Kanpur, Uttar Pradesh</option>
-                  </select>
+                    onChange={(val) => setStep5({ ...step5, preferredDIC: val })}
+                    options={[
+                      'DIC Mainpuri, Uttar Pradesh',
+                      'DIC Gautam Buddha Nagar (Noida)',
+                      'DIC Lucknow, Uttar Pradesh',
+                      'DIC Kanpur, Uttar Pradesh'
+                    ]}
+                    aria-label="District Industries Centre"
+                  />
                 </div>
 
-                <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
-                  <label className="flex items-start gap-2.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      required
-                      checked={step5.declarationAccepted}
-                      onChange={(e) => setStep5({ ...step5, declarationAccepted: e.target.checked })}
-                      className="w-4 h-4 text-blue-600 rounded mt-0.5"
-                    />
-                    <span className="text-xs text-slate-700 leading-relaxed">
-                      I hereby declare that the information given above is true and correct to the best of my knowledge and belief. I am aware that furnishing false information is a punishable offense under Section 27 of the MSMED Act, 2006.
-                    </span>
-                  </label>
-                </div>
+                <label className={optionCardClass(step5.declarationAccepted, 'p-4', true)}>
+                  <input
+                    type="checkbox"
+                    required
+                    checked={step5.declarationAccepted}
+                    onChange={(e) => setStep5({ ...step5, declarationAccepted: e.target.checked })}
+                    className="sr-only"
+                  />
+                  <CircleIndicator checked={step5.declarationAccepted} className="mt-0.5" />
+                  <span className="text-xs text-slate-700 leading-relaxed">
+                    I hereby declare that the information given above is true and correct to the best of my knowledge and belief. I am aware that furnishing false information is a punishable offense under Section 27 of the MSMED Act, 2006.
+                  </span>
+                </label>
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Final Confirmation Aadhaar OTP (Enter any 6 digits to verify) <span className="text-rose-600">*</span>
+                    Final Confirmation OTP (Enter any 6 digits sent to Mobile / Email) <span className="text-rose-600">*</span>
                   </label>
                   <input
                     type="text"
                     maxLength={6}
                     required
                     placeholder="Enter 6-digit confirmation OTP"
-                    value={step5.finalAadhaarOtp}
-                    onChange={(e) => setStep5({ ...step5, finalAadhaarOtp: e.target.value })}
+                    value={step5.finalConfirmationOtp}
+                    onChange={(e) => setStep5({ ...step5, finalConfirmationOtp: e.target.value })}
                     className="w-full sm:w-64 bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
@@ -1174,7 +1233,7 @@ export const UdyamRegistrationWizard: React.FC<UdyamRegistrationWizardProps> = (
                 </button>
                 <button
                   type="submit"
-                  disabled={!step5.declarationAccepted || step5.finalAadhaarOtp.length < 6}
+                  disabled={!step5.declarationAccepted || step5.finalConfirmationOtp.length < 6}
                   className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-bold text-sm px-8 py-3 rounded-xl cursor-pointer shadow-md transition-all"
                 >
                   <Award className="w-4 h-4" />

@@ -17,14 +17,32 @@ import {
   ChevronUp
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { AadhaarInput } from './AadhaarInput';
 import { AddressFieldGroup } from './AddressFieldGroup';
+import { DateOfBirthPicker } from './DateOfBirthPicker';
 import {
   PropertyBoundariesSection,
   PropertyBoundariesState,
   createInitialPropertyBoundaries,
   formatSingleBoundary
 } from './PropertyBoundariesSection';
+import { WhiteSelect } from './WhiteSelect';
+import {
+  AgreementValiditySection,
+  AgreementValidityValue,
+  DEFAULT_AGREEMENT_VALIDITY,
+  AGREEMENT_VALIDITY_OPTIONS_LABELS,
+  formatAgreementValidity,
+  isAgreementValidityValid
+} from './AgreementValiditySection';
+import {
+  COMPANY_SUBTYPE_OPTIONS,
+  COMPANY_DESIGNATION_OPTIONS,
+  ENTITY_AUTH_CONFIRM_LABEL,
+  getCompanyFieldLabels,
+  getCompanyRegFieldMeta,
+  isAuthDateRequired,
+  isGstinRequiredForSubType
+} from './CompanyEntityFields';
 import { LegalDocument, OrderItem } from '../types';
 import { STATE_CATEGORIES, getSafeStampDuty } from '../data/stampDutyMatrix';
 import { useExampleDetails } from '../hooks/useExampleDetails';
@@ -47,6 +65,13 @@ import { ServerBSyncStatusCard } from './ServerBSyncStatusCard';
 import { VoiceGuidanceButton } from './VoiceGuidanceButton';
 import { FormRequestTabBar, HorizontalSwipeContainer, WizardModeTab } from './FormRequestTabBar';
 import { QuickCallbackRequestPanel } from './QuickCallbackRequestPanel';
+import { TopicHeader } from './TopicHeader';
+import { SignatoryAuthoritySection } from './SignatoryAuthoritySection';
+import {
+  CircleIndicator,
+  TOPIC_DIVIDER_CLASS,
+  optionCardClass
+} from './OptionControl';
 
 interface GstNocWizardViewProps {
   document: LegalDocument;
@@ -59,7 +84,6 @@ interface CoOwner {
   id: string;
   name: string;
   pan: string;
-  aadhaarLast4: string;
 }
 
 interface CustomGstClause {
@@ -114,14 +138,20 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
   const [landlordFatherName, setLandlordFatherName] = useState('');
   const [landlordAddress, setLandlordAddress] = useState('');
   const [landlordPan, setLandlordPan] = useState('');
-  const [landlordAadhaarLast4, setLandlordAadhaarLast4] = useState('');
   const [landlordMobile, setLandlordMobile] = useState('');
   const [landlordEmail, setLandlordEmail] = useState('');
 
   // Dynamic Ownership Extension
   const [coOwners, setCoOwners] = useState<CoOwner[]>([]);
+  const [corpSubType, setCorpSubType] = useState<string>('Private Limited Company (Pvt Ltd)');
   const [corpCompanyName, setCorpCompanyName] = useState('');
   const [corpCin, setCorpCin] = useState('');
+  const [corpGstin, setCorpGstin] = useState('');
+  const [corpIncDate, setCorpIncDate] = useState('');
+  const [corpDesignation, setCorpDesignation] = useState('Director');
+  const [corpAuthDate, setCorpAuthDate] = useState('');
+  const [landlordEntityAuthConfirmed, setLandlordEntityAuthConfirmed] = useState(false);
+  const [showLandlordEntityAuthError, setShowLandlordEntityAuthError] = useState(false);
   const [boardResolutionFile, setBoardResolutionFile] = useState<UploadedDocumentPayload | null>(null);
   const boardResolutionUploaded = Boolean(boardResolutionFile);
 
@@ -131,8 +161,7 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
       {
         id: `co-${Date.now()}`,
         name: '',
-        pan: '',
-        aadhaarLast4: ''
+        pan: ''
       }
     ]);
   };
@@ -148,10 +177,18 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
   // --- PAGE 3: THE GRANTEE - PROPOSED GST ENTITY ---
   const [proposedTradeName, setProposedTradeName] = useState('');
   const [legalBusinessName, setLegalBusinessName] = useState('');
-  const [constitutionOfBusiness, setConstitutionOfBusiness] = useState<string>('Proprietorship');
+  const [constitutionOfBusiness, setConstitutionOfBusiness] = useState<string>('Sole Proprietorship Firm');
   const [granteePan, setGranteePan] = useState('');
+  const [granteeCin, setGranteeCin] = useState('');
+  const [granteeGstin, setGranteeGstin] = useState('');
+  const [granteeIncDate, setGranteeIncDate] = useState('');
+  const [granteeEmail, setGranteeEmail] = useState('');
+  const [granteeDesignation, setGranteeDesignation] = useState('Director');
+  const [granteeAuthDate, setGranteeAuthDate] = useState('');
   const [applicantName, setApplicantName] = useState('');
   const [granteeAddress, setGranteeAddress] = useState('');
+  const [granteeEntityAuthConfirmed, setGranteeEntityAuthConfirmed] = useState(false);
+  const [showGranteeEntityAuthError, setShowGranteeEntityAuthError] = useState(false);
   const [signingAuthorityFile, setSigningAuthorityFile] = useState<UploadedDocumentPayload | null>(null);
   const signingAuthorityUploaded = Boolean(signingAuthorityFile);
 
@@ -188,12 +225,15 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
     }
   };
 
-  // --- PAGE 4: GST COMPLIANCE & OFFICER INSPECTION CLAUSES ---
-  const [clauseRule9Physical, setClauseRule9Physical] = useState(true);
-  const [clauseRule18Banner, setClauseRule18Banner] = useState(true);
-  const [clauseSec35Books, setClauseSec35Books] = useState(true);
-  const [clauseTaxIndemnity, setClauseTaxIndemnity] = useState(true);
-  const [clauseSubmeterConsent, setClauseSubmeterConsent] = useState(true);
+  // --- PAGE 4: GST COMPLIANCE & OFFICER INSPECTION CLAUSES (Nothing Pre-Selected) ---
+  const [clauseRule9Physical, setClauseRule9Physical] = useState(false);
+  const [clauseRule18Banner, setClauseRule18Banner] = useState(false);
+  const [clauseSec35Books, setClauseSec35Books] = useState(false);
+  const [clauseTaxIndemnity, setClauseTaxIndemnity] = useState(false);
+  const [clauseSubmeterConsent] = useState(false);
+  const [agreementValidity, setAgreementValidity] = useState<AgreementValidityValue>(DEFAULT_AGREEMENT_VALIDITY);
+  const [signatoryAuthorized, setSignatoryAuthorized] = useState(false);
+  const [showSignatoryError, setShowSignatoryError] = useState(false);
 
   // Custom Clauses default to empty array []
   const [customGstClauses, setCustomGstClauses] = useState<CustomGstClause[]>([]);
@@ -288,42 +328,129 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
       }
     }
 
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
     if (currentPage === '2') {
+      const isCorpLessor = ownershipStatus === 'Authorized Director / Partner / Trustee';
+      const isCorpSoleProp = isCorpLessor && corpSubType === 'Sole Proprietorship Firm';
       if (!landlordName.trim()) {
-        showToast('Please provide Landlord Name.', 'warning');
+        showToast(
+          isCorpLessor
+            ? isCorpSoleProp
+              ? 'Please provide Proprietor Full Legal Name.'
+              : 'Please provide Authorized Signatory Name.'
+            : 'Please provide Landlord Name.',
+          'warning'
+        );
         return;
       }
       if (!landlordAddress.trim()) {
-        showToast('Please provide complete Landlord Residential / Registered Address.', 'warning');
+        showToast(
+          isCorpLessor
+            ? getCompanyFieldLabels(corpSubType).addressLabel + ' is mandatory.'
+            : 'Please provide complete Landlord Residential Address.',
+          'warning'
+        );
         return;
       }
       if (landlordPan.trim().length !== 10) {
-        showToast('Landlord 10-character PAN Number is mandatory.', 'warning');
-        return;
-      }
-      if (landlordAadhaarLast4.replace(/\D/g, '').length !== 12) {
-        showToast('Landlord 12-digit Aadhaar Number is mandatory.', 'warning');
+        showToast(
+          isCorpLessor
+            ? `${getCompanyFieldLabels(corpSubType).panLabel} (10-character) is mandatory.`
+            : 'Landlord 10-character PAN Number is mandatory.',
+          'warning'
+        );
         return;
       }
       if (landlordMobile.replace(/\D/g, '').length !== 10) {
         showToast('Please provide a valid 10-digit Landlord Mobile Number.', 'warning');
         return;
       }
-      if (ownershipStatus === 'Authorized Director / Partner / Trustee') {
-        if (!corpCompanyName.trim() || !corpCin.trim()) {
-          showToast('Please enter Company Name and CIN.', 'warning');
+      if (!landlordEmail.trim() || !emailRegex.test(landlordEmail.trim())) {
+        showToast('Please enter a valid mandatory Landlord Email Address.', 'warning');
+        return;
+      }
+      if (isCorpLessor) {
+        const corpRegMeta = getCompanyRegFieldMeta(corpSubType);
+        const corpGstinRequired = isGstinRequiredForSubType(corpSubType);
+        if (!corpCompanyName.trim()) {
+          showToast(`Please enter ${getCompanyFieldLabels(corpSubType).entityNameLabel}.`, 'warning');
+          return;
+        }
+        if (corpRegMeta.required && !corpCin.trim()) {
+          showToast(`Please enter ${corpRegMeta.label}.`, 'warning');
+          return;
+        }
+        const cleanCorpGstin = corpGstin.trim().toUpperCase();
+        if (corpGstinRequired && cleanCorpGstin.length !== 15) {
+          showToast('Please enter a valid 15-character Company / Firm GSTIN Number.', 'warning');
+          return;
+        }
+        if (!corpGstinRequired && cleanCorpGstin.length > 0 && cleanCorpGstin.length !== 15) {
+          showToast('If entering GSTIN, please enter all 15 characters.', 'warning');
+          return;
+        }
+        if (isAuthDateRequired(corpSubType) && !corpAuthDate.trim()) {
+          showToast('Please select Board Resolution / Authorization Letter Date.', 'warning');
+          return;
+        }
+        if (!landlordEntityAuthConfirmed) {
+          setShowLandlordEntityAuthError(true);
+          showToast(`Please tick "${ENTITY_AUTH_CONFIRM_LABEL}" before continuing.`, 'warning');
           return;
         }
       }
     }
 
     if (currentPage === '3') {
+      const isGranteeCompany = constitutionOfBusiness !== 'Sole Proprietorship Firm';
       if (!proposedTradeName.trim() || !legalBusinessName.trim() || granteePan.trim().length !== 10 || !applicantName.trim()) {
-        showToast('Please fill Proposed Trade Name, Legal Business Name, valid 10-char PAN, and Applicant Name.', 'warning');
+        showToast('Please fill Proposed Trade Name, Business/Legal Name, valid 10-char PAN, and Proprietor/Signatory Name.', 'warning');
         return;
       }
+      if (!granteeEmail.trim() || !emailRegex.test(granteeEmail.trim())) {
+        showToast('Please enter a valid mandatory Official Email Address for Grantee.', 'warning');
+        return;
+      }
+      if (isGranteeCompany) {
+        const granteeRegMeta = getCompanyRegFieldMeta(constitutionOfBusiness);
+        const granteeGstinRequired = isGstinRequiredForSubType(constitutionOfBusiness);
+        if (granteeRegMeta.required && !granteeCin.trim()) {
+          showToast(`Please enter ${granteeRegMeta.label} for Grantee entity.`, 'warning');
+          return;
+        }
+        const cleanGranteeGstin = granteeGstin.trim().toUpperCase();
+        if (granteeGstinRequired && cleanGranteeGstin.length !== 15) {
+          showToast('Please enter a valid 15-character Company / Firm GSTIN Number.', 'warning');
+          return;
+        }
+        if (!granteeGstinRequired && cleanGranteeGstin.length > 0 && cleanGranteeGstin.length !== 15) {
+          showToast('If entering GSTIN for Grantee, please enter all 15 characters.', 'warning');
+          return;
+        }
+        if (isAuthDateRequired(constitutionOfBusiness) && !granteeAuthDate.trim()) {
+          showToast('Please select Board Resolution / Authorization Letter Date for Grantee entity.', 'warning');
+          return;
+        }
+      } else {
+        const cleanGranteeGstin = granteeGstin.trim().toUpperCase();
+        if (cleanGranteeGstin.length > 0 && cleanGranteeGstin.length !== 15) {
+          showToast('If entering GSTIN, please enter all 15 characters.', 'warning');
+          return;
+        }
+      }
       if (!granteeAddress.trim()) {
-        showToast('Please provide complete Applicant / Business Communication Address.', 'warning');
+        showToast(
+          isGranteeCompany
+            ? 'Please provide Registered Office Address of Company.'
+            : 'Please provide complete Business Communication Address.',
+          'warning'
+        );
+        return;
+      }
+      if (!granteeEntityAuthConfirmed) {
+        setShowGranteeEntityAuthError(true);
+        showToast(`Please tick "${ENTITY_AUTH_CONFIRM_LABEL}" before continuing.`, 'warning');
         return;
       }
     }
@@ -331,6 +458,22 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
     if (currentPage === '3B') {
       if (!premisesAddress.trim()) {
         showToast('Please enter complete Principal Place of Business Address.', 'warning');
+        return;
+      }
+    }
+
+    if (currentPage === '4') {
+      if (!clauseRule9Physical && !clauseRule18Banner && !clauseSec35Books && !clauseTaxIndemnity) {
+        showToast('Please select at least one consent clause under Topic 1 (Statutory GST Consent Clauses).', 'warning');
+        return;
+      }
+      if (!isAgreementValidityValid(agreementValidity)) {
+        showToast('Please select Agreement Validity duration.', 'warning');
+        return;
+      }
+      if (!signatoryAuthorized) {
+        setShowSignatoryError(true);
+        showToast('Please confirm Signatory Authority to proceed.', 'warning');
         return;
       }
     }
@@ -410,6 +553,10 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
         'Custom Split'
       ];
 
+      const isCorpLessor = ownershipStatus === 'Authorized Director / Partner / Trustee';
+      const isGranteeCompany = constitutionOfBusiness !== 'Sole Proprietorship Firm';
+      const formattedValidity = formatAgreementValidity(agreementValidity);
+
       const sections = [
         {
           pageNumber: 1,
@@ -438,16 +585,37 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
               'Co-Owner / Joint Owner',
               'Authorized Director / Partner / Trustee'
             ]),
-            fieldEntry('Landlord Full Legal Name', landlordName, false),
+            fieldEntry(
+              isCorpLessor
+                ? getCompanyFieldLabels(corpSubType).signatoryLabel
+                : 'Landlord Full Legal Name',
+              landlordName,
+              false
+            ),
             fieldEntry("Father's / Husband's Name", landlordFatherName, false),
-            fieldEntry('Landlord Residential / Registered Address', landlordAddress, false),
-            fieldEntry('Landlord PAN Card', landlordPan, false),
-            fieldEntry('Aadhaar Number (12 Digits)', landlordAadhaarLast4, true),
+            fieldEntry(
+              isCorpLessor
+                ? getCompanyFieldLabels(corpSubType).addressLabel
+                : 'Landlord Residential Address',
+              landlordAddress,
+              false
+            ),
+            fieldEntry(
+              isCorpLessor ? getCompanyFieldLabels(corpSubType).panLabel : 'Landlord PAN Card',
+              landlordPan,
+              false
+            ),
             fieldEntry('Active Mobile Number', landlordMobile, false),
-            fieldEntry('Email ID', landlordEmail, true),
+            fieldEntry('Email ID', landlordEmail, false),
             fieldEntry('Co-Owners / Joint Owners List', coOwners.length > 0 ? coOwners : '', ownershipStatus !== 'Co-Owner / Joint Owner'),
-            fieldEntry('Corporate Company / LLP Name', corpCompanyName, ownershipStatus !== 'Authorized Director / Partner / Trustee'),
-            fieldEntry('Corporate CIN / LLPIN', corpCin, ownershipStatus !== 'Authorized Director / Partner / Trustee'),
+            fieldEntry('Company / Firm Type', corpSubType, !isCorpLessor, COMPANY_SUBTYPE_OPTIONS),
+            fieldEntry(getCompanyFieldLabels(corpSubType).entityNameLabel, corpCompanyName, !isCorpLessor),
+            fieldEntry(getCompanyRegFieldMeta(corpSubType).label, corpCin, !isCorpLessor),
+            fieldEntry('Company / Firm GSTIN Number', corpGstin, !isCorpLessor),
+            fieldEntry(getCompanyFieldLabels(corpSubType).incDateLabel, corpIncDate, !isCorpLessor),
+            fieldEntry('Signatory Designation', corpDesignation, !isCorpLessor || corpSubType === 'Sole Proprietorship Firm', COMPANY_DESIGNATION_OPTIONS),
+            fieldEntry('Board Resolution / Auth Letter Date', corpAuthDate, !isCorpLessor || corpSubType === 'Sole Proprietorship Firm'),
+            checkboxEntry(ENTITY_AUTH_CONFIRM_LABEL, landlordEntityAuthConfirmed, !isCorpLessor),
             fieldEntry('Board Resolution / Authorization Upload', boardResolutionFile ? `${boardResolutionFile.fileName} (${boardResolutionFile.mimeType})` : '', true)
           ]
         },
@@ -455,19 +623,19 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
           pageNumber: 3,
           sectionTitle: '2nd Party (Proposed GST Business Entity)',
           fields: [
-            fieldEntry('Constitution of Business', constitutionOfBusiness, false, [
-              'Proprietorship',
-              'Partnership',
-              'Private Limited Company',
-              'Limited Liability Partnership',
-              'One Person Company',
-              'Trust / Society / Club / AOP'
-            ]),
+            fieldEntry('Constitution of Business', constitutionOfBusiness, false, COMPANY_SUBTYPE_OPTIONS),
             fieldEntry('Proposed Trade Name', proposedTradeName, false),
-            fieldEntry('Legal Name (As on PAN)', legalBusinessName, false),
-            fieldEntry('Business / Grantee PAN Card', granteePan, false),
-            fieldEntry('Applicant Full Name', applicantName, false),
-            fieldEntry('Applicant / Business Communication Address', granteeAddress, false),
+            fieldEntry(getCompanyFieldLabels(constitutionOfBusiness).entityNameLabel, legalBusinessName, false),
+            fieldEntry(getCompanyFieldLabels(constitutionOfBusiness).panLabel, granteePan, false),
+            fieldEntry(getCompanyRegFieldMeta(constitutionOfBusiness).label, granteeCin, !isGranteeCompany),
+            fieldEntry('Company / Firm GSTIN Number', granteeGstin, true),
+            fieldEntry(getCompanyFieldLabels(constitutionOfBusiness).incDateLabel, granteeIncDate, true),
+            fieldEntry('Official Email Address', granteeEmail, false),
+            fieldEntry(getCompanyFieldLabels(constitutionOfBusiness).signatoryLabel, applicantName, false),
+            fieldEntry('Signatory Designation', granteeDesignation, !isGranteeCompany, COMPANY_DESIGNATION_OPTIONS),
+            fieldEntry('Board Resolution / Auth Letter Date', granteeAuthDate, !isGranteeCompany),
+            fieldEntry(getCompanyFieldLabels(constitutionOfBusiness).addressLabel, granteeAddress, false),
+            checkboxEntry(ENTITY_AUTH_CONFIRM_LABEL, granteeEntityAuthConfirmed, false),
             fieldEntry('Applicant Signing Authority / ID Proof Upload', signingAuthorityFile ? `${signingAuthorityFile.fileName} (${signingAuthorityFile.mimeType})` : '', true)
           ]
         },
@@ -501,6 +669,8 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
             checkboxEntry('Maintenance of Books of Accounts (Section 35)', clauseSec35Books, true),
             checkboxEntry('Tax Liability Indemnity Clause', clauseTaxIndemnity, true),
             checkboxEntry('Sub-meter / Utility Consent Clause', clauseSubmeterConsent, true),
+            fieldEntry('Agreement / NOC Validity Duration', formattedValidity, false, AGREEMENT_VALIDITY_OPTIONS_LABELS),
+            checkboxEntry('Signatory Authority Confirmation (Yes, I am authorized to enter this agreement.)', signatoryAuthorized, false),
             fieldEntry('Custom Operational Clauses', customGstClauses.length > 0 ? customGstClauses : '', true)
           ]
         },
@@ -539,13 +709,18 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
           fatherName: landlordFatherName,
           address: landlordAddress,
           ownershipStatus,
+          corpSubType: isCorpLessor ? corpSubType : '',
           pan: landlordPan,
-          aadhaar: landlordAadhaarLast4,
           mobile: landlordMobile,
           email: landlordEmail,
           coOwners,
           corpCompanyName: corpCompanyName || '',
           corpCin: corpCin || '',
+          corpGstin: corpGstin || '',
+          corpIncDate: isCorpLessor ? corpIncDate : '',
+          corpDesignation: isCorpLessor ? corpDesignation : '',
+          corpAuthDate: isCorpLessor ? corpAuthDate : '',
+          entityAuthConfirmed: isCorpLessor ? landlordEntityAuthConfirmed : undefined,
           boardResolutionUploaded,
           boardResolutionFile
         },
@@ -564,8 +739,15 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
           legalBusinessName,
           constitutionOfBusiness,
           granteePan,
+          granteeCin,
+          granteeGstin,
+          granteeIncDate,
+          granteeEmail,
+          granteeDesignation: isGranteeCompany ? granteeDesignation : 'Proprietor',
+          granteeAuthDate,
           applicantName,
           address: granteeAddress,
+          entityAuthConfirmed: granteeEntityAuthConfirmed,
           signingAuthorityUploaded,
           signingAuthorityFile
         },
@@ -575,6 +757,9 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
           clauseSec35Books,
           clauseTaxIndemnity,
           clauseSubmeterConsent,
+          agreementValidity: formattedValidity,
+          agreementValidityDetails: agreementValidity,
+          signatoryAuthorized,
           customGstClauses
         },
         delivery: {
@@ -799,15 +984,16 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
               <label className="block text-xs font-bold text-slate-800 mb-1.5">
                 Type of Premises <span className="text-red-500">*</span>
               </label>
-              <select
+              <WhiteSelect
                 value={premisesType}
-                onChange={(e) => setPremisesType(e.target.value)}
-                className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-black focus:outline-none focus:ring-2 focus:ring-blue-600"
-              >
-                <option value="Commercial Building / Shop / Office">Commercial Building / Shop / Office</option>
-                <option value="Industrial Area / Shed / Warehouse">Industrial Area / Shed / Warehouse</option>
-                <option value="Residential Property used for Business">Residential Property used for Business</option>
-              </select>
+                onChange={(val) => setPremisesType(val)}
+                options={[
+                  'Commercial Building / Shop / Office',
+                  'Industrial Area / Shed / Warehouse',
+                  'Residential Property used for Business'
+                ]}
+                aria-label="Type of Premises"
+              />
             </div>
 
             {/* State Selection */}
@@ -815,17 +1001,28 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
               <label className="block text-xs font-bold text-slate-800 mb-1.5">
                 State / Union Territory (36 States/UTs) <span className="text-red-500">*</span>
               </label>
-              <select
+              <WhiteSelect
                 value={selectedState}
-                onChange={(e) => setSelectedState(e.target.value)}
-                className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-black focus:outline-none focus:ring-2 focus:ring-blue-600"
-              >
-                {STATE_CATEGORIES.map((s) => (
-                  <option key={s.name} value={s.name}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
+                onChange={(val) => setSelectedState(val)}
+                options={[
+                  ...STATE_CATEGORIES.filter((s) => s.category === 'online_download').map((s) => ({
+                    value: s.name,
+                    label: s.label,
+                    group: '1. Online Purchase & Download Available (Plain Text)'
+                  })),
+                  ...STATE_CATEGORIES.filter((s) => s.category === 'online_nodownload').map((s) => ({
+                    value: s.name,
+                    label: s.label,
+                    group: '2. Online Purchase Available, Download Not Available (🔵 Blue Dot)'
+                  })),
+                  ...STATE_CATEGORIES.filter((s) => s.category === 'offline_only').map((s) => ({
+                    value: s.name,
+                    label: s.label,
+                    group: '3. Neither Online Purchase nor Download Available (⭐ Star)'
+                  }))
+                ]}
+                aria-label="State / Union Territory"
+              />
             </div>
 
 
@@ -837,40 +1034,30 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
               </label>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <label
-                  className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
-                    stampProcurementMode === 'estamp'
-                      ? 'border-blue-600 bg-blue-50/60 ring-1 ring-blue-600'
-                      : 'border-slate-200 hover:border-slate-300'
-                  }`}
-                >
+                <label className={optionCardClass(stampProcurementMode === 'estamp')}>
                   <input
                     type="radio"
                     name="procurementMode"
                     checked={stampProcurementMode === 'estamp'}
                     onChange={() => setStampProcurementMode('estamp')}
-                    className="w-4 h-4 text-blue-600"
+                    className="sr-only"
                   />
+                  <CircleIndicator checked={stampProcurementMode === 'estamp'} />
                   <div>
                     <span className="text-xs font-bold text-black block">E-Stamp Paper / Digital Stamp</span>
                     <span className="text-[11px] text-slate-500">System generated official state e-stamp</span>
                   </div>
                 </label>
 
-                <label
-                  className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
-                    stampProcurementMode === 'physical_upload'
-                      ? 'border-blue-600 bg-blue-50/60 ring-1 ring-blue-600'
-                      : 'border-slate-200 hover:border-slate-300'
-                  }`}
-                >
+                <label className={optionCardClass(stampProcurementMode === 'physical_upload')}>
                   <input
                     type="radio"
                     name="procurementMode"
                     checked={stampProcurementMode === 'physical_upload'}
                     onChange={() => setStampProcurementMode('physical_upload')}
-                    className="w-4 h-4 text-blue-600"
+                    className="sr-only"
                   />
+                  <CircleIndicator checked={stampProcurementMode === 'physical_upload'} />
                   <div>
                     <span className="text-xs font-bold text-black block">Physical Stamp Paper (User Upload)</span>
                     <span className="text-[11px] text-slate-500">Upload your own pre-purchased physical stamp</span>
@@ -990,16 +1177,17 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
                 Stamp Duty Cost Paid By <span className="text-red-500 font-bold">*</span>
               </label>
 
-              <select
+              <WhiteSelect
                 value={stampCostBorneBy}
-                onChange={(e) => setStampCostBorneBy(e.target.value)}
-                className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-              >
-                <option value="First Party (Landlord / Owner)">First Party (Landlord / Owner)</option>
-                <option value="Second Party (Business Owner / Grantee)">Second Party (Business Owner / Grantee)</option>
-                <option value="Shared Equally (50-50 Split)">Shared Equally (50-50 Split)</option>
-                <option value="Custom Split">Custom Ratio or Fixed Amount Split</option>
-              </select>
+                onChange={(val) => setStampCostBorneBy(val)}
+                options={[
+                  { value: 'First Party (Landlord / Owner)', label: 'First Party (Landlord / Owner)' },
+                  { value: 'Second Party (Business Owner / Grantee)', label: 'Second Party (Business Owner / Grantee)' },
+                  { value: 'Shared Equally (50-50 Split)', label: 'Shared Equally (50-50 Split)' },
+                  { value: 'Custom Split', label: 'Custom Ratio or Fixed Amount Split' }
+                ]}
+                aria-label="Stamp Duty Cost Paid By"
+              />
 
               {stampCostBorneBy === 'Custom Split' && (
                 <div className="mt-2">
@@ -1040,21 +1228,25 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
               <label className="block text-xs font-bold text-slate-700 mb-1">
                 Landlord Standing &amp; Entity Type <span className="text-red-500">*</span>
               </label>
-              <select
+              <WhiteSelect
                 value={ownershipStatus}
-                onChange={(e) => setOwnershipStatus(e.target.value)}
-                className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-              >
-                <option value="Sole Owner">Sole Individual Owner</option>
-                <option value="Co-Owner / Joint Owner">Co-Owner / Joint Owners</option>
-                <option value="Authorized Director / Partner / Trustee">Corporate Entity / Company / LLP</option>
-              </select>
+                onChange={(val) => setOwnershipStatus(val)}
+                options={[
+                  { value: 'Sole Owner', label: 'Sole Individual Owner' },
+                  { value: 'Co-Owner / Joint Owner', label: 'Co-Owner / Joint Owners' },
+                  { value: 'Authorized Director / Partner / Trustee', label: 'Company / Firm' }
+                ]}
+                aria-label="Landlord Standing and Entity Type"
+              />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Landlord Full Legal Name <span className="text-red-500">*</span>
+                  {ownershipStatus === 'Authorized Director / Partner / Trustee'
+                    ? getCompanyFieldLabels(corpSubType).signatoryLabel
+                    : 'Landlord Full Legal Name'}{' '}
+                  <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -1081,11 +1273,14 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
               </div>
             </div>
 
-            {/* KYC: PAN (Alphanumeric text removed), Mobile (No OTP button), Email (Optional) */}
+            {/* KYC: PAN, Mobile, Mandatory Email */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Landlord PAN Card <span className="text-red-500">*</span>
+                  {ownershipStatus === 'Authorized Director / Partner / Trustee'
+                    ? getCompanyFieldLabels(corpSubType).panLabel
+                    : 'Landlord PAN Card'}{' '}
+                  <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -1095,16 +1290,6 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
                   onChange={(e) => setLandlordPan(e.target.value.toUpperCase())}
                   placeholder={showExample ? "ABCDE1234F" : ""}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm font-mono uppercase text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                />
-              </div>
-
-              <div>
-                <AadhaarInput
-                  value={landlordAadhaarLast4}
-                  onChange={(val) => setLandlordAadhaarLast4(val)}
-                  required
-                  label="Aadhaar Number (12 Digits)"
-                  placeholder={showExample ? "1234 - 5678 - 9012" : "12-digit Aadhaar number"}
                 />
               </div>
 
@@ -1126,10 +1311,11 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Email ID <span className="text-slate-400 font-normal">(Optional)</span>
+                  Email Address <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="email"
+                  required
                   value={landlordEmail}
                   onChange={(e) => setLandlordEmail(e.target.value)}
                   placeholder={showExample ? "owner@example.com" : ""}
@@ -1139,7 +1325,11 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
             </div>
 
             <AddressFieldGroup
-              label="Landlord Residential / Registered Address"
+              label={
+                ownershipStatus === 'Authorized Director / Partner / Trustee'
+                  ? getCompanyFieldLabels(corpSubType).addressLabel
+                  : 'Landlord Residential Address'
+              }
               variant="standard"
               value={landlordAddress}
               onChangeAddress={(addr) => setLandlordAddress(addr)}
@@ -1175,7 +1365,7 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                       <div>
                         <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
                           Co-Owner Full Name
@@ -1201,14 +1391,6 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
                           className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-mono uppercase text-slate-900"
                         />
                       </div>
-                      <div>
-                        <AadhaarInput
-                          value={co.aadhaarLast4}
-                          onChange={(val) => updateCoOwner(co.id, 'aadhaarLast4', val)}
-                          label="Aadhaar Number (12 Digits)"
-                          placeholder={showExample ? "1234 - 5678 - 9012" : "12-digit Aadhaar number"}
-                        />
-                      </div>
                     </div>
                   </div>
                 ))}
@@ -1216,39 +1398,134 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
             )}
 
             {/* Corporate Owner Extension */}
-            {ownershipStatus === 'Authorized Director / Partner / Trustee' && (
+            {ownershipStatus === 'Authorized Director / Partner / Trustee' && (() => {
+              const corpRegMeta = getCompanyRegFieldMeta(corpSubType);
+              const corpAuthMandatory = isAuthDateRequired(corpSubType);
+              const corpGstinRequired = isGstinRequiredForSubType(corpSubType);
+              const corpLabels = getCompanyFieldLabels(corpSubType);
+              const isCorpSoleProp = corpSubType === 'Sole Proprietorship Firm';
+              return (
               <div className="space-y-3 p-4 bg-slate-50 border border-slate-200 rounded-xl animate-fadeIn">
                 <span className="text-xs font-bold text-blue-700 uppercase tracking-wider block">
-                  Corporate Lessor Credentials
+                  Corporate / Firm Lessor Credentials
                 </span>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Company / Firm Type <span className="text-red-500">*</span>
+                  </label>
+                  <WhiteSelect
+                    value={corpSubType}
+                    onChange={(val) => setCorpSubType(val)}
+                    options={COMPANY_SUBTYPE_OPTIONS}
+                    aria-label="Corporate Landlord Subtype"
+                  />
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Company / LLP Name <span className="text-red-500">*</span>
+                      {corpLabels.entityNameLabel} <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
                       required
                       value={corpCompanyName}
                       onChange={(e) => setCorpCompanyName(e.target.value)}
-                      placeholder={showExample ? "e.g. Skyline Commercial Assets Pvt Ltd" : ""}
+                      placeholder={showExample ? corpLabels.entityNamePlaceholder : ""}
                       className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900"
                     />
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
-                      CIN / LLPIN <span className="text-red-500">*</span>
+                      {corpRegMeta.label}{' '}
+                      {corpRegMeta.required ? (
+                        <span className="text-red-500">*</span>
+                      ) : (
+                        <span className="text-slate-400 font-normal">(Optional)</span>
+                      )}
                     </label>
                     <input
                       type="text"
-                      required
+                      required={corpRegMeta.required}
                       value={corpCin}
                       onChange={(e) => setCorpCin(e.target.value.toUpperCase())}
-                      placeholder={showExample ? "e.g. U72200UP2018PTC105544" : ""}
+                      placeholder={showExample ? corpRegMeta.placeholder : ""}
                       className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono uppercase text-slate-900"
                     />
                   </div>
                 </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Company / Firm GSTIN Number{' '}
+                      {corpGstinRequired ? (
+                        <span className="text-red-500">*</span>
+                      ) : (
+                        <span className="text-slate-400 font-normal">(Optional)</span>
+                      )}
+                    </label>
+                    <input
+                      type="text"
+                      required={corpGstinRequired}
+                      maxLength={15}
+                      value={corpGstin}
+                      onChange={(e) => setCorpGstin(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 15))}
+                      placeholder={showExample ? "27AABCU9603R1ZM" : ""}
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono uppercase text-slate-900"
+                    />
+                  </div>
+                  <div>
+                    <DateOfBirthPicker
+                      label={corpLabels.incDateLabel}
+                      value={corpIncDate}
+                      onChange={setCorpIncDate}
+                      required={false}
+                      placeholder="DD/MM/YYYY"
+                      helperText={showExample ? 'Format: DD/MM/YYYY' : undefined}
+                    />
+                  </div>
+                </div>
+
+                {!isCorpSoleProp && (
+                  <div className="p-3 bg-white border border-slate-200 rounded-xl space-y-2.5">
+                    <span className="text-[11px] font-bold text-blue-700 uppercase tracking-wider block">
+                      Authorized Signatory &amp; Authorization Details
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">
+                          Signatory Designation <span className="text-red-500">*</span>
+                        </label>
+                        <WhiteSelect
+                          variant="compact"
+                          value={corpDesignation}
+                          onChange={(val) => setCorpDesignation(val)}
+                          options={COMPANY_DESIGNATION_OPTIONS}
+                          aria-label="Corporate Landlord Designation"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">
+                          Board Resolution / Auth Letter Date{' '}
+                          {corpAuthMandatory ? (
+                            <span className="text-red-500">*</span>
+                          ) : (
+                            <span className="text-slate-400 font-normal">(Optional)</span>
+                          )}
+                        </label>
+                        <input
+                          type="date"
+                          required={corpAuthMandatory}
+                          value={corpAuthDate}
+                          onChange={(e) => setCorpAuthDate(e.target.value)}
+                          className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <div className="pt-2 border-t border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
@@ -1283,8 +1560,41 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
                     )}
                   </div>
                 </div>
+
+                {/* Mandatory Bottom Entity Authorization Checkbox */}
+                <div className="pt-1 space-y-1.5">
+                  <label
+                    className={optionCardClass(
+                      landlordEntityAuthConfirmed,
+                      showLandlordEntityAuthError && !landlordEntityAuthConfirmed
+                        ? 'border-rose-400 bg-rose-50/40'
+                        : '',
+                      true
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={landlordEntityAuthConfirmed}
+                      onChange={(e) => {
+                        setLandlordEntityAuthConfirmed(e.target.checked);
+                        if (e.target.checked) setShowLandlordEntityAuthError(false);
+                      }}
+                      className="sr-only"
+                    />
+                    <CircleIndicator checked={landlordEntityAuthConfirmed} className="mt-0.5" />
+                    <span className="text-xs text-slate-800">
+                      {ENTITY_AUTH_CONFIRM_LABEL} <span className="text-red-500 font-bold">*</span>
+                    </span>
+                  </label>
+                  {showLandlordEntityAuthError && !landlordEntityAuthConfirmed && (
+                    <p className="text-xs font-bold text-rose-600">
+                      Please tick &ldquo;{ENTITY_AUTH_CONFIRM_LABEL}&rdquo; before continuing.
+                    </p>
+                  )}
+                </div>
               </div>
-            )}
+              );
+            })()}
           </div>
         )}
 
@@ -1312,122 +1622,275 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
               <label className="block text-xs font-bold text-slate-700 mb-1">
                 Constitution of Business <span className="text-red-500">*</span>
               </label>
-              <select
+              <WhiteSelect
                 value={constitutionOfBusiness}
-                onChange={(e) => setConstitutionOfBusiness(e.target.value)}
-                className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-              >
-                <option value="Proprietorship">Sole Proprietorship</option>
-                <option value="Partnership">Partnership Firm</option>
-                <option value="Private Limited Company">Private Limited Company</option>
-                <option value="Limited Liability Partnership">Limited Liability Partnership (LLP)</option>
-                <option value="One Person Company">One Person Company (OPC)</option>
-                <option value="Trust / Society / Club / AOP">Trust / Society / Club / AOP</option>
-              </select>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Proposed Trade Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={proposedTradeName}
-                  onChange={(e) => handleTradeNameChange(e.target.value)}
-                  placeholder={showExample ? "e.g. Apex Global Enterprises" : ""}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Legal Name (As on PAN) <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={legalBusinessName}
-                  onChange={(e) => setLegalBusinessName(e.target.value)}
-                  placeholder={showExample ? "e.g. Amit Kumar Sharma" : ""}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  PAN Card <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  maxLength={10}
-                  value={granteePan}
-                  onChange={(e) => setGranteePan(e.target.value.toUpperCase())}
-                  placeholder={showExample ? "ABCDE1234F" : ""}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm font-mono uppercase text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Applicant Full Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={applicantName}
-                  onChange={(e) => setApplicantName(e.target.value)}
-                  placeholder={showExample ? "e.g. Amit Sharma" : ""}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                />
-              </div>
-            </div>
-
-            <AddressFieldGroup
-              label="Applicant / Business Communication Address"
-              variant="standard"
-              value={granteeAddress}
-              onChangeAddress={(addr) => setGranteeAddress(addr)}
-              required
-            />
-
-            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-800">
-                  Applicant Signing Authority / Authorization Proof <span className="text-slate-400 font-normal">(Optional)</span>
-                </label>
-                <span className="text-[11px] text-slate-500 block">
-                  {signingAuthorityFile
-                    ? `Attached: ${signingAuthorityFile.fileName} (${Math.max(1, Math.round(signingAuthorityFile.sizeBytes / 1024))} KB)`
-                    : 'Upload Partnership Deed, Authorization Letter, or ID Proof (PDF/JPG/PNG)'}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <label className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs cursor-pointer shadow-xs transition-all">
-                  <UploadCloud className="w-3.5 h-3.5" />
-                  <span>{signingAuthorityFile ? 'Change File' : 'Upload File'}</span>
-                  <input
-                    type="file"
-                    accept="image/*,.pdf"
-                    onChange={(e) => handleRealFileSelect(e, 'Applicant Signing Authority Proof', setSigningAuthorityFile)}
-                    className="sr-only"
-                  />
-                </label>
-                {signingAuthorityFile && (
-                  <button
-                    type="button"
-                    onClick={() => setSigningAuthorityFile(null)}
-                    className="px-2.5 py-1.5 rounded-xl border border-slate-300 bg-white text-slate-600 hover:text-rose-600 text-xs font-semibold cursor-pointer"
-                  >
-                    Remove
-                  </button>
+                onChange={(val) => setConstitutionOfBusiness(val)}
+                options={COMPANY_SUBTYPE_OPTIONS.map((opt) =>
+                  opt === 'Sole Proprietorship Firm'
+                    ? { value: 'Sole Proprietorship Firm', label: 'Sole Proprietorship Firm' }
+                    : opt
                 )}
-              </div>
+                aria-label="Constitution of Business"
+              />
             </div>
+
+            {(() => {
+              const granteeLabels = getCompanyFieldLabels(constitutionOfBusiness);
+              const granteeRegMeta = getCompanyRegFieldMeta(constitutionOfBusiness);
+              const granteeAuthMandatory = isAuthDateRequired(constitutionOfBusiness);
+              const granteeGstinRequired = isGstinRequiredForSubType(constitutionOfBusiness);
+              const isGranteeSoleProp = constitutionOfBusiness === 'Sole Proprietorship Firm';
+
+              return (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Proposed Trade Name <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={proposedTradeName}
+                        onChange={(e) => handleTradeNameChange(e.target.value)}
+                        placeholder={showExample ? "e.g. Apex Global Enterprises" : ""}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        {granteeLabels.entityNameLabel} <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={legalBusinessName}
+                        onChange={(e) => setLegalBusinessName(e.target.value)}
+                        placeholder={showExample ? granteeLabels.entityNamePlaceholder : ""}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        {granteeLabels.panLabel} <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        maxLength={10}
+                        value={granteePan}
+                        onChange={(e) => setGranteePan(e.target.value.toUpperCase())}
+                        placeholder={showExample ? "ABCDE1234F" : ""}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm font-mono uppercase text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Official Email Address <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="email"
+                        required
+                        value={granteeEmail}
+                        onChange={(e) => setGranteeEmail(e.target.value)}
+                        placeholder={showExample ? "gst@business.com" : ""}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Company / Firm Credentials (Date of Incorporation kept UP here, GSTIN optional for non-Pvt/Ltd) */}
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3 animate-fadeIn">
+                    <span className="text-xs font-bold text-blue-700 uppercase tracking-wider block">
+                      {isGranteeSoleProp ? 'Business Registration & GSTIN (Optional)' : 'Company / Firm Credentials'}
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">
+                          {granteeRegMeta.label}{' '}
+                          {granteeRegMeta.required && !isGranteeSoleProp ? (
+                            <span className="text-red-500">*</span>
+                          ) : (
+                            <span className="text-slate-400 font-normal">(Optional)</span>
+                          )}
+                        </label>
+                        <input
+                          type="text"
+                          required={granteeRegMeta.required && !isGranteeSoleProp}
+                          value={granteeCin}
+                          onChange={(e) => setGranteeCin(e.target.value.toUpperCase())}
+                          placeholder={showExample ? granteeRegMeta.placeholder : ""}
+                          className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono uppercase text-slate-900"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">
+                          Company / Firm GSTIN Number{' '}
+                          {granteeGstinRequired ? (
+                            <span className="text-red-500">*</span>
+                          ) : (
+                            <span className="text-slate-400 font-normal">(Optional)</span>
+                          )}
+                        </label>
+                        <input
+                          type="text"
+                          required={granteeGstinRequired}
+                          maxLength={15}
+                          value={granteeGstin}
+                          onChange={(e) => setGranteeGstin(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 15))}
+                          placeholder={showExample ? "27AABCU9603R1ZM" : ""}
+                          className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono uppercase text-slate-900"
+                        />
+                      </div>
+                      <div>
+                        <DateOfBirthPicker
+                          label={granteeLabels.incDateLabel}
+                          value={granteeIncDate}
+                          onChange={setGranteeIncDate}
+                          required={false}
+                          placeholder="DD/MM/YYYY"
+                          helperText={showExample ? 'Format: DD/MM/YYYY' : undefined}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <AddressFieldGroup
+                    label={granteeLabels.addressLabel}
+                    variant="standard"
+                    value={granteeAddress}
+                    onChangeAddress={(addr) => setGranteeAddress(addr)}
+                    required
+                  />
+
+                  {/* Authorized Signatory / Proprietor Details (No Aadhaar, No Date of Incorporation) */}
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                    <span className="text-xs font-bold text-blue-700 uppercase tracking-wider block">
+                      {isGranteeSoleProp ? 'Proprietor Details' : 'Authorized Signatory & Authorization Details'}
+                    </span>
+                    <div className={isGranteeSoleProp ? 'grid grid-cols-1 gap-3' : 'grid grid-cols-1 sm:grid-cols-3 gap-3'}>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">
+                          {granteeLabels.signatoryLabel} <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={applicantName}
+                          onChange={(e) => setApplicantName(e.target.value)}
+                          placeholder={showExample ? granteeLabels.signatoryPlaceholder : ""}
+                          className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                        />
+                      </div>
+                      {!isGranteeSoleProp && (
+                        <>
+                          <div>
+                            <label className="block text-xs font-bold text-slate-700 mb-1">
+                              Signatory Designation <span className="text-red-500">*</span>
+                            </label>
+                            <WhiteSelect
+                              variant="compact"
+                              value={granteeDesignation}
+                              onChange={(val) => setGranteeDesignation(val)}
+                              options={COMPANY_DESIGNATION_OPTIONS}
+                              aria-label="Grantee Signatory Designation"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-slate-700 mb-1">
+                              Board Resolution / Auth Letter Date{' '}
+                              {granteeAuthMandatory ? (
+                                <span className="text-red-500">*</span>
+                              ) : (
+                                <span className="text-slate-400 font-normal">(Optional)</span>
+                              )}
+                            </label>
+                            <input
+                              type="date"
+                              required={granteeAuthMandatory}
+                              value={granteeAuthDate}
+                              onChange={(e) => setGranteeAuthDate(e.target.value)}
+                              className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900"
+                            />
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-800">
+                        Applicant Signing Authority / Authorization Proof <span className="text-slate-400 font-normal">(Optional)</span>
+                      </label>
+                      <span className="text-[11px] text-slate-500 block">
+                        {signingAuthorityFile
+                          ? `Attached: ${signingAuthorityFile.fileName} (${Math.max(1, Math.round(signingAuthorityFile.sizeBytes / 1024))} KB)`
+                          : 'Upload Partnership Deed, Authorization Letter, or ID Proof (PDF/JPG/PNG)'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs cursor-pointer shadow-xs transition-all">
+                        <UploadCloud className="w-3.5 h-3.5" />
+                        <span>{signingAuthorityFile ? 'Change File' : 'Upload File'}</span>
+                        <input
+                          type="file"
+                          accept="image/*,.pdf"
+                          onChange={(e) => handleRealFileSelect(e, 'Applicant Signing Authority Proof', setSigningAuthorityFile)}
+                          className="sr-only"
+                        />
+                      </label>
+                      {signingAuthorityFile && (
+                        <button
+                          type="button"
+                          onClick={() => setSigningAuthorityFile(null)}
+                          className="px-2.5 py-1.5 rounded-xl border border-slate-300 bg-white text-slate-600 hover:text-rose-600 text-xs font-semibold cursor-pointer"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Mandatory Bottom Entity Authorization Confirmation Checkbox */}
+                  <div className="space-y-1.5">
+                    <label
+                      className={optionCardClass(
+                        granteeEntityAuthConfirmed,
+                        showGranteeEntityAuthError && !granteeEntityAuthConfirmed
+                          ? 'border-rose-400 bg-rose-50/40'
+                          : '',
+                        true
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={granteeEntityAuthConfirmed}
+                        onChange={(e) => {
+                          setGranteeEntityAuthConfirmed(e.target.checked);
+                          if (e.target.checked) setShowGranteeEntityAuthError(false);
+                        }}
+                        className="sr-only"
+                      />
+                      <CircleIndicator checked={granteeEntityAuthConfirmed} className="mt-0.5" />
+                      <span className="text-xs text-slate-800">
+                        {ENTITY_AUTH_CONFIRM_LABEL} <span className="text-red-500 font-bold">*</span>
+                      </span>
+                    </label>
+                    {showGranteeEntityAuthError && !granteeEntityAuthConfirmed && (
+                      <p className="text-xs font-bold text-rose-600">
+                        Please tick &ldquo;{ENTITY_AUTH_CONFIRM_LABEL}&rdquo; before continuing.
+                      </p>
+                    )}
+                  </div>
+                </>
+              );
+            })()}
           </div>
         )}
 
@@ -1507,16 +1970,18 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
                 </span>
               </div>
 
-              <select
+              <WhiteSelect
+                variant="compact"
                 value={ownershipDocType}
-                onChange={(e) => setOwnershipDocType(e.target.value)}
-                className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-              >
-                <option value="Electricity Bill (Not older than 2 months)">Electricity Bill (Not older than 2 months)</option>
-                <option value="Municipal Property Tax Receipt">Municipal Property Tax Receipt</option>
-                <option value="Registered Sale Deed / Title Deed">Registered Sale Deed / Title Deed</option>
-                <option value="Water Bill / Landline Bill">Water Bill / Landline Bill</option>
-              </select>
+                onChange={(val) => setOwnershipDocType(val)}
+                options={[
+                  'Electricity Bill (Not older than 2 months)',
+                  'Municipal Property Tax Receipt',
+                  'Registered Sale Deed / Title Deed',
+                  'Water Bill / Landline Bill'
+                ]}
+                aria-label="Ownership or Utility Document Type"
+              />
 
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-white border border-slate-200 rounded-xl">
                 <div>
@@ -1582,63 +2047,92 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
 
         {/* ================= PAGE 4: GST COMPLIANCE & OFFICER INSPECTION CLAUSES ================= */}
         {currentPage === '4' && (
-          <div className="space-y-4 animate-fadeIn">
-            <div className="space-y-3">
-              <span className="text-xs font-bold text-blue-700 uppercase tracking-wider block">
-                Statutory GST Consent Clauses (Pre-checked)
-              </span>
+          <div className="space-y-5 animate-fadeIn">
+            <div className="space-y-2.5">
+              <TopicHeader
+                number={1}
+                title="Statutory GST Consent Clauses"
+                question="Which GST compliance, inspection, and indemnity consents apply to these premises?"
+                required
+              />
 
-              <label className="flex items-start gap-2.5 cursor-pointer select-none">
+              <label className={optionCardClass(clauseRule9Physical, '', true)}>
                 <input
                   type="checkbox"
                   checked={clauseRule9Physical}
                   onChange={(e) => setClauseRule9Physical(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 text-blue-600 rounded"
+                  className="sr-only"
                 />
+                <CircleIndicator checked={clauseRule9Physical} className="mt-0.5" />
                 <span className="text-xs text-slate-700">
                   <strong>Physical Verification by GST Officer (Rule 9):</strong> Landlord has no objection to physical inspection or verification of the premises by GST authorities.
                 </span>
               </label>
 
-              <label className="flex items-start gap-2.5 cursor-pointer select-none">
+              <label className={optionCardClass(clauseRule18Banner, '', true)}>
                 <input
                   type="checkbox"
                   checked={clauseRule18Banner}
                   onChange={(e) => setClauseRule18Banner(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 text-blue-600 rounded"
+                  className="sr-only"
                 />
+                <CircleIndicator checked={clauseRule18Banner} className="mt-0.5" />
                 <span className="text-xs text-slate-700">
                   <strong>Display of GSTIN Signboard (Rule 18):</strong> Full consent to display the business name and 15-digit GSTIN on the entrance signboard.
                 </span>
               </label>
 
-              <label className="flex items-start gap-2.5 cursor-pointer select-none">
+              <label className={optionCardClass(clauseSec35Books, '', true)}>
                 <input
                   type="checkbox"
                   checked={clauseSec35Books}
                   onChange={(e) => setClauseSec35Books(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 text-blue-600 rounded"
+                  className="sr-only"
                 />
+                <CircleIndicator checked={clauseSec35Books} className="mt-0.5" />
                 <span className="text-xs text-slate-700">
                   <strong>Maintenance of Books of Accounts (Section 35):</strong> Consent to keep business accounting records, invoices, and ledgers at these premises.
                 </span>
               </label>
 
-              <label className="flex items-start gap-2.5 cursor-pointer select-none">
+              <label className={optionCardClass(clauseTaxIndemnity, '', true)}>
                 <input
                   type="checkbox"
                   checked={clauseTaxIndemnity}
                   onChange={(e) => setClauseTaxIndemnity(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 text-blue-600 rounded"
+                  className="sr-only"
                 />
+                <CircleIndicator checked={clauseTaxIndemnity} className="mt-0.5" />
                 <span className="text-xs text-slate-700">
                   <strong>Tax Liability Indemnity:</strong> All commercial taxes, GST liabilities, and penalties remain solely with the tenant/grantee, not the property owner.
                 </span>
               </label>
             </div>
 
+            {/* Agreement / NOC Validity */}
+            <div className={TOPIC_DIVIDER_CLASS}>
+              <AgreementValiditySection
+                topicNumber={2}
+                value={agreementValidity}
+                onChange={setAgreementValidity}
+              />
+            </div>
+
+            {/* Signatory Authority Confirmation */}
+            <div className={TOPIC_DIVIDER_CLASS}>
+              <SignatoryAuthoritySection
+                topicNumber={3}
+                checked={signatoryAuthorized}
+                onChange={(val) => {
+                  setSignatoryAuthorized(val);
+                  if (val) setShowSignatoryError(false);
+                }}
+                showError={showSignatoryError}
+              />
+            </div>
+
             {/* Custom Clauses */}
-            <div className="pt-3 border-t border-slate-200">
+            <div className={TOPIC_DIVIDER_CLASS}>
               <div className="flex items-center justify-between mb-2">
                 <div>
                   <span className="text-xs font-bold text-slate-800 block">
@@ -1704,13 +2198,7 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
               </span>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <label
-                  className={`p-3.5 rounded-xl border cursor-pointer transition-all ${
-                    deliveryPreference === 'digital'
-                      ? 'border-blue-600 bg-blue-50/60 ring-1 ring-blue-600'
-                      : 'border-slate-200 hover:border-slate-300'
-                  }`}
-                >
+                <label className={optionCardClass(deliveryPreference === 'digital', '', true)}>
                   <input
                     type="radio"
                     name="deliveryPreference"
@@ -1718,19 +2206,16 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
                     onChange={() => setDeliveryPreference('digital')}
                     className="sr-only"
                   />
-                  <span className="text-xs font-bold text-black block">Digital PDF with Aadhaar eSign</span>
-                  <span className="text-[11px] text-slate-500 mt-1 block">
-                    Instant delivery directly to email &amp; dashboard
-                  </span>
+                  <CircleIndicator checked={deliveryPreference === 'digital'} className="mt-0.5" />
+                  <div>
+                    <span className="text-xs font-bold text-black block">Digital PDF with eSign</span>
+                    <span className="text-[11px] text-slate-500 mt-1 block">
+                      Instant delivery directly to email &amp; dashboard
+                    </span>
+                  </div>
                 </label>
 
-                <label
-                  className={`p-3.5 rounded-xl border cursor-pointer transition-all ${
-                    deliveryPreference === 'physical'
-                      ? 'border-blue-600 bg-blue-50/60 ring-1 ring-blue-600'
-                      : 'border-slate-200 hover:border-slate-300'
-                  }`}
-                >
+                <label className={optionCardClass(deliveryPreference === 'physical', '', true)}>
                   <input
                     type="radio"
                     name="deliveryPreference"
@@ -1738,19 +2223,16 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
                     onChange={() => setDeliveryPreference('physical')}
                     className="sr-only"
                   />
-                  <span className="text-xs font-bold text-black block">Physical Courier on Original Stamp</span>
-                  <span className="text-[11px] text-slate-500 mt-1 block">
-                    Speed Post courier delivery with tracking (+₹50)
-                  </span>
+                  <CircleIndicator checked={deliveryPreference === 'physical'} className="mt-0.5" />
+                  <div>
+                    <span className="text-xs font-bold text-black block">Physical Courier on Original Stamp</span>
+                    <span className="text-[11px] text-slate-500 mt-1 block">
+                      Speed Post courier delivery with tracking (+₹50)
+                    </span>
+                  </div>
                 </label>
 
-                <label
-                  className={`p-3.5 rounded-xl border cursor-pointer transition-all ${
-                    deliveryPreference === 'hybrid'
-                      ? 'border-blue-600 bg-blue-50/60 ring-1 ring-blue-600'
-                      : 'border-slate-200 hover:border-slate-300'
-                  }`}
-                >
+                <label className={optionCardClass(deliveryPreference === 'hybrid', '', true)}>
                   <input
                     type="radio"
                     name="deliveryPreference"
@@ -1758,10 +2240,13 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
                     onChange={() => setDeliveryPreference('hybrid')}
                     className="sr-only"
                   />
-                  <span className="text-xs font-bold text-black block">Hybrid (Digital + Physical Courier)</span>
-                  <span className="text-[11px] text-slate-500 mt-1 block">
-                    Immediate digital copy + original physical stamp
-                  </span>
+                  <CircleIndicator checked={deliveryPreference === 'hybrid'} className="mt-0.5" />
+                  <div>
+                    <span className="text-xs font-bold text-black block">Hybrid (Digital + Physical Courier)</span>
+                    <span className="text-[11px] text-slate-500 mt-1 block">
+                      Immediate digital copy + original physical stamp
+                    </span>
+                  </div>
                 </label>
               </div>
             </div>
@@ -1814,7 +2299,7 @@ export const GstNocWizardView: React.FC<GstNocWizardViewProps> = ({
                   <span>₹{pricing.stamp}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Aadhaar OTP eSign &amp; Procurement:</span>
+                  <span>Digital OTP eSign &amp; Procurement:</span>
                   <span>₹{pricing.eSign + pricing.govtPurchasing}</span>
                 </div>
                 <div className="flex justify-between">

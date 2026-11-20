@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { X, Plus, Camera, Search, Check, ShieldCheck } from 'lucide-react';
 import { UserProfile } from '../types';
 import { STATE_CITIES_MAP, INDIAN_STATES_LIST } from '../data/indianCities';
+import { WhiteSelect } from './WhiteSelect';
 
 interface ProfileModalProps {
   profile: UserProfile;
@@ -188,17 +189,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
             <label className="block text-xs font-bold text-slate-700 mb-1">
               State
             </label>
-            <select
+            <WhiteSelect
               value={formData.state}
-              onChange={(e) => handleStateChange(e.target.value)}
-              className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 cursor-pointer"
-            >
-              {INDIAN_STATES_LIST.map((st) => (
-                <option key={st} value={st}>
-                  {st}
-                </option>
-              ))}
-            </select>
+              onChange={(val) => handleStateChange(val)}
+              options={INDIAN_STATES_LIST}
+              aria-label="State"
+            />
           </div>
 
           {/* Dynamic City Dropdown (Dependent on selected state) with Search */}
@@ -219,17 +215,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               />
             </div>
 
-            <select
+            <WhiteSelect
               value={formData.city}
-              onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-              className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 cursor-pointer"
-            >
-              {availableCities.map((cityName) => (
-                <option key={cityName} value={cityName}>
-                  {cityName}
-                </option>
-              ))}
-            </select>
+              onChange={(val) => setFormData({ ...formData, city: val })}
+              options={availableCities}
+              aria-label={`City in ${formData.state}`}
+            />
           </div>
 
           {/* GSTIN (Optional) */}

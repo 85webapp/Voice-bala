@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Clock, Zap, ShieldCheck, ArrowRight } from 'lucide-react';
 import { INITIAL_FRONT_DOCUMENTS } from '../data/documentsData';
 import { LegalDocument } from '../types';
+import { WhiteSelect } from './WhiteSelect';
 
 interface DeliveryCalculatorModalProps {
   onClose: () => void;
@@ -78,17 +79,15 @@ export const DeliveryCalculatorModal: React.FC<DeliveryCalculatorModalProps> = (
             <label className="block text-xs font-bold text-slate-800 mb-1.5">
               Select Document or Affidavit
             </label>
-            <select
+            <WhiteSelect
               value={selectedDocId}
-              onChange={(e) => setSelectedDocId(e.target.value)}
-              className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 cursor-pointer"
-            >
-              {INITIAL_FRONT_DOCUMENTS.map((doc) => (
-                <option key={doc.id} value={doc.id}>
-                  {doc.title} (₹{doc.basePrice})
-                </option>
-              ))}
-            </select>
+              onChange={(val) => setSelectedDocId(val)}
+              options={INITIAL_FRONT_DOCUMENTS.map((doc) => ({
+                value: doc.id,
+                label: `${doc.title} (₹${doc.basePrice})`
+              }))}
+              aria-label="Select Document or Affidavit"
+            />
           </div>
 
           {/* Hours Slider */}

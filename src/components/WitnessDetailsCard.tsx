@@ -1,8 +1,7 @@
 import React from 'react';
-import { AadhaarInput } from './AadhaarInput';
 import { AddressFieldGroup } from './AddressFieldGroup';
-import { DateOfBirthPicker } from './DateOfBirthPicker';
 import { useExampleDetails } from '../hooks/useExampleDetails';
+import { CircleIndicator, optionCardClass } from './OptionControl';
 
 interface WitnessDetailsCardProps {
   witnessNumber: 1 | 2;
@@ -12,12 +11,12 @@ interface WitnessDetailsCardProps {
   onFatherNameChange: (val: string) => void;
   profession: string;
   onProfessionChange: (val: string) => void;
-  ageOrDob: string;
-  onAgeOrDobChange: (val: string) => void;
+  email: string;
+  onEmailChange: (val: string) => void;
+  isAbove18: boolean;
+  onIsAbove18Change: (val: boolean) => void;
   mobile: string;
   onMobileChange: (val: string) => void;
-  aadhaar: string;
-  onAadhaarChange: (val: string) => void;
   address: string;
   onAddressChange: (val: string) => void;
 }
@@ -30,16 +29,16 @@ export const WitnessDetailsCard: React.FC<WitnessDetailsCardProps> = ({
   onFatherNameChange,
   profession,
   onProfessionChange,
-  ageOrDob,
-  onAgeOrDobChange,
+  email,
+  onEmailChange,
+  isAbove18,
+  onIsAbove18Change,
   mobile,
   onMobileChange,
-  aadhaar,
-  onAadhaarChange,
   address,
   onAddressChange
 }) => {
-  const { showExampleDetails, getPlaceholder } = useExampleDetails();
+  const { getPlaceholder } = useExampleDetails();
 
   return (
     <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
@@ -80,29 +79,18 @@ export const WitnessDetailsCard: React.FC<WitnessDetailsCardProps> = ({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label className="block text-[11px] font-bold text-slate-700 mb-1">
-            Profession / Job Title <span className="text-slate-400 font-normal">(Optional)</span>
+            Email Address <span className="text-red-500">*</span>
           </label>
           <input
-            type="text"
-            value={profession}
-            onChange={(e) => onProfessionChange(e.target.value)}
-            placeholder={getPlaceholder('e.g. Service / Business')}
+            type="email"
+            required
+            value={email}
+            onChange={(e) => onEmailChange(e.target.value)}
+            placeholder={getPlaceholder(`witness${witnessNumber}@example.com`)}
             className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
           />
         </div>
 
-        <div>
-          <DateOfBirthPicker
-            label="Age / Date of Birth"
-            value={ageOrDob}
-            onChange={onAgeOrDobChange}
-            placeholder={getPlaceholder('DD/MM/YYYY')}
-            helperText={showExampleDetails ? 'Format: DD/MM/YYYY' : undefined}
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label className="block text-[11px] font-bold text-slate-700 mb-1">
             Mobile Number (10 Digits) <span className="text-red-500">*</span>
@@ -119,15 +107,19 @@ export const WitnessDetailsCard: React.FC<WitnessDetailsCardProps> = ({
             className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
           />
         </div>
+      </div>
 
-        <div>
-          <AadhaarInput
-            label="Aadhaar Number (12 Digits)"
-            value={aadhaar}
-            onChange={onAadhaarChange}
-            required
-          />
-        </div>
+      <div>
+        <label className="block text-[11px] font-bold text-slate-700 mb-1">
+          Profession / Job Title <span className="text-slate-400 font-normal">(Optional)</span>
+        </label>
+        <input
+          type="text"
+          value={profession}
+          onChange={(e) => onProfessionChange(e.target.value)}
+          placeholder={getPlaceholder('e.g. Service / Business')}
+          className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+        />
       </div>
 
       <AddressFieldGroup
@@ -137,6 +129,23 @@ export const WitnessDetailsCard: React.FC<WitnessDetailsCardProps> = ({
         onChangeAddress={(addr) => onAddressChange(addr)}
         required
       />
+
+      {/* Mandatory Age Confirmation Box */}
+      <div>
+        <label className={optionCardClass(isAbove18, 'font-semibold')}>
+          <input
+            type="checkbox"
+            required
+            checked={isAbove18}
+            onChange={(e) => onIsAbove18Change(e.target.checked)}
+            className="sr-only"
+          />
+          <CircleIndicator checked={isAbove18} />
+          <span>
+            Witness is above 18+ <span className="text-red-500 font-bold">*</span>
+          </span>
+        </label>
+      </div>
     </div>
   );
 };

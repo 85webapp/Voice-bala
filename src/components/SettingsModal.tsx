@@ -3,6 +3,8 @@ import { X, LogOut, LogIn, ChevronRight, ShieldCheck, Volume2, Globe, CheckCircl
 import { UserProfile } from '../types';
 import { SUPPORTED_LANGUAGES, SupportedLanguage, getStoredAudioLanguage, setStoredAudioLanguage } from '../data/voiceNarrationData';
 import { useDisplayLanguage } from '../hooks/useDisplayLanguage';
+import { WhiteSelect } from './WhiteSelect';
+import { CircleIndicator } from './OptionControl';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -137,11 +139,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     Show example hints in form input boxes (Default: OFF)
                   </div>
                 </div>
+                <CircleIndicator checked={showExampleDetails} />
                 <input
                   type="checkbox"
                   checked={showExampleDetails}
                   onChange={(e) => handleToggleExampleDetails(e.target.checked)}
-                  className="w-4 h-4 rounded text-blue-600 accent-blue-600 cursor-pointer"
+                  className="sr-only"
                 />
               </label>
             </div>
@@ -154,46 +157,47 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </span>
 
             {/* Standalone Box: Display Language */}
-            <div className="bg-white border border-slate-200 rounded-xl p-3.5 flex items-center justify-between">
-              <div className="flex items-center gap-2">
+            <div className="bg-white border border-slate-200 rounded-xl p-3.5 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 shrink-0">
                 <Globe className="w-4 h-4 text-blue-600" />
                 <div className="font-bold text-slate-900 text-xs">{t('Display Language')}</div>
               </div>
-              <select
-                value={displayLanguage}
-                onChange={(e) => setDisplayLanguage(e.target.value as SupportedLanguage)}
-                aria-label={t('Display Language')}
-                className="bg-slate-50 border border-slate-300 text-slate-900 text-xs font-bold rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-600 focus:outline-none cursor-pointer"
-              >
-                {SUPPORTED_LANGUAGES.map((language) => (
-                  <option key={language.code} value={language.code}>
-                    {language.code === 'en' ? 'English' : `${language.nativeName} (${language.name})`}
-                  </option>
-                ))}
-              </select>
+              <div className="w-44 sm:w-52 shrink-0">
+                <WhiteSelect
+                  variant="compact"
+                  value={displayLanguage}
+                  onChange={(val) => setDisplayLanguage(val as SupportedLanguage)}
+                  options={SUPPORTED_LANGUAGES.map((language) => ({
+                    value: language.code,
+                    label: language.code === 'en' ? 'English' : `${language.nativeName} (${language.name})`
+                  }))}
+                  aria-label={t('Display Language')}
+                />
+              </div>
             </div>
 
             {/* Standalone Box: Audio Voice Language */}
-            <div className="bg-white border border-slate-200 rounded-xl p-3.5 flex items-center justify-between">
-              <div className="flex items-center gap-2">
+            <div className="bg-white border border-slate-200 rounded-xl p-3.5 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 shrink-0">
                 <Volume2 className="w-4 h-4 text-blue-600" />
                 <div className="font-bold text-slate-900 text-xs">Audio Voice Language</div>
               </div>
-              <select
-                value={audioLang}
-                onChange={(e) => {
-                  const next = e.target.value as SupportedLanguage;
-                  setAudioLang(next);
-                  setStoredAudioLanguage(next);
-                }}
-                className="bg-slate-50 border border-slate-300 text-slate-900 text-xs font-bold rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-600 focus:outline-none cursor-pointer"
-              >
-                {SUPPORTED_LANGUAGES.map((l) => (
-                  <option key={l.code} value={l.code}>
-                    {l.code === 'en' ? 'English' : `${l.nativeName} (${l.name})`}
-                  </option>
-                ))}
-              </select>
+              <div className="w-44 sm:w-52 shrink-0">
+                <WhiteSelect
+                  variant="compact"
+                  value={audioLang}
+                  onChange={(val) => {
+                    const next = val as SupportedLanguage;
+                    setAudioLang(next);
+                    setStoredAudioLanguage(next);
+                  }}
+                  options={SUPPORTED_LANGUAGES.map((l) => ({
+                    value: l.code,
+                    label: l.code === 'en' ? 'English' : `${l.nativeName} (${l.name})`
+                  }))}
+                  aria-label="Audio Voice Language"
+                />
+              </div>
             </div>
 
             {/* Currency & Date standard box */}

@@ -17,8 +17,8 @@ import {
   ChevronUp
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { AadhaarInput } from './AadhaarInput';
 import { AddressFieldGroup } from './AddressFieldGroup';
+import { DateOfBirthPicker } from './DateOfBirthPicker';
 import {
   PropertyBoundariesSection,
   PropertyBoundariesState,
@@ -27,6 +27,15 @@ import {
   areAllBoundariesFilled
 } from './PropertyBoundariesSection';
 import { WitnessDetailsCard } from './WitnessDetailsCard';
+import { WhiteSelect } from './WhiteSelect';
+import {
+  COMPANY_DESIGNATION_OPTIONS,
+  ENTITY_AUTH_CONFIRM_LABEL,
+  getCompanyFieldLabels,
+  getCompanyRegFieldMeta,
+  isAuthDateRequired,
+  isGstinRequiredForSubType
+} from './CompanyEntityFields';
 import { LegalDocument, OrderItem } from '../types';
 import { STATE_CATEGORIES, getSafeStampDuty } from '../data/stampDutyMatrix';
 import { useExampleDetails } from '../hooks/useExampleDetails';
@@ -49,6 +58,14 @@ import { ServerBSyncStatusCard } from './ServerBSyncStatusCard';
 import { VoiceGuidanceButton } from './VoiceGuidanceButton';
 import { FormRequestTabBar, HorizontalSwipeContainer, WizardModeTab } from './FormRequestTabBar';
 import { QuickCallbackRequestPanel } from './QuickCallbackRequestPanel';
+import { TopicHeader } from './TopicHeader';
+import { SignatoryAuthoritySection } from './SignatoryAuthoritySection';
+import {
+  CircleIndicator,
+  SUBQUESTION_DIVIDER_CLASS,
+  TOPIC_DIVIDER_CLASS,
+  optionCardClass
+} from './OptionControl';
 
 interface CommercialNocWizardViewProps {
   document: LegalDocument;
@@ -61,7 +78,6 @@ interface CoOwner {
   id: string;
   name: string;
   pan: string;
-  aadhaarLast4: string;
 }
 
 interface CustomOperationalClause {
@@ -146,24 +162,27 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
   const [landlordFatherName, setLandlordFatherName] = useState('');
   const [landlordAddress, setLandlordAddress] = useState('');
   const [landlordPan, setLandlordPan] = useState('');
-  const [landlordAadhaarLast4, setLandlordAadhaarLast4] = useState('');
   const [landlordMobile, setLandlordMobile] = useState('');
   const [landlordEmail, setLandlordEmail] = useState('');
   const [clearTitleDeclared, setClearTitleDeclared] = useState(true);
 
   // Corporate Landlord
   const [corpCin, setCorpCin] = useState('');
+  const [corpGstin, setCorpGstin] = useState('');
+  const [corpIncDate, setCorpIncDate] = useState('');
   const [corpRegAddress, setCorpRegAddress] = useState('');
   const [corpRepName, setCorpRepName] = useState('');
   const [corpRepDesignation, setCorpRepDesignation] = useState('Director');
   const [corpResolutionDate, setCorpResolutionDate] = useState('');
+  const [landlordEntityAuthConfirmed, setLandlordEntityAuthConfirmed] = useState(false);
+  const [showLandlordEntityAuthError, setShowLandlordEntityAuthError] = useState(false);
 
   // Joint Landlords
   const [coOwners, setCoOwners] = useState<CoOwner[]>([]);
   const addCoOwner = () => {
     setCoOwners((prev) => [
       ...prev,
-      { id: `co-${Date.now()}`, name: '', pan: '', aadhaarLast4: '' }
+      { id: `co-${Date.now()}`, name: '', pan: '' }
     ]);
   };
   const updateCoOwner = (id: string, field: keyof CoOwner, val: string) => {
@@ -174,10 +193,14 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
   };
 
   // --- PAGE 3: THE GRANTEE (BUSINESS SCOPE & ENTITY) ---
-  const [businessConstitution, setBusinessConstitution] = useState<string>('Sole Proprietorship');
+  const [businessConstitution, setBusinessConstitution] = useState<string>('Sole Proprietorship Firm');
   const [proposedBusinessName, setProposedBusinessName] = useState('');
   const [granteePan, setGranteePan] = useState('');
   const [granteeCin, setGranteeCin] = useState('');
+  const [granteeGstin, setGranteeGstin] = useState('');
+  const [granteeIncDate, setGranteeIncDate] = useState('');
+  const [granteeAuthDate, setGranteeAuthDate] = useState('');
+  const [granteeEmail, setGranteeEmail] = useState('');
   const [natureOfOperations, setNatureOfOperations] = useState<string>(
     'IT / Software / Back Office / Consultancy'
   );
@@ -186,9 +209,10 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
   // Signatory & Grantee Communication Details
   const [granteeSignatoryName, setGranteeSignatoryName] = useState('');
   const [granteeSignatoryFatherName, setGranteeSignatoryFatherName] = useState('');
-  const [granteeAadhaar, setGranteeAadhaar] = useState('');
   const [granteeAddress, setGranteeAddress] = useState('');
   const [granteeDesignation, setGranteeDesignation] = useState<string>('Proprietor');
+  const [granteeEntityAuthConfirmed, setGranteeEntityAuthConfirmed] = useState(false);
+  const [showGranteeEntityAuthError, setShowGranteeEntityAuthError] = useState(false);
   const [authorizationDocFile, setAuthorizationDocFile] = useState<UploadedDocumentPayload | null>(null);
   const authorizationDocUploaded = Boolean(authorizationDocFile);
 
@@ -206,17 +230,23 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
   // Handle Dynamic Constitution to Signatory Designation Mapping
   const handleConstitutionChange = (newConstitution: string) => {
     setBusinessConstitution(newConstitution);
-    if (newConstitution === 'Sole Proprietorship') {
+    if (newConstitution === 'Sole Proprietorship Firm') {
       setGranteeDesignation('Proprietor');
     } else if (newConstitution === 'Partnership Firm') {
       setGranteeDesignation('Partner');
+    } else if (newConstitution === 'Limited Liability Partnership (LLP)') {
+      setGranteeDesignation('Designated Partner');
+    } else if (newConstitution === 'Hindu Undivided Family (HUF)') {
+      setGranteeDesignation('Karta');
+    } else if (newConstitution === 'Trust / Society / AOP') {
+      setGranteeDesignation('Authorized Trustee');
     } else if (
-      newConstitution === 'Private Limited Company' ||
-      newConstitution === 'Limited Liability Partnership (LLP)' ||
-      newConstitution === 'One Person Company (OPC)' ||
-      newConstitution === 'Public Limited Company'
+      newConstitution === 'Private Limited Company (Pvt Ltd)' ||
+      newConstitution === 'Public Limited Company (Ltd)'
     ) {
       setGranteeDesignation('Director');
+    } else {
+      setGranteeDesignation('Authorized Signatory');
     }
   };
 
@@ -244,22 +274,24 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
   );
   const [boundariesOptional, setBoundariesOptional] = useState(false);
 
-  // --- PAGE 4: OPERATIONAL CONDITIONS & STATUTORY CLAUSES ---
-  const [clauseMultiAgency, setClauseMultiAgency] = useState(true);
-  const [clausePhysicalVerification, setClausePhysicalVerification] = useState(true);
-  const [clauseSignboard, setClauseSignboard] = useState(true);
-  const [clauseBooks, setClauseBooks] = useState(true);
-  const [clauseStructural, setClauseStructural] = useState(true);
-  const [clauseFssai, setClauseFssai] = useState(true);
-  const [clauseFireSafety, setClauseFireSafety] = useState(true);
-  const [clauseHealthTrade, setClauseHealthTrade] = useState(true);
+  // --- PAGE 4: OPERATIONAL CONDITIONS & STATUTORY CLAUSES (Nothing Pre-Selected) ---
+  const [clauseMultiAgency, setClauseMultiAgency] = useState(false);
+  const [clausePhysicalVerification, setClausePhysicalVerification] = useState(false);
+  const [clauseSignboard, setClauseSignboard] = useState(false);
+  const [clauseBooks, setClauseBooks] = useState(false);
+  const [clauseStructural, setClauseStructural] = useState(false);
+  const [clauseFssai, setClauseFssai] = useState(false);
+  const [clauseFireSafety, setClauseFireSafety] = useState(false);
+  const [clauseHealthTrade, setClauseHealthTrade] = useState(false);
 
-  const [nocDuration, setNocDuration] = useState<string>('1 Year');
+  const [nocDuration, setNocDuration] = useState<string>('');
   const [customNocDuration, setCustomNocDuration] = useState<string>('');
-  const [sublettingPermission, setSublettingPermission] = useState<'Not Allowed' | 'Allowed'>('Not Allowed');
-  const [propertyTaxEscalation, setPropertyTaxEscalation] = useState('Fully Paid by Landlord');
-  const [meterLoadConsent, setMeterLoadConsent] = useState(true);
-  const landlordIndemnityAccepted = true;
+  const [sublettingPermission, setSublettingPermission] = useState<'Not Allowed' | 'Allowed' | ''>('');
+  const [propertyTaxEscalation, setPropertyTaxEscalation] = useState('');
+  const [meterLoadConsent, setMeterLoadConsent] = useState(false);
+  const [landlordIndemnityAccepted, setLandlordIndemnityAccepted] = useState(false);
+  const [signatoryAuthorized, setSignatoryAuthorized] = useState(false);
+  const [showSignatoryError, setShowSignatoryError] = useState(false);
 
   // Custom Clauses
   const [customClauses, setCustomClauses] = useState<CustomOperationalClause[]>([]);
@@ -280,17 +312,17 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
   const [witness1Name, setWitness1Name] = useState('');
   const [witness1FatherName, setWitness1FatherName] = useState('');
   const [witness1Profession, setWitness1Profession] = useState('');
-  const [witness1Age, setWitness1Age] = useState('');
+  const [witness1Email, setWitness1Email] = useState('');
+  const [witness1Above18, setWitness1Above18] = useState(false);
   const [witness1Address, setWitness1Address] = useState('');
-  const [witness1Id, setWitness1Id] = useState('');
   const [witness1Mobile, setWitness1Mobile] = useState('');
 
   const [witness2Name, setWitness2Name] = useState('');
   const [witness2FatherName, setWitness2FatherName] = useState('');
   const [witness2Profession, setWitness2Profession] = useState('');
-  const [witness2Age, setWitness2Age] = useState('');
+  const [witness2Email, setWitness2Email] = useState('');
+  const [witness2Above18, setWitness2Above18] = useState(false);
   const [witness2Address, setWitness2Address] = useState('');
-  const [witness2Id, setWitness2Id] = useState('');
   const [witness2Mobile, setWitness2Mobile] = useState('');
 
   // Delivery Preference
@@ -356,6 +388,8 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
       }
     }
 
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
     if (currentPage === '2') {
       const isCorp = landlordOwnershipType !== 'Sole Individual' && landlordOwnershipType !== 'Joint Owners';
       if (!isCorp) {
@@ -368,8 +402,34 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
           return;
         }
       } else {
+        const landlordLabels = getCompanyFieldLabels(landlordOwnershipType);
+        const landlordRegMeta = getCompanyRegFieldMeta(landlordOwnershipType);
+        const landlordGstinRequired = isGstinRequiredForSubType(landlordOwnershipType);
+        const isLandlordSoleProp = landlordOwnershipType === 'Sole Proprietorship Firm';
         if (!landlordName.trim() || !corpRegAddress.trim() || !corpRepName.trim()) {
-          showToast('Please fill Entity Name, Registered Address, and Authorized Representative.', 'warning');
+          showToast(
+            isLandlordSoleProp
+              ? 'Please fill Proprietor Name, Business / Firm Name, and Business Address.'
+              : `Please fill ${landlordLabels.entityNameLabel}, ${landlordLabels.addressLabel}, and ${landlordLabels.signatoryLabel}.`,
+            'warning'
+          );
+          return;
+        }
+        if (landlordRegMeta.required && !corpCin.trim()) {
+          showToast(`Please enter ${landlordRegMeta.label} for Landlord entity.`, 'warning');
+          return;
+        }
+        const cleanCorpGstin = corpGstin.trim().toUpperCase();
+        if (landlordGstinRequired && cleanCorpGstin.length !== 15) {
+          showToast('Please enter a valid 15-character Company / Firm GSTIN for Landlord.', 'warning');
+          return;
+        }
+        if (!landlordGstinRequired && cleanCorpGstin.length > 0 && cleanCorpGstin.length !== 15) {
+          showToast('If entering GSTIN for Landlord, please enter all 15 characters.', 'warning');
+          return;
+        }
+        if (isAuthDateRequired(landlordOwnershipType) && !corpResolutionDate.trim()) {
+          showToast('Please select Board Resolution / Authorization Letter Date for Landlord entity.', 'warning');
           return;
         }
       }
@@ -377,12 +437,17 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
         showToast('Landlord / Corporate 10-character PAN Card is mandatory.', 'warning');
         return;
       }
-      if (landlordAadhaarLast4.replace(/\D/g, '').length !== 12) {
-        showToast('First Party (Landlord) 12-digit Aadhaar Number is mandatory.', 'warning');
-        return;
-      }
       if (landlordMobile.replace(/\D/g, '').length !== 10) {
         showToast('Please enter a valid 10-digit Landlord Mobile Number.', 'warning');
+        return;
+      }
+      if (!landlordEmail.trim() || !emailRegex.test(landlordEmail.trim())) {
+        showToast('Please enter a valid mandatory Landlord Email Address.', 'warning');
+        return;
+      }
+      if (isCorp && !landlordEntityAuthConfirmed) {
+        setShowLandlordEntityAuthError(true);
+        showToast(`Please tick "${ENTITY_AUTH_CONFIRM_LABEL}" before continuing.`, 'warning');
         return;
       }
       if (!clearTitleDeclared) {
@@ -392,24 +457,57 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
     }
 
     if (currentPage === '3') {
+      const isGranteeCompany = businessConstitution !== 'Sole Proprietorship Firm';
       if (!proposedBusinessName.trim() || !granteeSignatoryName.trim()) {
-        showToast('Please provide Proposed Business Name and Signatory details.', 'warning');
+        showToast('Please provide Business / Firm Name and Proprietor / Signatory Name.', 'warning');
         return;
       }
+      if (isGranteeCompany) {
+        const granteeRegMeta = getCompanyRegFieldMeta(businessConstitution);
+        const granteeGstinRequired = isGstinRequiredForSubType(businessConstitution);
+        if (granteeRegMeta.required && !granteeCin.trim()) {
+          showToast(`Please enter ${granteeRegMeta.label} for Grantee entity.`, 'warning');
+          return;
+        }
+        const cleanGranteeGstin = granteeGstin.trim().toUpperCase();
+        if (granteeGstinRequired && cleanGranteeGstin.length !== 15) {
+          showToast('Please enter a valid 15-character Company / Firm GSTIN for Grantee.', 'warning');
+          return;
+        }
+        if (!granteeGstinRequired && cleanGranteeGstin.length > 0 && cleanGranteeGstin.length !== 15) {
+          showToast('If entering GSTIN for Grantee, please enter all 15 characters.', 'warning');
+          return;
+        }
+        if (isAuthDateRequired(businessConstitution) && !granteeAuthDate.trim()) {
+          showToast('Please select Board Resolution / Authorization Letter Date for Grantee entity.', 'warning');
+          return;
+        }
+      } else {
+        const cleanGranteeGstin = granteeGstin.trim().toUpperCase();
+        if (cleanGranteeGstin.length > 0 && cleanGranteeGstin.length !== 15) {
+          showToast('If entering GSTIN, please enter all 15 characters.', 'warning');
+          return;
+        }
+      }
       if (!granteeAddress.trim()) {
-        showToast('Please provide complete Applicant / Business Communication Address.', 'warning');
+        showToast('Please provide complete Registered Office / Business Address.', 'warning');
         return;
       }
       if (granteePan.trim().length !== 10) {
         showToast('Second Party (Grantee) 10-character PAN Card is mandatory.', 'warning');
         return;
       }
-      if (granteeAadhaar.replace(/\D/g, '').length !== 12) {
-        showToast('Second Party (Grantee) 12-digit Aadhaar Number is mandatory.', 'warning');
+      if (!granteeEmail.trim() || !emailRegex.test(granteeEmail.trim())) {
+        showToast('Please enter a valid mandatory Grantee Email Address.', 'warning');
         return;
       }
       if (natureOfOperations === 'Other' && !customNatureOfOperations.trim()) {
         showToast('Please specify the custom Nature of Business Operations.', 'warning');
+        return;
+      }
+      if (!granteeEntityAuthConfirmed) {
+        setShowGranteeEntityAuthError(true);
+        showToast(`Please tick "${ENTITY_AUTH_CONFIRM_LABEL}" before continuing.`, 'warning');
         return;
       }
     }
@@ -421,6 +519,44 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
       }
       if (!boundariesOptional && !areAllBoundariesFilled(propertyBoundaries)) {
         showToast('Please complete all four Property Boundaries or select "Change to Optional".', 'warning');
+        return;
+      }
+    }
+
+    if (currentPage === '4') {
+      if (
+        !clauseMultiAgency &&
+        !clausePhysicalVerification &&
+        !clauseSignboard &&
+        !clauseBooks &&
+        !clauseStructural
+      ) {
+        showToast('Please select at least one clearance under Topic 1 (Business Clearances & Statutory Permissions).', 'warning');
+        return;
+      }
+      if (!nocDuration.trim()) {
+        showToast('Please select NOC Validity / Duration.', 'warning');
+        return;
+      }
+      if (nocDuration === 'Custom' && !customNocDuration.trim()) {
+        showToast('Please specify your Custom NOC Duration.', 'warning');
+        return;
+      }
+      if (!sublettingPermission) {
+        showToast('Please select Sub-Letting & Co-Working Permission.', 'warning');
+        return;
+      }
+      if (!propertyTaxEscalation) {
+        showToast('Please select Property Tax Escalation Responsibility.', 'warning');
+        return;
+      }
+      if (!landlordIndemnityAccepted) {
+        showToast('Please confirm the Landlord Indemnity acceptance checkbox.', 'warning');
+        return;
+      }
+      if (!signatoryAuthorized) {
+        setShowSignatoryError(true);
+        showToast('Please confirm Signatory Authority to proceed.', 'warning');
         return;
       }
     }
@@ -442,16 +578,21 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!witness1Name.trim() || !witness1FatherName.trim() || !witness1Address.trim()) {
       showToast('Witness 1 Full Legal Name, Father/Husband Name, and Residential Address are mandatory.', 'warning');
       return;
     }
-    if (witness1Mobile.replace(/\D/g, '').length !== 10) {
-      showToast('Please enter a valid 10-digit Mobile Number for Witness 1.', 'warning');
+    if (!witness1Email.trim() || !emailRegex.test(witness1Email.trim())) {
+      showToast('Please enter a valid Email Address for Witness 1.', 'warning');
       return;
     }
-    if (witness1Id.replace(/\D/g, '').length !== 12) {
-      showToast('Witness 1 complete 12-digit Aadhaar Number is mandatory.', 'warning');
+    if (!witness1Above18) {
+      showToast('Please confirm that Witness 1 is above 18+.', 'warning');
+      return;
+    }
+    if (witness1Mobile.replace(/\D/g, '').length !== 10) {
+      showToast('Please enter a valid 10-digit Mobile Number for Witness 1.', 'warning');
       return;
     }
 
@@ -459,12 +600,16 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
       showToast('Witness 2 Full Legal Name, Father/Husband Name, and Residential Address are mandatory.', 'warning');
       return;
     }
-    if (witness2Mobile.replace(/\D/g, '').length !== 10) {
-      showToast('Please enter a valid 10-digit Mobile Number for Witness 2.', 'warning');
+    if (!witness2Email.trim() || !emailRegex.test(witness2Email.trim())) {
+      showToast('Please enter a valid Email Address for Witness 2.', 'warning');
       return;
     }
-    if (witness2Id.replace(/\D/g, '').length !== 12) {
-      showToast('Witness 2 complete 12-digit Aadhaar Number is mandatory.', 'warning');
+    if (!witness2Above18) {
+      showToast('Please confirm that Witness 2 is above 18+.', 'warning');
+      return;
+    }
+    if (witness2Mobile.replace(/\D/g, '').length !== 10) {
+      showToast('Please enter a valid 10-digit Mobile Number for Witness 2.', 'warning');
       return;
     }
 
@@ -534,28 +679,29 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
       const landlordOwnershipOptions = [
         'Sole Individual',
         'Joint Owners',
-        'Partnership Firm / LLP',
-        'Private Limited / Public Limited Company',
-        'HUF',
-        'Trust / Society'
-      ];
-      const constitutionOptions = [
-        'Sole Proprietorship',
         'Partnership Firm',
         'Limited Liability Partnership (LLP)',
-        'Private Limited Company',
-        'Public Limited Company',
-        'One Person Company (OPC)',
-        'Trust / Society / NGO'
+        'Private Limited Company (Pvt Ltd)',
+        'Public Limited Company (Ltd)',
+        'Hindu Undivided Family (HUF)',
+        'Trust / Society / AOP',
+        'Sole Proprietorship Firm'
+      ];
+      const constitutionOptions = [
+        'Sole Proprietorship Firm',
+        'Partnership Firm',
+        'Limited Liability Partnership (LLP)',
+        'Private Limited Company (Pvt Ltd)',
+        'Public Limited Company (Ltd)',
+        'Joint Owners / Co-Owners',
+        'Hindu Undivided Family (HUF)',
+        'Trust / Society / AOP'
       ];
       const natureOptions = [
         'IT / Software / Back Office / Consultancy',
-        'E-Commerce / Warehousing / Fulfillment',
-        'Retail Shop / Showroom / Trading',
-        'Restaurant / Cafe / Cloud Kitchen / Food Processing',
-        'Manufacturing / Industrial Workshop',
-        'Healthcare / Clinic / Pharmacy',
-        'Education / Coaching / Training Center',
+        'Retail / Showroom / Gym / Footfall Business',
+        'Logistics / Warehousing / Heavy Storage / Manufacturing',
+        'Restaurant / Cloud Kitchen / Food & Beverage',
         'Other'
       ];
       const nocDurationOptions = [
@@ -567,8 +713,10 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
         '2 Years',
         '3 Years',
         'Until Lease Validity',
+        'Forever (until cancelled in writing)',
         'Custom'
       ];
+      const isGranteeCompany = businessConstitution !== 'Sole Proprietorship Firm';
 
       const sections = [
         {
@@ -594,19 +742,31 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
           sectionTitle: '1st Party / Grantor (Landlord) Details',
           fields: [
             fieldEntry('Landlord Ownership Type', landlordOwnershipType, false, landlordOwnershipOptions),
-            fieldEntry(isCorpLandlord ? 'Entity Legal Name' : 'Landlord Full Legal Name', landlordName, false),
-            fieldEntry('CIN / LLPIN', corpCin, !isCorpLandlord),
-            fieldEntry('Registered Office Address', corpRegAddress, !isCorpLandlord),
-            fieldEntry('Authorised Representative Name', corpRepName, !isCorpLandlord),
-            fieldEntry('Authorised Representative Designation', corpRepDesignation, !isCorpLandlord),
-            fieldEntry('Resolution / Authorization Date', corpResolutionDate, !isCorpLandlord),
+            fieldEntry(
+              isCorpLandlord
+                ? getCompanyFieldLabels(landlordOwnershipType).entityNameLabel
+                : 'Landlord Full Legal Name',
+              landlordName,
+              false
+            ),
+            fieldEntry(getCompanyRegFieldMeta(landlordOwnershipType).label, corpCin, !isCorpLandlord),
+            fieldEntry('Company / Firm GSTIN Number', corpGstin, !isCorpLandlord),
+            fieldEntry(getCompanyFieldLabels(landlordOwnershipType).incDateLabel, corpIncDate, !isCorpLandlord),
+            fieldEntry(getCompanyFieldLabels(landlordOwnershipType).addressLabel, corpRegAddress, !isCorpLandlord),
+            fieldEntry(getCompanyFieldLabels(landlordOwnershipType).signatoryLabel, corpRepName, !isCorpLandlord),
+            fieldEntry('Signatory Designation', corpRepDesignation, !isCorpLandlord || landlordOwnershipType === 'Sole Proprietorship Firm', COMPANY_DESIGNATION_OPTIONS),
+            fieldEntry('Board Resolution / Auth Letter Date', corpResolutionDate, !isCorpLandlord || landlordOwnershipType === 'Sole Proprietorship Firm'),
             fieldEntry("Father's / Husband's Name", landlordFatherName, isCorpLandlord),
             fieldEntry('Permanent Residential Address', landlordAddress, isCorpLandlord),
-            fieldEntry('Landlord / Corporate PAN Card', landlordPan, false),
-            fieldEntry('Aadhaar Number (12 Digits)', landlordAadhaarLast4, false),
+            fieldEntry(
+              isCorpLandlord ? getCompanyFieldLabels(landlordOwnershipType).panLabel : 'Landlord PAN Card',
+              landlordPan,
+              false
+            ),
             fieldEntry('Official Contact Mobile Number', landlordMobile, false),
-            fieldEntry('Contact Email ID', landlordEmail, true),
+            fieldEntry('Contact Email ID', landlordEmail, false),
             fieldEntry('Joint Co-Owners Added', coOwners.length > 0 ? coOwners : '', true),
+            checkboxEntry(ENTITY_AUTH_CONFIRM_LABEL, landlordEntityAuthConfirmed, !isCorpLandlord),
             checkboxEntry('Clear Legal Title & Encumbrance Declaration Accepted', clearTitleDeclared, false)
           ]
         },
@@ -615,16 +775,34 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
           sectionTitle: '2nd Party / Grantee (Business & Entity) Details',
           fields: [
             fieldEntry('Business Constitution', businessConstitution, false, constitutionOptions),
-            fieldEntry('Proposed Business Name / Trade Name', proposedBusinessName, false),
-            fieldEntry('Entity / Proprietor PAN Card', granteePan, false),
-            fieldEntry('Grantee / Signatory Aadhaar Number (12 Digits)', granteeAadhaar, false),
-            fieldEntry('Applicant / Business Communication Address', granteeAddress, false),
-            fieldEntry('CIN / LLPIN', granteeCin, businessConstitution === 'Sole Proprietorship' || businessConstitution === 'Partnership Firm'),
+            fieldEntry(
+              isGranteeCompany
+                ? getCompanyFieldLabels(businessConstitution).entityNameLabel
+                : 'Proposed Business / Firm Name',
+              proposedBusinessName,
+              false
+            ),
+            fieldEntry(getCompanyFieldLabels(businessConstitution).panLabel, granteePan, false),
+            fieldEntry(
+              isGranteeCompany ? 'Registered Office Address of Company' : 'Business Address',
+              granteeAddress,
+              false
+            ),
+            fieldEntry(getCompanyRegFieldMeta(businessConstitution).label, granteeCin, !isGranteeCompany),
+            fieldEntry('Company / Firm GSTIN Number', granteeGstin, true),
+            fieldEntry(getCompanyFieldLabels(businessConstitution).incDateLabel, granteeIncDate, true),
+            fieldEntry('Official Email Address', granteeEmail, false),
+            fieldEntry('Board Resolution / Auth Letter Date', granteeAuthDate, !isGranteeCompany),
             fieldEntry('Nature of Business Operations', natureOfOperations, false, natureOptions),
             fieldEntry('Custom Nature of Operations Description', customNatureOfOperations, natureOfOperations !== 'Other'),
-            fieldEntry('Signatory Full Legal Name', granteeSignatoryName, false),
+            fieldEntry(
+              isGranteeCompany ? getCompanyFieldLabels(businessConstitution).signatoryLabel : 'Proprietor Full Legal Name',
+              granteeSignatoryName,
+              false
+            ),
             fieldEntry("Signatory Father's Name", granteeSignatoryFatherName, false),
-            fieldEntry('Signatory Designation', granteeDesignation, false, ['Proprietor', 'Partner', 'Director', 'Authorized Signatory via BR']),
+            fieldEntry('Signatory Designation', granteeDesignation, false, COMPANY_DESIGNATION_OPTIONS),
+            checkboxEntry(ENTITY_AUTH_CONFIRM_LABEL, granteeEntityAuthConfirmed, false),
             fieldEntry('Authorization Letter / Board Resolution File', authorizationDocFile ? `${authorizationDocFile.fileName} (${Math.round(authorizationDocFile.sizeBytes / 1024)} KB)` : '', true)
           ]
         },
@@ -662,6 +840,7 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
             fieldEntry('Sub-Letting & Co-Working Permission', sublettingPermission, false, ['Not Allowed', 'Allowed']),
             fieldEntry('Property Tax Escalation Responsibility', propertyTaxEscalation, false, ['Fully Paid by Landlord', 'Reimbursed by Tenant', 'Divided on Pro-rata Basis']),
             checkboxEntry('Landlord Indemnity Clause (Tenant solely responsible for taxes & liabilities)', landlordIndemnityAccepted, false),
+            checkboxEntry('Signatory Authority Confirmation (Yes, I am authorized to enter this agreement.)', signatoryAuthorized, false),
             fieldEntry(
               'Custom Operational Conditions',
               customClauses.length > 0
@@ -678,17 +857,17 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
             fieldEntry('Witness 1 Full Legal Name', witness1Name, false),
             fieldEntry("Witness 1 Father's / Husband's Name", witness1FatherName, false),
             fieldEntry('Witness 1 Profession', witness1Profession, true),
-            fieldEntry('Witness 1 Age / Date of Birth', witness1Age, true),
+            fieldEntry('Witness 1 Email Address', witness1Email, false),
+            checkboxEntry('Witness 1 Confirmed Above 18+', witness1Above18, false),
             fieldEntry('Witness 1 Residential Address', witness1Address, false),
             fieldEntry('Witness 1 Mobile Number', witness1Mobile, false),
-            fieldEntry('Witness 1 Aadhaar Number (12 Digits)', witness1Id, false),
             fieldEntry('Witness 2 Full Legal Name', witness2Name, false),
             fieldEntry("Witness 2 Father's / Husband's Name", witness2FatherName, false),
             fieldEntry('Witness 2 Profession', witness2Profession, true),
-            fieldEntry('Witness 2 Age / Date of Birth', witness2Age, true),
+            fieldEntry('Witness 2 Email Address', witness2Email, false),
+            checkboxEntry('Witness 2 Confirmed Above 18+', witness2Above18, false),
             fieldEntry('Witness 2 Residential Address', witness2Address, false),
             fieldEntry('Witness 2 Mobile Number', witness2Mobile, false),
-            fieldEntry('Witness 2 Aadhaar Number (12 Digits)', witness2Id, false),
             fieldEntry('Execution & Delivery Mode', deliveryPreference, false, ['digital', 'physical', 'hybrid']),
             fieldEntry('Shipping Postal Address', shippingAddress, deliveryPreference === 'digital'),
             fieldEntry('Shipping PIN Code', shippingPincode, deliveryPreference === 'digital'),
@@ -721,13 +900,15 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
           fatherName: landlordFatherName,
           address: isCorpLandlord ? corpRegAddress : landlordAddress,
           pan: landlordPan,
-          aadhaar: landlordAadhaarLast4,
           mobile: landlordMobile,
           email: landlordEmail,
           clearTitleDeclared,
+          entityAuthConfirmed: isCorpLandlord ? landlordEntityAuthConfirmed : undefined,
           coOwners: coOwners.length > 0 ? coOwners : undefined,
           corporate: isCorpLandlord ? {
             corpCin,
+            corpGstin,
+            corpIncDate,
             corpRegAddress,
             corpRepName,
             corpRepDesignation,
@@ -738,13 +919,17 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
           businessName: proposedBusinessName,
           constitutionType: businessConstitution,
           pan: granteePan,
-          aadhaar: granteeAadhaar,
+          gstin: granteeGstin,
+          incorporationDate: granteeIncDate,
+          authDate: granteeAuthDate,
+          email: granteeEmail,
           address: granteeAddress,
           cin: granteeCin,
           natureOfOperations: natureOfOperations === 'Other' ? customNatureOfOperations : natureOfOperations,
           authorizedPerson: granteeSignatoryName,
           fatherName: granteeSignatoryFatherName,
           designation: granteeDesignation,
+          entityAuthConfirmed: granteeEntityAuthConfirmed,
           authorizationDocUploaded,
           authorizationDocFile
         },
@@ -772,11 +957,12 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
           propertyTaxEscalation,
           meterLoadConsent,
           landlordIndemnityAccepted,
+          signatoryAuthorized,
           customClauses
         },
         witnesses: [
-          { name: witness1Name, fatherName: witness1FatherName, profession: witness1Profession, age: witness1Age, address: witness1Address, idNumber: witness1Id, mobile: witness1Mobile },
-          { name: witness2Name, fatherName: witness2FatherName, profession: witness2Profession, age: witness2Age, address: witness2Address, idNumber: witness2Id, mobile: witness2Mobile }
+          { name: witness1Name, fatherName: witness1FatherName, profession: witness1Profession, email: witness1Email, isAbove18: witness1Above18, address: witness1Address, mobile: witness1Mobile },
+          { name: witness2Name, fatherName: witness2FatherName, profession: witness2Profession, email: witness2Email, isAbove18: witness2Above18, address: witness2Address, mobile: witness2Mobile }
         ],
         delivery: {
           deliveryPreference,
@@ -1006,17 +1192,28 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
               <label className="block text-xs font-bold text-slate-800 mb-1.5">
                 State / Union Territory (36 States/UTs) <span className="text-red-500 font-bold">*</span>
               </label>
-              <select
+              <WhiteSelect
                 value={selectedState}
-                onChange={(e) => setSelectedState(e.target.value)}
-                className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-black focus:outline-none focus:ring-2 focus:ring-blue-600"
-              >
-                {STATE_CATEGORIES.map((s) => (
-                  <option key={s.name} value={s.name}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
+                onChange={(val) => setSelectedState(val)}
+                options={[
+                  ...STATE_CATEGORIES.filter((s) => s.category === 'online_download').map((s) => ({
+                    value: s.name,
+                    label: s.label,
+                    group: '1. Online Purchase & Download Available (Plain Text)'
+                  })),
+                  ...STATE_CATEGORIES.filter((s) => s.category === 'online_nodownload').map((s) => ({
+                    value: s.name,
+                    label: s.label,
+                    group: '2. Online Purchase Available, Download Not Available (🔵 Blue Dot)'
+                  })),
+                  ...STATE_CATEGORIES.filter((s) => s.category === 'offline_only').map((s) => ({
+                    value: s.name,
+                    label: s.label,
+                    group: '3. Neither Online Purchase nor Download Available (⭐ Star)'
+                  }))
+                ]}
+                aria-label="State / Union Territory"
+              />
             </div>
 
             {/* Purpose of NOC [Multi-Select Checkbox] */}
@@ -1034,18 +1231,15 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
                 ].map((item) => (
                   <label
                     key={item.key}
-                    className={`flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer transition-all ${
-                      purposes[item.key]
-                        ? 'border-blue-600 bg-blue-50/60 ring-1 ring-blue-600'
-                        : 'border-slate-200 hover:border-slate-300'
-                    }`}
+                    className={optionCardClass(Boolean(purposes[item.key]), 'font-semibold')}
                   >
                     <input
                       type="checkbox"
                       checked={purposes[item.key]}
                       onChange={() => togglePurpose(item.key)}
-                      className="w-4 h-4 text-blue-600 rounded"
+                      className="sr-only"
                     />
+                    <CircleIndicator checked={Boolean(purposes[item.key])} />
                     <span className="text-xs font-semibold text-slate-800">{item.label}</span>
                   </label>
                 ))}
@@ -1057,17 +1251,18 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
               <label className="block text-xs font-bold text-slate-800 mb-1.5">
                 Property Classification <span className="text-red-500 font-bold">*</span>
               </label>
-              <select
+              <WhiteSelect
                 value={propertyClassification}
-                onChange={(e) => setPropertyClassification(e.target.value)}
-                className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-              >
-                <option value="Commercial Building">Commercial Building</option>
-                <option value="IT Park/SEZ">IT Park / SEZ</option>
-                <option value="Industrial Land/Shed">Industrial Land / Shed / Warehouse</option>
-                <option value="Mixed-Use Urban Property">Mixed-Use Urban Property</option>
-                <option value="Residential Property Used for Business">Residential Property Used for Business</option>
-              </select>
+                onChange={(val) => setPropertyClassification(val)}
+                options={[
+                  { value: 'Commercial Building', label: 'Commercial Building' },
+                  { value: 'IT Park/SEZ', label: 'IT Park / SEZ' },
+                  { value: 'Industrial Land/Shed', label: 'Industrial Land / Shed / Warehouse' },
+                  { value: 'Mixed-Use Urban Property', label: 'Mixed-Use Urban Property' },
+                  { value: 'Residential Property Used for Business', label: 'Residential Property Used for Business' }
+                ]}
+                aria-label="Property Classification"
+              />
             </div>
 
             {/* Stamp Paper Procurement Mode (Identical to 11 Month Rent Agreement) */}
@@ -1077,40 +1272,30 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
               </label>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <label
-                  className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
-                    stampProcurementMode === 'estamp'
-                      ? 'border-blue-600 bg-blue-50/60 ring-1 ring-blue-600'
-                      : 'border-slate-200 hover:border-slate-300'
-                  }`}
-                >
+                <label className={optionCardClass(stampProcurementMode === 'estamp')}>
                   <input
                     type="radio"
                     name="procurementMode"
                     checked={stampProcurementMode === 'estamp'}
                     onChange={() => setStampProcurementMode('estamp')}
-                    className="w-4 h-4 text-blue-600"
+                    className="sr-only"
                   />
+                  <CircleIndicator checked={stampProcurementMode === 'estamp'} />
                   <div>
                     <span className="text-xs font-bold text-black block">E-Stamp Paper / Digital Stamp</span>
                     <span className="text-[11px] text-slate-500">System generated official state e-stamp</span>
                   </div>
                 </label>
 
-                <label
-                  className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
-                    stampProcurementMode === 'physical_upload'
-                      ? 'border-blue-600 bg-blue-50/60 ring-1 ring-blue-600'
-                      : 'border-slate-200 hover:border-slate-300'
-                  }`}
-                >
+                <label className={optionCardClass(stampProcurementMode === 'physical_upload')}>
                   <input
                     type="radio"
                     name="procurementMode"
                     checked={stampProcurementMode === 'physical_upload'}
                     onChange={() => setStampProcurementMode('physical_upload')}
-                    className="w-4 h-4 text-blue-600"
+                    className="sr-only"
                   />
+                  <CircleIndicator checked={stampProcurementMode === 'physical_upload'} />
                   <div>
                     <span className="text-xs font-bold text-black block">Physical Stamp Paper (User Upload)</span>
                     <span className="text-[11px] text-slate-500">Upload your own pre-purchased physical stamp</span>
@@ -1230,16 +1415,17 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
                 Stamp Duty Cost Paid By <span className="text-red-500 font-bold">*</span>
               </label>
 
-              <select
+              <WhiteSelect
                 value={stampCostBorneBy}
-                onChange={(e) => setStampCostBorneBy(e.target.value)}
-                className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-              >
-                <option value="First Party (Landlord / Lessor)">First Party (Landlord / Lessor)</option>
-                <option value="Second Party (Business Owner / Grantee)">Second Party (Business Owner / Grantee)</option>
-                <option value="Shared Equally (50-50 Split)">Shared Equally (50-50 Split)</option>
-                <option value="Custom Split">Custom Ratio or Fixed Amount Split</option>
-              </select>
+                onChange={(val) => setStampCostBorneBy(val)}
+                options={[
+                  { value: 'First Party (Landlord / Lessor)', label: 'First Party (Landlord / Lessor)' },
+                  { value: 'Second Party (Business Owner / Grantee)', label: 'Second Party (Business Owner / Grantee)' },
+                  { value: 'Shared Equally (50-50 Split)', label: 'Shared Equally (50-50 Split)' },
+                  { value: 'Custom Split', label: 'Custom Ratio or Fixed Amount Split' }
+                ]}
+                aria-label="Stamp Duty Cost Paid By"
+              />
 
               {stampCostBorneBy === 'Custom Split' && (
                 <div className="mt-2">
@@ -1280,112 +1466,215 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
               <label className="block text-xs font-bold text-slate-800 mb-1.5">
                 Landlord Ownership Type <span className="text-red-500">*</span>
               </label>
-              <select
+              <WhiteSelect
                 value={landlordOwnershipType}
-                onChange={(e) => setLandlordOwnershipType(e.target.value)}
-                className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-black focus:outline-none focus:ring-2 focus:ring-blue-600"
-              >
-                <option value="Sole Individual">Sole Individual</option>
-                <option value="Joint Owners">Joint Owners</option>
-                <option value="Partnership Firm">Partnership Firm</option>
-                <option value="LLP">Limited Liability Partnership (LLP)</option>
-                <option value="Private Ltd / Public Ltd Company">Private Ltd / Public Ltd Company</option>
-                <option value="HUF">Hindu Undivided Family (HUF)</option>
-                <option value="Trust / Society">Trust / Society</option>
-              </select>
+                onChange={(val) => setLandlordOwnershipType(val)}
+                options={[
+                  { value: 'Sole Individual', label: 'Sole Individual' },
+                  { value: 'Joint Owners', label: 'Joint Owners' },
+                  { value: 'Partnership Firm', label: 'Partnership Firm' },
+                  { value: 'Limited Liability Partnership (LLP)', label: 'Limited Liability Partnership (LLP)' },
+                  { value: 'Private Limited Company (Pvt Ltd)', label: 'Private Limited Company (Pvt Ltd)' },
+                  { value: 'Public Limited Company (Ltd)', label: 'Public Limited Company (Ltd)' },
+                  { value: 'Hindu Undivided Family (HUF)', label: 'Hindu Undivided Family (HUF)' },
+                  { value: 'Trust / Society / AOP', label: 'Trust / Society / AOP' },
+                  { value: 'Sole Proprietorship Firm', label: 'Sole Proprietorship Firm' }
+                ]}
+                aria-label="Landlord Ownership Type"
+              />
             </div>
 
             {landlordOwnershipType !== 'Sole Individual' && landlordOwnershipType !== 'Joint Owners' ? (
               /* Corporate Landlord */
+              (() => {
+                const landlordRegMeta = getCompanyRegFieldMeta(landlordOwnershipType);
+                const landlordAuthMandatory = isAuthDateRequired(landlordOwnershipType);
+                const landlordGstinRequired = isGstinRequiredForSubType(landlordOwnershipType);
+                const landlordLabels = getCompanyFieldLabels(landlordOwnershipType);
+                const isLandlordSoleProp = landlordOwnershipType === 'Sole Proprietorship Firm';
+                return (
               <div className="space-y-3 p-4 bg-slate-50 border border-slate-200 rounded-xl">
                 <span className="text-xs font-bold text-blue-700 uppercase tracking-wider block">
-                  Corporate / Entity Ownership Details
+                  {isLandlordSoleProp ? 'Sole Proprietorship Details' : 'Corporate / Entity Ownership Details'}
                 </span>
+
+                {isLandlordSoleProp ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        {landlordLabels.signatoryLabel} <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={corpRepName}
+                        onChange={(e) => setCorpRepName(e.target.value)}
+                        placeholder={showExample ? landlordLabels.signatoryPlaceholder : ""}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        {landlordLabels.entityNameLabel} <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={landlordName}
+                        onChange={(e) => setLandlordName(e.target.value)}
+                        placeholder={showExample ? landlordLabels.entityNamePlaceholder : ""}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        {landlordLabels.entityNameLabel} <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={landlordName}
+                        onChange={(e) => setLandlordName(e.target.value)}
+                        placeholder={showExample ? landlordLabels.entityNamePlaceholder : ""}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        {landlordRegMeta.label}{' '}
+                        {landlordRegMeta.required ? (
+                          <span className="text-red-500">*</span>
+                        ) : (
+                          <span className="text-slate-400 font-normal">(Optional)</span>
+                        )}
+                      </label>
+                      <input
+                        type="text"
+                        required={landlordRegMeta.required}
+                        value={corpCin}
+                        onChange={(e) => setCorpCin(e.target.value.toUpperCase())}
+                        placeholder={showExample ? landlordRegMeta.placeholder : ""}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono uppercase text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      />
+                    </div>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Entity Legal Name <span className="text-red-500">*</span>
+                      Company / Firm GSTIN Number{' '}
+                      {landlordGstinRequired ? (
+                        <span className="text-red-500">*</span>
+                      ) : (
+                        <span className="text-slate-400 font-normal">(Optional)</span>
+                      )}
                     </label>
                     <input
                       type="text"
-                      required
-                      value={landlordName}
-                      onChange={(e) => setLandlordName(e.target.value)}
-                      placeholder={showExample ? "e.g. Prestige Commercial Estates LLP" : ""}
-                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      required={landlordGstinRequired}
+                      maxLength={15}
+                      value={corpGstin}
+                      onChange={(e) => setCorpGstin(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 15))}
+                      placeholder={showExample ? "27AABCU9603R1ZM" : ""}
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono uppercase text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      CIN / LLPIN <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={corpCin}
-                      onChange={(e) => setCorpCin(e.target.value.toUpperCase())}
-                      placeholder={showExample ? "e.g. U70100MH2019PTC112233" : ""}
-                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono uppercase text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    <DateOfBirthPicker
+                      label={landlordLabels.incDateLabel}
+                      value={corpIncDate}
+                      onChange={setCorpIncDate}
+                      required={false}
+                      placeholder="DD/MM/YYYY"
+                      helperText={showExample ? 'Format: DD/MM/YYYY' : undefined}
                     />
                   </div>
                 </div>
 
+                {isLandlordSoleProp && (
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      {landlordRegMeta.label} <span className="text-slate-400 font-normal">(Optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={corpCin}
+                      onChange={(e) => setCorpCin(e.target.value.toUpperCase())}
+                      placeholder={showExample ? landlordRegMeta.placeholder : ""}
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono uppercase text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    />
+                  </div>
+                )}
+
                 <AddressFieldGroup
-                  label="Registered Office Address"
+                  label={landlordLabels.addressLabel}
                   variant="standard"
                   value={corpRegAddress}
                   onChangeAddress={(addr) => setCorpRegAddress(addr)}
                   required
                 />
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Authorised Representative <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={corpRepName}
-                      onChange={(e) => setCorpRepName(e.target.value)}
-                      placeholder={showExample ? "e.g. Sunil Kothari" : ""}
-                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                    />
-                  </div>
+                {!isLandlordSoleProp && (
+                  <div className="p-3 bg-white border border-slate-200 rounded-xl space-y-3">
+                    <span className="text-[11px] font-bold text-blue-700 uppercase tracking-wider block">
+                      Authorized Signatory &amp; Authorization Details
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">
+                          {landlordLabels.signatoryLabel} <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={corpRepName}
+                          onChange={(e) => setCorpRepName(e.target.value)}
+                          placeholder={showExample ? landlordLabels.signatoryPlaceholder : ""}
+                          className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                        />
+                      </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Designation <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={corpRepDesignation}
-                      onChange={(e) => setCorpRepDesignation(e.target.value)}
-                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                    >
-                      <option value="Managing Director">Managing Director</option>
-                      <option value="Director">Director</option>
-                      <option value="Managing Partner">Managing Partner</option>
-                      <option value="Authorized Trustee">Authorized Trustee</option>
-                      <option value="Power of Attorney Holder">Power of Attorney Holder</option>
-                    </select>
-                  </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">
+                          Signatory Designation <span className="text-red-500">*</span>
+                        </label>
+                        <WhiteSelect
+                          variant="compact"
+                          value={corpRepDesignation}
+                          onChange={(val) => setCorpRepDesignation(val)}
+                          options={COMPANY_DESIGNATION_OPTIONS}
+                          aria-label="Landlord Signatory Designation"
+                        />
+                      </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Resolution / Auth Date <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="date"
-                      required
-                      value={corpResolutionDate}
-                      onChange={(e) => setCorpResolutionDate(e.target.value)}
-                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                    />
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">
+                          Board Resolution / Auth Letter Date{' '}
+                          {landlordAuthMandatory ? (
+                            <span className="text-red-500">*</span>
+                          ) : (
+                            <span className="text-slate-400 font-normal">(Optional)</span>
+                          )}
+                        </label>
+                        <input
+                          type="date"
+                          required={landlordAuthMandatory}
+                          value={corpResolutionDate}
+                          onChange={(e) => setCorpResolutionDate(e.target.value)}
+                          className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                        />
+                      </div>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
+                );
+              })()
             ) : (
               /* Individual / Joint Landlord */
               <div className="space-y-3">
@@ -1429,11 +1718,14 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
               </div>
             )}
 
-            {/* KYC Identifiers: PAN, Aadhaar, Mobile, Email (Optional) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* KYC Identifiers: PAN, Mobile, Mandatory Email */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Landlord / Corporate PAN Card <span className="text-red-500">*</span>
+                  {landlordOwnershipType !== 'Sole Individual' && landlordOwnershipType !== 'Joint Owners'
+                    ? getCompanyFieldLabels(landlordOwnershipType).panLabel
+                    : 'Landlord PAN Card'}{' '}
+                  <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -1446,18 +1738,6 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
                 />
               </div>
 
-              <div>
-                <AadhaarInput
-                  value={landlordAadhaarLast4}
-                  onChange={(val) => setLandlordAadhaarLast4(val)}
-                  required
-                  label="Aadhaar Number (12 Digits)"
-                  placeholder={showExample ? "1234 - 5678 - 9012" : "12-digit Aadhaar number"}
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
                   Official Contact Mobile Number <span className="text-red-500">*</span>
@@ -1477,10 +1757,11 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Contact Email ID <span className="text-slate-400 font-normal">(Optional)</span>
+                  Email Address <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="email"
+                  required
                   value={landlordEmail}
                   onChange={(e) => setLandlordEmail(e.target.value)}
                   placeholder={showExample ? "landlord@example.com" : ""}
@@ -1545,16 +1826,51 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
               </div>
             )}
 
+            {/* Mandatory Entity Authorization Checkbox for Corporate/Firm Landlords */}
+            {landlordOwnershipType !== 'Sole Individual' && landlordOwnershipType !== 'Joint Owners' && (
+              <div className="space-y-1.5">
+                <label
+                  className={optionCardClass(
+                    landlordEntityAuthConfirmed,
+                    showLandlordEntityAuthError && !landlordEntityAuthConfirmed
+                      ? 'border-rose-400 bg-rose-50/40'
+                      : '',
+                    true
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    checked={landlordEntityAuthConfirmed}
+                    onChange={(e) => {
+                      setLandlordEntityAuthConfirmed(e.target.checked);
+                      if (e.target.checked) setShowLandlordEntityAuthError(false);
+                    }}
+                    className="sr-only"
+                  />
+                  <CircleIndicator checked={landlordEntityAuthConfirmed} className="mt-0.5" />
+                  <span className="text-xs text-slate-800">
+                    {ENTITY_AUTH_CONFIRM_LABEL} <span className="text-red-500 font-bold">*</span>
+                  </span>
+                </label>
+                {showLandlordEntityAuthError && !landlordEntityAuthConfirmed && (
+                  <p className="text-xs font-bold text-rose-600">
+                    Please tick &ldquo;{ENTITY_AUTH_CONFIRM_LABEL}&rdquo; before continuing.
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* Clear Title Declaration in Simple Language */}
-            <div className="p-3.5 bg-blue-50/60 border border-blue-200 rounded-xl">
-              <label className="flex items-start gap-2.5 cursor-pointer select-none">
+            <div>
+              <label className={optionCardClass(clearTitleDeclared, '', true)}>
                 <input
                   type="checkbox"
                   required
                   checked={clearTitleDeclared}
                   onChange={(e) => setClearTitleDeclared(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 text-blue-600 rounded"
+                  className="sr-only"
                 />
+                <CircleIndicator checked={clearTitleDeclared} className="mt-0.5" />
                 <span className="text-xs text-slate-800 leading-relaxed">
                   <strong>Title Declaration:</strong> I solemnly declare that this property has a clear legal title and I have full authority to grant this Commercial NOC.
                 </span>
@@ -1587,210 +1903,316 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
               <label className="block text-xs font-bold text-slate-700 mb-1">
                 Business Constitution <span className="text-red-500">*</span>
               </label>
-              <select
+              <WhiteSelect
                 value={businessConstitution}
-                onChange={(e) => handleConstitutionChange(e.target.value)}
-                className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-              >
-                <option value="Sole Proprietorship">Sole Proprietorship</option>
-                <option value="Partnership Firm">Partnership Firm</option>
-                <option value="Limited Liability Partnership (LLP)">Limited Liability Partnership (LLP)</option>
-                <option value="Private Limited Company">Private Limited Company</option>
-                <option value="One Person Company (OPC)">One Person Company (OPC)</option>
-                <option value="Public Limited Company">Public Limited Company</option>
-                <option value="Trust / NGO">Trust / NGO</option>
-              </select>
-            </div>
-
-            {/* Proposed Business Name & PAN */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Proposed Business Name / Trade Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={proposedBusinessName}
-                  onChange={(e) => handleBusinessNameChange(e.target.value)}
-                  placeholder={showExample ? "e.g. Apex Logistical Solutions" : ""}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  {businessConstitution === 'Sole Proprietorship'
-                    ? "Proprietor's Personal PAN Card"
-                    : 'Entity / Company PAN Card'}{' '}
-                  <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  maxLength={10}
-                  value={granteePan}
-                  onChange={(e) => setGranteePan(e.target.value.toUpperCase())}
-                  placeholder={showExample ? "ABCDE1234F" : ""}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm font-mono uppercase text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                />
-              </div>
-            </div>
-
-            {/* CIN if Company/LLP */}
-            {businessConstitution !== 'Sole Proprietorship' && businessConstitution !== 'Partnership Firm' && (
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  CIN / LLPIN <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={granteeCin}
-                  onChange={(e) => setGranteeCin(e.target.value.toUpperCase())}
-                  placeholder={showExample ? "e.g. U74999DL2022PTC123456" : ""}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono uppercase text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                />
-              </div>
-            )}
-
-            {/* Nature of Business Operations + 'Other' Custom Box Option */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                Nature of Business Operations <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={natureOfOperations}
-                onChange={(e) => setNatureOfOperations(e.target.value)}
-                className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-              >
-                <option value="IT / Software / Back Office / Consultancy">IT / Software / Back Office / Consultancy</option>
-                <option value="Retail / Showroom / Gym / Footfall Business">Retail / Showroom / Gym / Footfall Business</option>
-                <option value="Logistics / Warehousing / Heavy Storage / Manufacturing">Logistics / Warehousing / Heavy Storage / Manufacturing</option>
-                <option value="Restaurant / Cloud Kitchen / Food & Beverage">Restaurant / Cloud Kitchen / Food &amp; Beverage</option>
-                <option value="Other">Other</option>
-              </select>
-
-              {/* Dynamic Custom Nature of Business Input Box when 'Other' is selected */}
-              {natureOfOperations === 'Other' && (
-                <div className="mt-2.5 animate-fadeIn">
-                  <label className="block text-[11px] font-bold text-blue-900 mb-1">
-                    Specify Nature of Business Operations <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={customNatureOfOperations}
-                    onChange={(e) => setCustomNatureOfOperations(e.target.value)}
-                    placeholder={showExample ? "Type your specific business category or activities" : ""}
-                    className="w-full bg-white border border-blue-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  />
-                </div>
-              )}
-            </div>
-
-            {/* Authorised Signatory Details (Pre-selects Proprietor / Partner / Director) */}
-            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
-              <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
-                Applicant / Authorized Signatory Details
-              </span>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
-                    Full Legal Name <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={granteeSignatoryName}
-                    onChange={(e) => setGranteeSignatoryName(e.target.value)}
-                    placeholder={showExample ? "e.g. Tarun Bajaj" : ""}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
-                    Father's Name <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={granteeSignatoryFatherName}
-                    onChange={(e) => setGranteeSignatoryFatherName(e.target.value)}
-                    placeholder={showExample ? "e.g. S.K. Bajaj" : ""}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
-                    Designation <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={granteeDesignation}
-                    onChange={(e) => setGranteeDesignation(e.target.value)}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
-                  >
-                    <option value="Proprietor">Proprietor</option>
-                    <option value="Partner">Partner</option>
-                    <option value="Director">Director</option>
-                    <option value="Authorized Signatory via BR">Authorized Signatory via BR</option>
-                  </select>
-                </div>
-              </div>
-
-              <AadhaarInput
-                value={granteeAadhaar}
-                onChange={(val) => setGranteeAadhaar(val)}
-                required
-                label="Grantee / Signatory Aadhaar Number (12 Digits)"
-                placeholder={showExample ? "1234 - 5678 - 9012" : "12-digit Aadhaar number"}
+                onChange={(val) => handleConstitutionChange(val)}
+                options={[
+                  { value: 'Sole Proprietorship Firm', label: 'Sole Proprietorship Firm' },
+                  { value: 'Partnership Firm', label: 'Partnership Firm' },
+                  { value: 'Limited Liability Partnership (LLP)', label: 'Limited Liability Partnership (LLP)' },
+                  { value: 'Private Limited Company (Pvt Ltd)', label: 'Private Limited Company (Pvt Ltd)' },
+                  { value: 'Public Limited Company (Ltd)', label: 'Public Limited Company (Ltd)' },
+                  { value: 'Joint Owners / Co-Owners', label: 'Joint Owners / Co-Owners' },
+                  { value: 'Hindu Undivided Family (HUF)', label: 'Hindu Undivided Family (HUF)' },
+                  { value: 'Trust / Society / AOP', label: 'Trust / Society / AOP' }
+                ]}
+                aria-label="Business Constitution"
               />
+            </div>
 
-              <AddressFieldGroup
-                label="Applicant / Business Communication Address"
-                variant="standard"
-                value={granteeAddress}
-                onChangeAddress={(addr) => setGranteeAddress(addr)}
-                required
-              />
+            {/* Proposed Business / Firm Name & PAN */}
+            {(() => {
+              const granteeLabels = getCompanyFieldLabels(businessConstitution);
+              const granteeRegMeta = getCompanyRegFieldMeta(businessConstitution);
+              const granteeAuthMandatory = isAuthDateRequired(businessConstitution);
+              const granteeGstinRequired = isGstinRequiredForSubType(businessConstitution);
+              const isGranteeSoleProp = businessConstitution === 'Sole Proprietorship Firm';
+              return (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        {isGranteeSoleProp
+                          ? 'Proposed Business / Firm Name'
+                          : granteeLabels.entityNameLabel}{' '}
+                        <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={proposedBusinessName}
+                        onChange={(e) => handleBusinessNameChange(e.target.value)}
+                        placeholder={showExample ? granteeLabels.entityNamePlaceholder : ""}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      />
+                    </div>
 
-              <div className="pt-2 border-t border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-800">
-                    Authorization Letter / Board Resolution <span className="text-slate-400 font-normal">(Optional)</span>
-                  </label>
-                  <span className="text-[11px] text-slate-500 block">
-                    {authorizationDocFile
-                      ? `Attached: ${authorizationDocFile.fileName} (${Math.max(1, Math.round(authorizationDocFile.sizeBytes / 1024))} KB)`
-                      : 'Attach signed authorization letter or board resolution (PDF/JPG/PNG)'}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <label className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs cursor-pointer shadow-xs transition-all">
-                    <UploadCloud className="w-3.5 h-3.5" />
-                    <span>{authorizationDocFile ? 'Change File' : 'Upload File'}</span>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        {granteeLabels.panLabel} <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        maxLength={10}
+                        value={granteePan}
+                        onChange={(e) => setGranteePan(e.target.value.toUpperCase())}
+                        placeholder={showExample ? "ABCDE1234F" : ""}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm font-mono uppercase text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Company / Firm Details (Date of Incorporation stays UP here, GSTIN Optional for non-Pvt/Ltd) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 bg-slate-50 border border-slate-200 rounded-xl animate-fadeIn">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        {granteeRegMeta.label}{' '}
+                        {granteeRegMeta.required && !isGranteeSoleProp ? (
+                          <span className="text-red-500">*</span>
+                        ) : (
+                          <span className="text-slate-400 font-normal">(Optional)</span>
+                        )}
+                      </label>
+                      <input
+                        type="text"
+                        required={granteeRegMeta.required && !isGranteeSoleProp}
+                        value={granteeCin}
+                        onChange={(e) => setGranteeCin(e.target.value.toUpperCase())}
+                        placeholder={showExample ? granteeRegMeta.placeholder : ""}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono uppercase text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Company / Firm GSTIN Number{' '}
+                        {granteeGstinRequired ? (
+                          <span className="text-red-500">*</span>
+                        ) : (
+                          <span className="text-slate-400 font-normal">(Optional)</span>
+                        )}
+                      </label>
+                      <input
+                        type="text"
+                        required={granteeGstinRequired}
+                        maxLength={15}
+                        value={granteeGstin}
+                        onChange={(e) => setGranteeGstin(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 15))}
+                        placeholder={showExample ? "27AABCU9603R1ZM" : ""}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono uppercase text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      />
+                    </div>
+
+                    <div>
+                      <DateOfBirthPicker
+                        label={granteeLabels.incDateLabel}
+                        value={granteeIncDate}
+                        onChange={setGranteeIncDate}
+                        required={false}
+                        placeholder="DD/MM/YYYY"
+                        helperText={showExample ? 'Format: DD/MM/YYYY' : undefined}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Mandatory Email Address */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Official Email Address <span className="text-red-500">*</span>
+                    </label>
                     <input
-                      type="file"
-                      accept="image/*,.pdf"
-                      onChange={handleAuthFileSelect}
-                      className="sr-only"
+                      type="email"
+                      required
+                      value={granteeEmail}
+                      onChange={(e) => setGranteeEmail(e.target.value)}
+                      placeholder={showExample ? "grantee@business.com" : ""}
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                     />
-                  </label>
-                  {authorizationDocFile && (
-                    <button
-                      type="button"
-                      onClick={() => setAuthorizationDocFile(null)}
-                      className="px-2.5 py-1.5 rounded-xl border border-slate-300 bg-white text-slate-600 hover:text-rose-600 text-xs font-semibold cursor-pointer"
+                  </div>
+
+                  {/* Nature of Business Operations + 'Other' Custom Box Option */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Nature of Business Operations <span className="text-red-500">*</span>
+                    </label>
+                    <WhiteSelect
+                      value={natureOfOperations}
+                      onChange={(val) => setNatureOfOperations(val)}
+                      options={[
+                        { value: 'IT / Software / Back Office / Consultancy', label: 'IT / Software / Back Office / Consultancy' },
+                        { value: 'Retail / Showroom / Gym / Footfall Business', label: 'Retail / Showroom / Gym / Footfall Business' },
+                        { value: 'Logistics / Warehousing / Heavy Storage / Manufacturing', label: 'Logistics / Warehousing / Heavy Storage / Manufacturing' },
+                        { value: 'Restaurant / Cloud Kitchen / Food & Beverage', label: 'Restaurant / Cloud Kitchen / Food & Beverage' },
+                        { value: 'Other', label: 'Other' }
+                      ]}
+                      aria-label="Nature of Business Operations"
+                    />
+
+                    {/* Dynamic Custom Nature of Business Input Box when 'Other' is selected */}
+                    {natureOfOperations === 'Other' && (
+                      <div className="mt-2.5 animate-fadeIn">
+                        <label className="block text-[11px] font-bold text-blue-900 mb-1">
+                          Specify Nature of Business Operations <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={customNatureOfOperations}
+                          onChange={(e) => setCustomNatureOfOperations(e.target.value)}
+                          placeholder={showExample ? "Type your specific business category or activities" : ""}
+                          className="w-full bg-white border border-blue-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  <AddressFieldGroup
+                    label={granteeLabels.addressLabel}
+                    variant="standard"
+                    value={granteeAddress}
+                    onChangeAddress={(addr) => setGranteeAddress(addr)}
+                    required
+                  />
+
+                  {/* Authorised Signatory Details (No Aadhaar, No Date of Incorporation) */}
+                  <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                    <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
+                      {isGranteeSoleProp ? 'Proprietor Details' : 'Authorized Signatory & Authorization Details'}
+                    </span>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
+                          {granteeLabels.signatoryLabel} <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={granteeSignatoryName}
+                          onChange={(e) => setGranteeSignatoryName(e.target.value)}
+                          placeholder={showExample ? granteeLabels.signatoryPlaceholder : ""}
+                          className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
+                          Father's Name <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={granteeSignatoryFatherName}
+                          onChange={(e) => setGranteeSignatoryFatherName(e.target.value)}
+                          placeholder={showExample ? "e.g. S.K. Bajaj" : ""}
+                          className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
+                          Designation <span className="text-red-500">*</span>
+                        </label>
+                        <WhiteSelect
+                          variant="compact"
+                          value={granteeDesignation}
+                          onChange={(val) => setGranteeDesignation(val)}
+                          options={COMPANY_DESIGNATION_OPTIONS}
+                          aria-label="Grantee Signatory Designation"
+                        />
+                      </div>
+                    </div>
+
+                    {!isGranteeSoleProp && (
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
+                          Board Resolution / Auth Letter Date{' '}
+                          {granteeAuthMandatory ? (
+                            <span className="text-red-500">*</span>
+                          ) : (
+                            <span className="text-slate-400 font-normal">(Optional)</span>
+                          )}
+                        </label>
+                        <input
+                          type="date"
+                          required={granteeAuthMandatory}
+                          value={granteeAuthDate}
+                          onChange={(e) => setGranteeAuthDate(e.target.value)}
+                          className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                        />
+                      </div>
+                    )}
+
+                    <div className="pt-2 border-t border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-800">
+                          Authorization Letter / Board Resolution <span className="text-slate-400 font-normal">(Optional)</span>
+                        </label>
+                        <span className="text-[11px] text-slate-500 block">
+                          {authorizationDocFile
+                            ? `Attached: ${authorizationDocFile.fileName} (${Math.max(1, Math.round(authorizationDocFile.sizeBytes / 1024))} KB)`
+                            : 'Attach signed authorization letter or board resolution (PDF/JPG/PNG)'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <label className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs cursor-pointer shadow-xs transition-all">
+                          <UploadCloud className="w-3.5 h-3.5" />
+                          <span>{authorizationDocFile ? 'Change File' : 'Upload File'}</span>
+                          <input
+                            type="file"
+                            accept="image/*,.pdf"
+                            onChange={handleAuthFileSelect}
+                            className="sr-only"
+                          />
+                        </label>
+                        {authorizationDocFile && (
+                          <button
+                            type="button"
+                            onClick={() => setAuthorizationDocFile(null)}
+                            className="px-2.5 py-1.5 rounded-xl border border-slate-300 bg-white text-slate-600 hover:text-rose-600 text-xs font-semibold cursor-pointer"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Mandatory Bottom Entity Authorization Confirmation Checkbox */}
+                  <div className="space-y-1.5">
+                    <label
+                      className={optionCardClass(
+                        granteeEntityAuthConfirmed,
+                        showGranteeEntityAuthError && !granteeEntityAuthConfirmed
+                          ? 'border-rose-400 bg-rose-50/40'
+                          : '',
+                        true
+                      )}
                     >
-                      Remove
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
+                      <input
+                        type="checkbox"
+                        checked={granteeEntityAuthConfirmed}
+                        onChange={(e) => {
+                          setGranteeEntityAuthConfirmed(e.target.checked);
+                          if (e.target.checked) setShowGranteeEntityAuthError(false);
+                        }}
+                        className="sr-only"
+                      />
+                      <CircleIndicator checked={granteeEntityAuthConfirmed} className="mt-0.5" />
+                      <span className="text-xs text-slate-800">
+                        {ENTITY_AUTH_CONFIRM_LABEL} <span className="text-red-500 font-bold">*</span>
+                      </span>
+                    </label>
+                    {showGranteeEntityAuthError && !granteeEntityAuthConfirmed && (
+                      <p className="text-xs font-bold text-rose-600">
+                        Please tick &ldquo;{ENTITY_AUTH_CONFIRM_LABEL}&rdquo; before continuing.
+                      </p>
+                    )}
+                  </div>
+                </>
+              );
+            })()}
           </div>
         )}
 
@@ -1906,66 +2328,74 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
         {currentPage === '4' && (
           <div className="space-y-5 animate-fadeIn">
             {/* Simple English Statutory Permissions */}
-            <div className="space-y-3">
-              <span className="text-xs font-bold text-blue-700 uppercase tracking-wider block">
-                Business Clearances &amp; Statutory Permissions (Pre-checked)
-              </span>
+            <div className="space-y-2.5">
+              <TopicHeader
+                number={1}
+                title="Business Clearances & Statutory Permissions"
+                question="Which business registrations, inspections, and premises permissions are included in this NOC?"
+                required
+              />
 
-              <label className="flex items-start gap-2.5 cursor-pointer select-none">
+              <label className={optionCardClass(clauseMultiAgency, '', true)}>
                 <input
                   type="checkbox"
                   checked={clauseMultiAgency}
                   onChange={(e) => setClauseMultiAgency(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 text-blue-600 rounded"
+                  className="sr-only"
                 />
+                <CircleIndicator checked={clauseMultiAgency} className="mt-0.5" />
                 <span className="text-xs text-slate-700">
                   <strong>Government Registration Permission:</strong> The landlord has no objection to the tenant obtaining GST, MSME, Shop &amp; Establishment, or Trade License registrations at this address.
                 </span>
               </label>
 
-              <label className="flex items-start gap-2.5 cursor-pointer select-none">
+              <label className={optionCardClass(clausePhysicalVerification, '', true)}>
                 <input
                   type="checkbox"
                   checked={clausePhysicalVerification}
                   onChange={(e) => setClausePhysicalVerification(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 text-blue-600 rounded"
+                  className="sr-only"
                 />
+                <CircleIndicator checked={clausePhysicalVerification} className="mt-0.5" />
                 <span className="text-xs text-slate-700">
                   <strong>Tax Officer Inspection:</strong> GST and tax authorities have full permission to visit this address for physical verification and spot inspection.
                 </span>
               </label>
 
-              <label className="flex items-start gap-2.5 cursor-pointer select-none">
+              <label className={optionCardClass(clauseSignboard, '', true)}>
                 <input
                   type="checkbox"
                   checked={clauseSignboard}
                   onChange={(e) => setClauseSignboard(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 text-blue-600 rounded"
+                  className="sr-only"
                 />
+                <CircleIndicator checked={clauseSignboard} className="mt-0.5" />
                 <span className="text-xs text-slate-700">
                   <strong>Signboard Display Permission:</strong> The tenant may install their business name and GST number signboard outside the shop or office.
                 </span>
               </label>
 
-              <label className="flex items-start gap-2.5 cursor-pointer select-none">
+              <label className={optionCardClass(clauseBooks, '', true)}>
                 <input
                   type="checkbox"
                   checked={clauseBooks}
                   onChange={(e) => setClauseBooks(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 text-blue-600 rounded"
+                  className="sr-only"
                 />
+                <CircleIndicator checked={clauseBooks} className="mt-0.5" />
                 <span className="text-xs text-slate-700">
                   <strong>Books &amp; Invoices Permission:</strong> The business's tax invoices, ledgers, and accounting records may be maintained at this address.
                 </span>
               </label>
 
-              <label className="flex items-start gap-2.5 cursor-pointer select-none">
+              <label className={optionCardClass(clauseStructural, '', true)}>
                 <input
                   type="checkbox"
                   checked={clauseStructural}
                   onChange={(e) => setClauseStructural(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 text-blue-600 rounded"
+                  className="sr-only"
                 />
+                <CircleIndicator checked={clauseStructural} className="mt-0.5" />
                 <span className="text-xs text-slate-700">
                   <strong>Structural Limits:</strong> Temporary partitions or false ceiling work may be carried out without damaging any main structural beams or load-bearing walls.
                 </span>
@@ -1973,25 +2403,31 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
             </div>
 
             {/* NOC Duration */}
-            <div className="pt-3 border-t border-slate-200 space-y-2.5">
-              <label className="block text-xs font-bold text-slate-800">
-                NOC Validity / Duration <span className="text-red-500 font-bold">*</span>
-              </label>
-              <select
+            <div className={`${TOPIC_DIVIDER_CLASS} space-y-2.5`}>
+              <TopicHeader
+                number={2}
+                title="NOC Validity / Duration"
+                question="How long should this Commercial NOC remain valid?"
+                required
+              />
+              <WhiteSelect
                 value={nocDuration}
-                onChange={(e) => setNocDuration(e.target.value)}
-                className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-              >
-                <option value="1 Month">1 Month</option>
-                <option value="2 Months">2 Months</option>
-                <option value="3 Months">3 Months</option>
-                <option value="6 Months">6 Months</option>
-                <option value="1 Year">1 Year</option>
-                <option value="2 Years">2 Years</option>
-                <option value="3 Years">3 Years</option>
-                <option value="Until Lease Validity">Until Lease Validity</option>
-                <option value="Custom">Custom Duration</option>
-              </select>
+                onChange={(val) => setNocDuration(val)}
+                placeholder="Select NOC validity duration"
+                options={[
+                  { value: '1 Month', label: '1 Month' },
+                  { value: '2 Months', label: '2 Months' },
+                  { value: '3 Months', label: '3 Months' },
+                  { value: '6 Months', label: '6 Months' },
+                  { value: '1 Year', label: '1 Year' },
+                  { value: '2 Years', label: '2 Years' },
+                  { value: '3 Years', label: '3 Years' },
+                  { value: 'Until Lease Validity', label: 'Until Lease Validity' },
+                  { value: 'Forever (until cancelled in writing)', label: 'Forever (until cancelled in writing)' },
+                  { value: 'Custom', label: 'Custom Duration' }
+                ]}
+                aria-label="NOC Validity / Duration"
+              />
 
               {nocDuration === 'Custom' && (
                 <input
@@ -2005,59 +2441,79 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
             </div>
 
             {/* Commercial Utilities & Indemnity */}
-            <div className="pt-3 border-t border-slate-200 space-y-3">
-              <span className="text-xs font-bold text-blue-700 uppercase tracking-wider block">
-                Commercial Utilities &amp; Asset Protection
-              </span>
+            <div className={`${TOPIC_DIVIDER_CLASS} space-y-3`}>
+              <TopicHeader
+                number={3}
+                title="Commercial Utilities & Asset Protection"
+                question="How will sub-letting, property tax escalation, and landlord indemnity be handled?"
+                required
+              />
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     Sub-Letting &amp; Co-Working Permission <span className="text-red-500">*</span>
                   </label>
-                  <select
+                  <WhiteSelect
+                    variant="compact"
                     value={sublettingPermission}
-                    onChange={(e) => setSublettingPermission(e.target.value as any)}
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900"
-                  >
-                    <option value="Not Allowed">Not Allowed</option>
-                    <option value="Allowed">Allowed</option>
-                  </select>
+                    onChange={(val) => setSublettingPermission(val as 'Not Allowed' | 'Allowed')}
+                    placeholder="Select permission"
+                    options={['Not Allowed', 'Allowed']}
+                    aria-label="Sub-Letting Permission"
+                  />
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     Property Tax Escalation Responsibility <span className="text-red-500">*</span>
                   </label>
-                  <select
+                  <WhiteSelect
+                    variant="compact"
                     value={propertyTaxEscalation}
-                    onChange={(e) => setPropertyTaxEscalation(e.target.value)}
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900"
-                  >
-                    <option value="Fully Paid by Landlord">Fully Paid by Landlord</option>
-                    <option value="Reimbursed by Tenant">Reimbursed by Tenant</option>
-                    <option value="Divided on Pro-rata Basis">Divided on Pro-rata Basis</option>
-                  </select>
+                    onChange={(val) => setPropertyTaxEscalation(val)}
+                    placeholder="Select responsibility"
+                    options={[
+                      'Fully Paid by Landlord',
+                      'Reimbursed by Tenant',
+                      'Divided on Pro-rata Basis'
+                    ]}
+                    aria-label="Property Tax Escalation Responsibility"
+                  />
                 </div>
               </div>
 
-              <div className="p-3.5 bg-slate-50 border border-slate-300 rounded-xl">
-                <label className="flex items-start gap-2.5 select-none">
+              <div className={SUBQUESTION_DIVIDER_CLASS}>
+                <label className={optionCardClass(landlordIndemnityAccepted, '', true)}>
                   <input
                     type="checkbox"
-                    checked={true}
-                    readOnly
-                    className="mt-0.5 w-4 h-4 text-blue-600 rounded cursor-default"
+                    checked={landlordIndemnityAccepted}
+                    onChange={(e) => setLandlordIndemnityAccepted(e.target.checked)}
+                    className="sr-only"
                   />
+                  <CircleIndicator checked={landlordIndemnityAccepted} className="mt-0.5" />
                   <span className="text-xs text-slate-800 leading-relaxed">
-                    <strong>Landlord Indemnity:</strong> The tenant shall remain solely responsible for all business operations, statutory taxes, GST filings, and commercial liabilities. No tax liability or attachment shall apply to the landlord's property.
+                    <strong>Landlord Indemnity:</strong> The tenant shall remain solely responsible for all business operations, statutory taxes, GST filings, and commercial liabilities. No tax liability or attachment shall apply to the landlord's property. <span className="text-red-500 font-bold">*</span>
                   </span>
                 </label>
               </div>
             </div>
 
+            {/* Signatory Authority Confirmation */}
+            <div className={TOPIC_DIVIDER_CLASS}>
+              <SignatoryAuthoritySection
+                topicNumber={4}
+                checked={signatoryAuthorized}
+                onChange={(val) => {
+                  setSignatoryAuthorized(val);
+                  if (val) setShowSignatoryError(false);
+                }}
+                showError={showSignatoryError}
+              />
+            </div>
+
             {/* Custom Operational Clauses */}
-            <div className="pt-3 border-t border-slate-200 space-y-3">
+            <div className={`${TOPIC_DIVIDER_CLASS} space-y-3`}>
               <div className="flex items-center justify-between">
                 <div>
                   <span className="text-xs font-bold text-slate-800 block">
@@ -2123,12 +2579,12 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
                 onFatherNameChange={setWitness1FatherName}
                 profession={witness1Profession}
                 onProfessionChange={setWitness1Profession}
-                ageOrDob={witness1Age}
-                onAgeOrDobChange={setWitness1Age}
+                email={witness1Email}
+                onEmailChange={setWitness1Email}
+                isAbove18={witness1Above18}
+                onIsAbove18Change={setWitness1Above18}
                 mobile={witness1Mobile}
                 onMobileChange={setWitness1Mobile}
-                aadhaar={witness1Id}
-                onAadhaarChange={setWitness1Id}
                 address={witness1Address}
                 onAddressChange={setWitness1Address}
               />
@@ -2141,12 +2597,12 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
                 onFatherNameChange={setWitness2FatherName}
                 profession={witness2Profession}
                 onProfessionChange={setWitness2Profession}
-                ageOrDob={witness2Age}
-                onAgeOrDobChange={setWitness2Age}
+                email={witness2Email}
+                onEmailChange={setWitness2Email}
+                isAbove18={witness2Above18}
+                onIsAbove18Change={setWitness2Above18}
                 mobile={witness2Mobile}
                 onMobileChange={setWitness2Mobile}
-                aadhaar={witness2Id}
-                onAadhaarChange={setWitness2Id}
                 address={witness2Address}
                 onAddressChange={setWitness2Address}
               />
@@ -2159,13 +2615,7 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
               </span>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <label
-                  className={`p-3 rounded-xl border cursor-pointer transition-all ${
-                    deliveryPreference === 'digital'
-                      ? 'border-blue-600 bg-blue-50/60 ring-1 ring-blue-600'
-                      : 'border-slate-200 hover:border-slate-300'
-                  }`}
-                >
+                <label className={optionCardClass(deliveryPreference === 'digital', '', true)}>
                   <input
                     type="radio"
                     name="deliveryPreference"
@@ -2173,19 +2623,16 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
                     onChange={() => setDeliveryPreference('digital')}
                     className="sr-only"
                   />
-                  <span className="text-xs font-bold text-black block">Digital e-Sign PDF</span>
-                  <span className="text-[11px] text-slate-500 mt-0.5 block">
-                    Instant delivery via email &amp; dashboard (1-2 Hours)
-                  </span>
+                  <CircleIndicator checked={deliveryPreference === 'digital'} className="mt-0.5" />
+                  <div>
+                    <span className="text-xs font-bold text-black block">Digital e-Sign PDF</span>
+                    <span className="text-[11px] text-slate-500 mt-0.5 block">
+                      Instant delivery via email &amp; dashboard (1-2 Hours)
+                    </span>
+                  </div>
                 </label>
 
-                <label
-                  className={`p-3 rounded-xl border cursor-pointer transition-all ${
-                    deliveryPreference === 'physical'
-                      ? 'border-blue-600 bg-blue-50/60 ring-1 ring-blue-600'
-                      : 'border-slate-200 hover:border-slate-300'
-                  }`}
-                >
+                <label className={optionCardClass(deliveryPreference === 'physical', '', true)}>
                   <input
                     type="radio"
                     name="deliveryPreference"
@@ -2193,19 +2640,16 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
                     onChange={() => setDeliveryPreference('physical')}
                     className="sr-only"
                   />
-                  <span className="text-xs font-bold text-black block">Physical Stamp Paper</span>
-                  <span className="text-[11px] text-slate-500 mt-0.5 block">
-                    Speed Post courier delivery (+₹50)
-                  </span>
+                  <CircleIndicator checked={deliveryPreference === 'physical'} className="mt-0.5" />
+                  <div>
+                    <span className="text-xs font-bold text-black block">Physical Stamp Paper</span>
+                    <span className="text-[11px] text-slate-500 mt-0.5 block">
+                      Speed Post courier delivery (+₹50)
+                    </span>
+                  </div>
                 </label>
 
-                <label
-                  className={`p-3 rounded-xl border cursor-pointer transition-all ${
-                    deliveryPreference === 'hybrid'
-                      ? 'border-blue-600 bg-blue-50/60 ring-1 ring-blue-600'
-                      : 'border-slate-200 hover:border-slate-300'
-                  }`}
-                >
+                <label className={optionCardClass(deliveryPreference === 'hybrid', '', true)}>
                   <input
                     type="radio"
                     name="deliveryPreference"
@@ -2213,10 +2657,13 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
                     onChange={() => setDeliveryPreference('hybrid')}
                     className="sr-only"
                   />
-                  <span className="text-xs font-bold text-black block">Hybrid Mode</span>
-                  <span className="text-[11px] text-slate-500 mt-0.5 block">
-                    Digital copy + Physical original (+₹50)
-                  </span>
+                  <CircleIndicator checked={deliveryPreference === 'hybrid'} className="mt-0.5" />
+                  <div>
+                    <span className="text-xs font-bold text-black block">Hybrid Mode</span>
+                    <span className="text-[11px] text-slate-500 mt-0.5 block">
+                      Digital copy + Physical original (+₹50)
+                    </span>
+                  </div>
                 </label>
               </div>
 
@@ -2280,7 +2727,7 @@ export const CommercialNocWizardView: React.FC<CommercialNocWizardViewProps> = (
                   <span className="font-semibold text-slate-900">₹{pricing.stamp}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Aadhaar e-Sign Charges:</span>
+                  <span>Digital e-Sign Charges:</span>
                   <span className="font-semibold text-slate-900">₹{pricing.eSign}</span>
                 </div>
                 <div className="flex justify-between">
