@@ -26,7 +26,7 @@ interface DocumentRowProps {
 
 const getDocumentIcon = (title: string) => {
   const lower = title.toLowerCase();
-  if (lower.includes('rent') || lower.includes('lease') || lower.includes('sub-lease')) {
+  if (/\brent\b/.test(lower) || /\b(sub-?lease|lease)\b/.test(lower)) {
     return Key;
   }
   if (lower.includes('noc')) {

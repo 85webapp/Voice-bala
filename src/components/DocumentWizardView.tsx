@@ -227,10 +227,9 @@ export const DocumentWizardView: React.FC<DocumentWizardViewProps> = ({
   const isRentOrLeaseDoc = useMemo(() => {
     const t = selectedDocTitle.toLowerCase();
     return (
-      t.includes('rent') ||
-      t.includes('lease') ||
-      t.includes('tenan') ||
-      t.includes('sublease')
+      /\brent\b/.test(t) ||
+      /\b(sub-?lease|lease)\b/.test(t) ||
+      /\btenan/.test(t)
     );
   }, [selectedDocTitle]);
 

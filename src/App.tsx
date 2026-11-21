@@ -251,9 +251,9 @@ export default function App() {
 
             // 3. Rent & Lease Agreements (Rent Agreement, Commercial/Equipment Lease - MTA Compliant)
             if (
-              lowerTitle.includes('rent') ||
-              lowerTitle.includes('lease') ||
-              lowerTitle.includes('tenancy')
+              /\brent\b/.test(lowerTitle) ||
+              /\b(sub-?lease|lease)\b/.test(lowerTitle) ||
+              /\btenancy\b/.test(lowerTitle)
             ) {
               return <RentLeaseWizardView {...commonProps} />;
             }

@@ -312,7 +312,7 @@ export function getDocumentIdRule(documentTitleOrId: string): DocumentIdRule {
     }
   }
 
-  if (clean.includes('rent') || clean.includes('lease') || clean.includes('tenancy')) {
+  if (/\brent\b/.test(clean) || /\b(sub-?lease|lease)\b/.test(clean) || /\btenancy\b/.test(clean)) {
     if (clean.includes('machinery') || clean.includes('equipment')) {
       return DOCUMENT_ID_RULES['equipments-machinery-lease'];
     }
